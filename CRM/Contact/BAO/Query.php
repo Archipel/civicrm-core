@@ -5782,7 +5782,7 @@ SELECT COUNT( conts.total_amount ) as cancel_count,
       // create temp table with contact ids
       $tableName = CRM_Core_DAO::createTempTableName('civicrm_transform', TRUE);
 
-      $sql = "CREATE TEMPORARY TABLE $tableName ( contact_id int primary key) ENGINE=HEAP";
+      $sql = "CREATE TEMPORARY TABLE $tableName ( contact_id int primary key) ";
       CRM_Core_DAO::executeQuery($sql);
 
       $sql = "

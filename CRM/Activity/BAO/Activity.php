@@ -958,7 +958,7 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
     // fixed_sort_order field
     $sql .= "
           UNIQUE KEY ( activity_id )
-        ) ENGINE=HEAP DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci
+        ) DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci
         ";
 
     CRM_Core_DAO::executeQuery($sql);

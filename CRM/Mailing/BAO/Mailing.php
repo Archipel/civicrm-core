@@ -181,7 +181,7 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
     $mailingGroup->query(
       "CREATE TEMPORARY TABLE $excludeTempTablename
             (contact_id int primary key)
-            ENGINE=HEAP"
+            "
     );
     // populate exclude temp-table with recipients to be excluded from the list
     //  on basis of selected recipients groups and/or previous mailing
@@ -226,7 +226,7 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
     $mailingGroup->query(
       "CREATE TEMPORARY TABLE $includedTempTablename
             (contact_id int primary key, $entityColumn int)
-            ENGINE=HEAP"
+            "
     );
 
     if ($isSMSmode) {

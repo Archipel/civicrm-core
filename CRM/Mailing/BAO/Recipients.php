@@ -103,7 +103,7 @@ WHERE  mailing_id = %1
     $sql = "
 CREATE TEMPORARY TABLE srcMailing_$sourceMailingId
             (mailing_recipient_id int unsigned, id int PRIMARY KEY AUTO_INCREMENT, INDEX(mailing_recipient_id))
-            ENGINE=HEAP";
+            ";
     CRM_Core_DAO::executeQuery($sql);
     $sql = "
 INSERT INTO srcMailing_$sourceMailingId (mailing_recipient_id)

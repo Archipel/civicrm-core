@@ -184,7 +184,7 @@ class CRM_Contact_Form_Search_Custom_DateAdded extends CRM_Contact_Form_Search_C
     $this->_igTable = CRM_Utils_SQL_TempTable::build()->setCategory('ig')->getName();
 
     //grab the contacts added in the date range first
-    $sql = "CREATE TEMPORARY TABLE {$this->_datesTable} ( id int primary key, date_added date ) ENGINE=HEAP";
+    $sql = "CREATE TEMPORARY TABLE {$this->_datesTable} ( id int primary key, date_added date ) ";
     if ($this->_debug > 0) {
       print "-- Date range query: <pre>";
       print "$sql;";
@@ -254,7 +254,7 @@ class CRM_Contact_Form_Search_Custom_DateAdded extends CRM_Contact_Form_Search_C
 
       $sql = "DROP TEMPORARY TABLE IF EXISTS {$this->_xgTable}";
       CRM_Core_DAO::executeQuery($sql, CRM_Core_DAO::$_nullArray);
-      $sql = "CREATE TEMPORARY TABLE {$this->_xgTable} ( contact_id int primary key) ENGINE=HEAP";
+      $sql = "CREATE TEMPORARY TABLE {$this->_xgTable} ( contact_id int primary key) ";
       CRM_Core_DAO::executeQuery($sql, CRM_Core_DAO::$_nullArray);
 
       //used only when exclude group is selected
@@ -292,7 +292,7 @@ class CRM_Contact_Form_Search_Custom_DateAdded extends CRM_Contact_Form_Search_C
       $sql = "CREATE TEMPORARY TABLE {$this->_igTable}
                 ( id int PRIMARY KEY AUTO_INCREMENT,
                   contact_id int,
-                  group_names varchar(64)) ENGINE=HEAP";
+                  group_names varchar(64)) ";
 
       if ($this->_debug > 0) {
         print "-- Include groups query: <pre>";

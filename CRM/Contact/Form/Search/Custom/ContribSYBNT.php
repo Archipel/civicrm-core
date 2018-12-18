@@ -272,7 +272,7 @@ count(contrib_1.id) AS donation_count
       $sql = "DROP TEMPORARY TABLE IF EXISTS XG_CustomSearch_SYBNT";
       CRM_Core_DAO::executeQuery($sql);
 
-      $sql = "CREATE TEMPORARY TABLE XG_CustomSearch_SYBNT ( contact_id int primary key) ENGINE=HEAP";
+      $sql = "CREATE TEMPORARY TABLE XG_CustomSearch_SYBNT ( contact_id int primary key) ";
       CRM_Core_DAO::executeQuery($sql);
 
       $excludeClauses = array();

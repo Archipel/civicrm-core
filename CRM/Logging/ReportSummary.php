@@ -354,7 +354,7 @@ WHERE  log_date <= %1 AND id = %2 ORDER BY log_date DESC LIMIT 1";
     }
 
     // temp table to hold all altered contact-ids
-    $sql = "CREATE TEMPORARY TABLE civicrm_temp_civireport_logsummary ( {$tempColumns} ) ENGINE=HEAP";
+    $sql = "CREATE TEMPORARY TABLE civicrm_temp_civireport_logsummary ( {$tempColumns} ) ";
     CRM_Core_DAO::executeQuery($sql);
     $this->addToDeveloperTab($sql);
 

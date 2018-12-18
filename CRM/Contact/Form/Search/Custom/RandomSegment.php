@@ -190,7 +190,7 @@ class CRM_Contact_Form_Search_Custom_RandomSegment extends CRM_Contact_Form_Sear
 
     $sql = "DROP TEMPORARY TABLE IF EXISTS Xg_{$this->_tableName}";
     CRM_Core_DAO::executeQuery($sql);
-    $sql = "CREATE TEMPORARY TABLE Xg_{$this->_tableName} ( contact_id int primary key) ENGINE=HEAP";
+    $sql = "CREATE TEMPORARY TABLE Xg_{$this->_tableName} ( contact_id int primary key) ";
     CRM_Core_DAO::executeQuery($sql);
 
     //used only when exclude group is selected
@@ -227,7 +227,7 @@ class CRM_Contact_Form_Search_Custom_RandomSegment extends CRM_Contact_Form_Sear
     $sql = "CREATE TEMPORARY TABLE Ig_{$this->_tableName}
             ( id int PRIMARY KEY AUTO_INCREMENT,
               contact_id int,
-              group_names varchar(64)) ENGINE=HEAP";
+              group_names varchar(64)) ";
 
     if ($this->_debug > 0) {
       print "-- Include groups query: <pre>";
@@ -305,7 +305,7 @@ class CRM_Contact_Form_Search_Custom_RandomSegment extends CRM_Contact_Form_Sear
     // now create a temp table to store the randomized contacts
     $sql = "DROP TEMPORARY TABLE IF EXISTS random_{$this->_tableName}";
     CRM_Core_DAO::executeQuery($sql);
-    $sql = "CREATE TEMPORARY TABLE random_{$this->_tableName} ( id int primary key ) ENGINE=HEAP";
+    $sql = "CREATE TEMPORARY TABLE random_{$this->_tableName} ( id int primary key ) ";
     CRM_Core_DAO::executeQuery($sql);
 
     if (substr($this->_segmentSize, -1) == '%') {

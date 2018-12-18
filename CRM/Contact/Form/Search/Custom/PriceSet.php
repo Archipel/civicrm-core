@@ -94,7 +94,7 @@ CREATE TEMPORARY TABLE {$this->_tableName} (
     $sql .= "
 PRIMARY KEY ( id ),
 UNIQUE INDEX unique_participant_id ( participant_id )
-) ENGINE=HEAP
+) 
 ";
 
     CRM_Core_DAO::executeQuery($sql);

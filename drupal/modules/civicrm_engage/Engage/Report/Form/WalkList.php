@@ -424,7 +424,7 @@ class Engage_Report_Form_WalkList extends Engage_Report_Form_List {
                   contact_id      INT
                   $receiveDate $contAmount
                   )
-                 ENGINE=HEAP
+                 
                  DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci";
     CRM_Core_DAO::executeQuery($sql);
 
