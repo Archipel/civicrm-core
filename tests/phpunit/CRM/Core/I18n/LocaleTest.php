@@ -1,8 +1,9 @@
-{*
+<?php
+/*
  +--------------------------------------------------------------------+
  | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -22,17 +23,35 @@
  | GNU Affero General Public License or the licensing of CiviCRM,     |
  | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
  +--------------------------------------------------------------------+
-*}
-{htxt id="test-intro-title"}
-  {ts}Test Message{/ts}
-{/htxt}
-{htxt id="test-intro"}
-<p>{ts}It's a good idea to test your mailing by sending it to yourself and/or a selected group of people in your organization. You can also view your content in the preview panel below.{/ts}</p>
-<p>{ts}Enter a single email address or select an existing group and click "Send a Test Mailing." Once you receive the test mailing:{/ts}</p>
-<ul>
-<li>{ts}Verify the content and formatting.{/ts}</li>
-<li>{ts}If you are using mail-merge tokens, check that they have been replaced with expected values.{/ts}</li>
-<li>{ts}Click on each included link to make sure they go to the expected web pages.{/ts}</li>
-</ul>
-<p>{ts}If you need to make changes, you can click <strong>Previous</strong> to return to the content step, make your changes, and send another test.{/ts}</p>
-{/htxt}
+ */
+/**
+ * Class CRM_Core_I18n_LocaleTest
+ * @group headless
+ */
+class CRM_Core_I18n_LocaleTest extends CiviUnitTestCase {
+
+  public function setUp() {
+    parent::setUp();
+  }
+
+  public function tearDown() {
+    CRM_Core_I18n_Schema::makeSinglelingual('en_US');
+    parent::tearDown();
+  }
+
+  /**
+   *
+   */
+  public function testI18nLocaleChange() {
+    $this->enableMultilingual();
+    CRM_Core_I18n_Schema::addLocale('fr_CA', 'en_US');
+
+    CRM_Core_I18n::singleton()->setLocale('fr_CA');
+    $locale = CRM_Core_I18n::getLocale();
+
+    $this->assertEquals($locale, 'fr_CA');
+    CRM_Core_I18n::singleton()->setLocale('en_US');
+    Civi::$statics['CRM_Core_I18n']['singleton'] = [];
+  }
+
+}

@@ -1792,6 +1792,12 @@ class api_v3_ContactTest extends CiviUnitTestCase {
 
     $result = $this->callAPISuccess('contact', 'getquick', $params);
     $this->assertEquals(17, $result['values'][0]['id']);
+    $params = array(
+      'name' => "TestContact@example.com",
+      'field_name' => 'sort_name',
+    );
+    $result = $this->callAPISuccess('contact', 'getquick', $params);
+    $this->assertEquals(17, $result['values'][0]['id']);
   }
 
   /**
@@ -2061,6 +2067,13 @@ class api_v3_ContactTest extends CiviUnitTestCase {
       'id' => '@user:exampleUser',
     ));
     $this->assertEquals('testGetByUsername', $result['values'][$cid]['first_name']);
+
+    // Check search of contacts with & without uf records
+    $result = $this->callAPISuccess('Contact', 'get', ['uf_user' => 1]);
+    $this->assertArrayHasKey($cid, $result['values']);
+
+    $result = $this->callAPISuccess('Contact', 'get', ['uf_user' => 0]);
+    $this->assertArrayNotHasKey($cid, $result['values']);
   }
 
   /**
