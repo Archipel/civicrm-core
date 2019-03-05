@@ -160,6 +160,7 @@ class CRM_Core_QuickForm_Action_Upload extends CRM_Core_QuickForm_Action {
       $this->upload($page, $data, $pageName, $name);
     }
 
+    /* @var $state CRM_Core_State */
     $state = &$this->_stateMachine->getState($pageName);
     if (empty($state)) {
       return $page->handle('display');
