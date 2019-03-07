@@ -327,6 +327,8 @@ class CRM_Event_Form_Registration_Confirm extends CRM_Event_Form_Registration {
         ),
       )
     );
+    $this->add('hidden', session_name(), session_id());
+    //$this->add('hidden', 'id', $this->_values['event']['id']);
 
     $defaults = array();
     $fields = array();

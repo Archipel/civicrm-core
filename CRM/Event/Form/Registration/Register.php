@@ -294,6 +294,8 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
 
     $this->add('hidden', 'scriptFee', NULL);
     $this->add('hidden', 'scriptArray', NULL);
+    $this->add('hidden', session_name(), session_id());
+    $this->add('hidden', 'id', $this->_values['event']['id']);
 
     $bypassPayment = $allowGroupOnWaitlist = $isAdditionalParticipants = FALSE;
     if ($this->_values['event']['is_multiple_registrations']) {
@@ -1221,7 +1223,7 @@ class CRM_Event_Form_Registration_Register extends CRM_Event_Form_Registration {
             $status = ts("It looks like you are already registered for this event. If you want to change your registration, or you feel that you've received this message in error, please contact the site administrator.") . ' ' . ts('You can also <a href="%1">register another participant</a>.', array(1 => $registerUrl));
             CRM_Core_Session::singleton()->setStatus($status, ts('Oops.'), 'alert');
             $url = CRM_Utils_System::url('civicrm/event/info',
-              "reset=1&id={$self->_values['event']['id']}&noFullMsg=true"
+              "reset=1&id={$self->_values['event']['id']}&noFullMsg=true&" . session_name() . '=' . session_id()
             );
             if ($self->_action & CRM_Core_Action::PREVIEW) {
               $url .= '&action=preview';

@@ -284,7 +284,7 @@ class CRM_Core_Invoke {
       }
       else {
         $newArgs = explode('/', $_GET[$config->userFrameworkURLVar]);
-        $mode = 'null';
+        $mode = null;
         if (isset($pageArgs['mode'])) {
           $mode = $pageArgs['mode'];
           unset($pageArgs['mode']);

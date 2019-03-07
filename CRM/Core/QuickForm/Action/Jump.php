@@ -77,7 +77,7 @@ class CRM_Core_QuickForm_Action_Jump extends CRM_Core_QuickForm_Action {
     // prevent URLs that end in ? from causing redirects
     $action = rtrim($action, '?');
     // FIXME: this should be passed through CRM_Utils_System::url()
-    $url = $action . (FALSE === strpos($action, '?') ? '?' : '&') . $current->getButtonName('display') . '=true' . '&qfKey=' . $page->get('qfKey') . '&id=' . $page->get('id');
+    $url = $action . (FALSE === strpos($action, '?') ? '?' : '&') . $current->getButtonName('display') . '=true' . '&qfKey=' . $page->get('qfKey') . '&id=' . $page->get('id') . '&' . session_name() . '='.session_id();
 
     CRM_Utils_System::redirect($url);
   }
