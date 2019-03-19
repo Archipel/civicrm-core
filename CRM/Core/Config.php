@@ -118,6 +118,9 @@ class CRM_Core_Config extends CRM_Core_Config_MagicMerge {
         unset($errorScope);
 
         CRM_Utils_Hook::config(self::$_singleton);
+        if($_SESSION){ // fix possible __PHP_Incomplete_Class
+          $_SESSION = unserialize(serialize($_SESSION));
+        }
         self::$_singleton->authenticate();
 
         // Extreme backward compat: $config binds to active domain at moment of setup.
