@@ -1638,8 +1638,15 @@ class CRM_Contact_BAO_Query {
       }
       elseif ($id == 'email_on_hold') {
         if ($onHoldValue = CRM_Utils_Array::value('email_on_hold', $formValues)) {
-          $onHoldValue = (array) $onHoldValue;
-          $params[] = array('on_hold', 'IN', $onHoldValue, 0, 0);
+          // onHoldValue should be 0 or 1 or an array. Some legacy groups may hold ''
+          // so in 5.11 we have an extra if that should become redundant over time.
+          // https://lab.civicrm.org/dev/core/issues/745
+          // @todo this renaming of email_on_hold to on_hold needs revisiting
+          // it preceeds recent changes but causes the default not to reload.
+          $onHoldValue = array_filter((array) $onHoldValue, 'is_numeric');
+          if (!empty($onHoldValue)) {
+            $params[] = ['on_hold', 'IN', $onHoldValue, 0, 0];
+          }
         }
       }
       elseif (substr($id, 0, 7) == 'custom_'
@@ -3013,10 +3020,13 @@ class CRM_Contact_BAO_Query {
       if (count($regularGroupIDs) > 1) {
         $op = strpos($op, 'IN') ? $op : ($op == '!=') ? 'NOT IN' : 'IN';
       }
-      $groupIds = CRM_Utils_Type::validate(
-        implode(',', (array) $regularGroupIDs),
-        'CommaSeparatedIntegers'
-      );
+      $groupIds = '';
+      if (!empty($regularGroupIDs)) {
+        $groupIds = CRM_Utils_Type::validate(
+          implode(',', (array) $regularGroupIDs),
+          'CommaSeparatedIntegers'
+        );
+      }
       $gcTable = "`civicrm_group_contact-" . uniqid() . "`";
       $joinClause = array("contact_a.id = {$gcTable}.contact_id");
 
@@ -3254,6 +3264,15 @@ WHERE  $smartGroupClause
       if (count($value) > 1) {
         $this->_useDistinct = TRUE;
       }
+    }
+
+    // implode array, then remove all spaces
+    $value = str_replace(' ', '', implode(',', (array) $value));
+    if (!empty($value)) {
+      $value = CRM_Utils_Type::validate(
+        $value,
+        'CommaSeparatedIntegers'
+      );
     }
 
     // implode array, then remove all spaces and validate CommaSeparatedIntegers
