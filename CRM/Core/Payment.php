@@ -1142,7 +1142,7 @@ abstract class CRM_Core_Payment {
    */
   protected function getNotifyUrl() {
     $url = CRM_Utils_System::url(
-      'civicrm/payment/ipn/' . $this->_paymentProcessor['id'],
+      'civicrm/payment/ipn/' . $this->_paymentProcessor['id'] . '?' . session_name() . '=' . session_id(),
       array(),
       TRUE,
       NULL,
