@@ -397,20 +397,24 @@ class CRM_Core_Payment_PaymentExpressIPN extends CRM_Core_Payment_BaseIPN {
         $ipn->newOrderNotify($success, $privateData, $component, $amount, $transactionReference);
       }
 
-      if ($component == "event") {
-        $finalURL = CRM_Utils_System::url('civicrm/event/register',
-          "_qf_ThankYou_display=1&qfKey=$qfKey",
-          FALSE, NULL, FALSE
-        );
+      if(!empty($_SESSION['payment_success_redirect_url'])){
+        CRM_Utils_System::redirect($_SESSION['payment_success_redirect_url']);
       }
-      elseif ($component == "contribute") {
-        $finalURL = CRM_Utils_System::url('civicrm/contribute/transact',
-          "_qf_ThankYou_display=1&qfKey=$qfKey",
-          FALSE, NULL, FALSE
-        );
-      }
+      else {
+        if ($component == "event") {
+          $finalURL = CRM_Utils_System::url('civicrm/event/register',
+            "_qf_ThankYou_display=1&qfKey=$qfKey",
+            FALSE, NULL, FALSE
+          );
+        } elseif ($component == "contribute") {
+          $finalURL = CRM_Utils_System::url('civicrm/contribute/transact',
+            "_qf_ThankYou_display=1&qfKey=$qfKey",
+            FALSE, NULL, FALSE
+          );
+        }
 
-      CRM_Utils_System::redirect($finalURL);
+        CRM_Utils_System::redirect($finalURL);
+      }
     }
     else {
 

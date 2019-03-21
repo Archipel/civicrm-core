@@ -1073,6 +1073,10 @@ abstract class CRM_Core_Payment {
    * @return string
    */
   protected function getReturnSuccessUrl($qfKey) {
+    if(!isset($this->successUrl) && !empty($_SESSION['payment_success_redirect_url'])){
+      $this->successUrl = $_SESSION['payment_success_redirect_url'];
+    }
+
     if (isset($this->successUrl)) {
       return $this->successUrl;
     }
