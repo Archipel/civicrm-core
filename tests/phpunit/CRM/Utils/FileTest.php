@@ -23,6 +23,7 @@ class CRM_Utils_FileTest extends CiviUnitTestCase {
       ));
     }
   }
+
   public function testStripComment() {
     $strings = array(
       "\nab\n-- cd\nef" => "\nab\nef",
@@ -92,6 +93,41 @@ class CRM_Utils_FileTest extends CiviUnitTestCase {
    */
   public function testFileNameValid($fileName, $expectedResult) {
     $this->assertEquals($expectedResult, CRM_Utils_File::isValidFileName($fileName));
+  }
+
+  public function pathToFileExtension() {
+    $cases = [];
+    $cases[] = ['/evil.pdf', 'pdf'];
+    $cases[] = ['/helloworld.jpg', 'jpg'];
+    $cases[] = ['/smartwatch_1736683_1280_9af3657015e8660cc234eb1601da871.jpg', 'jpg'];
+    return $cases;
+  }
+
+  /**
+   * Test returning appropriate file extension
+   * @dataProvider pathToFileExtension
+   * @param string $path
+   * @param string $expectedExtension
+   */
+  public function testPathToExtension($path, $expectedExtension) {
+    $this->assertEquals($expectedExtension, CRM_Utils_File::getExtensionFromPath($path));
+  }
+
+  public function mimeTypeToExtension() {
+    $cases = [];
+    $cases[] = ['text/plain', ['txt', 'text', 'conf', 'def', 'list', 'log', 'in']];
+    $cases[] = ['image/jpeg', ['jpeg', 'jpg', 'jpe']];
+    $cases[] = ['image/png', ['png']];
+    return $cases;
+  }
+
+  /**
+   * @dataProvider mimeTypeToExtension
+   * @param stirng $mimeType
+   * @param array $expectedExtensions
+   */
+  public function testMimeTypeToExtension($mimeType, $expectedExtensions) {
+    $this->assertEquals($expectedExtensions, CRM_Utils_File::getAcceptableExtensionsForMimeType($mimeType));
   }
 
 }

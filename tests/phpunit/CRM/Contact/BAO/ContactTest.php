@@ -1550,7 +1550,8 @@ class CRM_Contact_BAO_ContactTest extends CiviUnitTestCase {
 
     $prevTimestamps = $origTimestamps;
     foreach ($callbacks as $callbackName => $callback) {
-      sleep(1); // advance clock by 1 second to ensure timestamps change
+      // advance clock by 1 second to ensure timestamps change
+      sleep(1);
 
       $callback($contactId);
       $newTimestamps = CRM_Contact_BAO_Contact::getTimestamps($contactId);
@@ -1620,6 +1621,20 @@ class CRM_Contact_BAO_ContactTest extends CiviUnitTestCase {
 
     //cleanup DB by deleting the contact
     $this->contactDelete($contactId);
+  }
+
+  /**
+   * Test that contact details are still displayed if no email is present.
+   *
+   * @throws \Exception
+   */
+  public function testContactEmailDetailsWithNoPrimaryEmail() {
+    $params = $this->contactParams();
+    unset($params['email']);
+    $contact = CRM_Contact_BAO_Contact::create($params);
+    $contactId = $contact->id;
+    $result = CRM_Contact_BAO_Contact_Location::getEmailDetails($contactId);
+    $this->assertEquals([$contact->display_name, NULL, NULL, NULL], $result);
   }
 
 }
