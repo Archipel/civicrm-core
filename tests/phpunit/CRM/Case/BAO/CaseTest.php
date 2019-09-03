@@ -72,9 +72,14 @@ class CRM_Case_BAO_CaseTest extends CiviUnitTestCase {
   /**
    * Create and return case object of given Client ID.
    * @param $clientId
+   * @param $loggedInUser
    * @return CRM_Case_BAO_Case
    */
-  private function createCase($clientId) {
+  private function createCase($clientId, $loggedInUser = NULL) {
+    if (empty($loggedInUser)) {
+      // backwards compatibility - but it's more typical that the creator is a different person than the client
+      $loggedInUser = $clientId;
+    }
     $caseParams = array(
       'activity_subject' => 'Case Subject',
       'client_id'        => $clientId,
@@ -88,7 +93,7 @@ class CRM_Case_BAO_CaseTest extends CiviUnitTestCase {
       'activity_details' => '',
     );
     $form = new CRM_Case_Form_Case();
-    $caseObj = $form->testSubmit($caseParams, "OpenCase", $clientId, "standalone");
+    $caseObj = $form->testSubmit($caseParams, "OpenCase", $loggedInUser, "standalone");
     return $caseObj;
   }
 
@@ -166,6 +171,68 @@ class CRM_Case_BAO_CaseTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test that all custom files are migrated to new case when case is assigned to new client.
+   */
+  public function testCaseReassignForCustomFiles() {
+    $individual = $this->individualCreate();
+    $customGroup = $this->customGroupCreate(array(
+      'extends' => 'Case',
+    ));
+    $customGroup = $customGroup['values'][$customGroup['id']];
+
+    $customFileFieldA = $this->customFieldCreate(array(
+      'custom_group_id' => $customGroup['id'],
+      'html_type'       => 'File',
+      'is_active'       => 1,
+      'default_value'   => 'null',
+      'label'           => 'Custom File A',
+      'data_type'       => 'File',
+    ));
+
+    $customFileFieldB = $this->customFieldCreate(array(
+      'custom_group_id' => $customGroup['id'],
+      'html_type'       => 'File',
+      'is_active'       => 1,
+      'default_value'   => 'null',
+      'label'           => 'Custom File B',
+      'data_type'       => 'File',
+    ));
+
+    // Create two files to attach to the new case
+    $filepath = Civi::paths()->getPath('[civicrm.files]/custom');
+
+    CRM_Utils_File::createFakeFile($filepath, 'Bananas do not bend themselves without a little help.', 'i_bend_bananas.txt');
+    $fileA = $this->callAPISuccess('File', 'create', ['uri' => "$filepath/i_bend_bananas.txt"]);
+
+    CRM_Utils_File::createFakeFile($filepath, 'Wombats will bite your ankles if you run from them.', 'wombats_bite_your_ankles.txt');
+    $fileB = $this->callAPISuccess('File', 'create', ['uri' => "$filepath/wombats_bite_your_ankles.txt"]);
+
+    $caseObj = $this->createCase($individual);
+
+    $this->callAPISuccess('Case', 'create', array(
+      'id'                                => $caseObj->id,
+      'custom_' . $customFileFieldA['id'] => $fileA['id'],
+      'custom_' . $customFileFieldB['id'] => $fileB['id'],
+    ));
+
+    $reassignIndividual = $this->individualCreate();
+    $this->createLoggedInUser();
+    $newCase = CRM_Case_BAO_Case::mergeCases($reassignIndividual, $caseObj->id, $individual, NULL, TRUE);
+
+    $entityFiles = new CRM_Core_DAO_EntityFile();
+    $entityFiles->entity_id = $newCase[0];
+    $entityFiles->entity_table = $customGroup['table_name'];
+    $entityFiles->find();
+
+    $totalEntityFiles = 0;
+    while ($entityFiles->fetch()) {
+      $totalEntityFiles++;
+    }
+
+    $this->assertEquals(2, $totalEntityFiles, 'Two files should be attached with new case.');
+  }
+
+  /**
    * FIXME: need to create an activity to run this test
    * function testGetCases() {
    *   $cases = CRM_Case_BAO_Case::getCases(TRUE, 3);
@@ -182,5 +249,121 @@ class CRM_Case_BAO_CaseTest extends CiviUnitTestCase {
    * function testGetRelatedCases() {
    * }
    */
+
+  /**
+   * Test various things after a case is closed.
+   *
+   * This annotation is not ideal, but without it there is some kind of
+   * messup that happens to quickform that persists between tests, e.g.
+   * it can't add maxfilesize validation rules.
+   * @runInSeparateProcess
+   * @preserveGlobalState disabled
+   */
+  public function testCaseClosure() {
+    $loggedInUser = $this->createLoggedInUser();
+    $client_id = $this->individualCreate();
+    $caseObj = $this->createCase($client_id, $loggedInUser);
+    $case_id = $caseObj->id;
+
+    // Get the case status option value for "Resolved" (name="Closed").
+    $closed_status = $this->callAPISuccess('OptionValue', 'getValue', [
+      'return' => 'value',
+      'option_group_id' => 'case_status',
+      'name' => 'Closed',
+    ]);
+    $this->assertNotEmpty($closed_status);
+
+    // Get the activity status option value for "Completed"
+    $completed_status = $this->callAPISuccess('OptionValue', 'getValue', [
+      'return' => 'value',
+      'option_group_id' => 'activity_status',
+      'name' => 'Completed',
+    ]);
+    $this->assertNotEmpty($completed_status);
+
+    // Get the value for the activity type id we need to create
+    $atype = CRM_Core_PseudoConstant::getKey('CRM_Activity_BAO_Activity', 'activity_type_id', 'Change Case Status');
+
+    // Now it gets weird. There doesn't seem to be a good way to test this, so we simulate a form and the various bits that go with it.
+
+    // HTTP vars needed because that's how the form determines stuff
+    $oldMETHOD = empty($_SERVER['REQUEST_METHOD']) ? NULL : $_SERVER['REQUEST_METHOD'];
+    $oldGET = empty($_GET) ? [] : $_GET;
+    $oldREQUEST = empty($_REQUEST) ? [] : $_REQUEST;
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    $_GET['caseid'] = $case_id;
+    $_REQUEST['caseid'] = $case_id;
+    $_GET['cid'] = $client_id;
+    $_REQUEST['cid'] = $client_id;
+    $_GET['action'] = 'add';
+    $_REQUEST['action'] = 'add';
+    $_GET['reset'] = 1;
+    $_REQUEST['reset'] = 1;
+    $_GET['atype'] = $atype;
+    $_REQUEST['atype'] = $atype;
+
+    $form = new CRM_Case_Form_Activity();
+    $form->controller = new CRM_Core_Controller_Simple('CRM_Case_Form_Activity', 'Case Activity');
+    $form->_activityTypeId  = $atype;
+    $form->_activityTypeName = 'Change Case Status';
+    $form->_activityTypeFile = 'ChangeCaseStatus';
+
+    $form->preProcess();
+    $form->buildQuickForm();
+    $form->setDefaultValues();
+
+    // Now submit the form. Store the date used so we can check it later.
+
+    $t = time();
+    $now_date = date('Y-m-d H:i:s', $t);
+    $now_date_date_only = date('Y-m-d', $t);
+    $actParams = [
+      'is_unittest' => TRUE,
+      'case_status_id' => $closed_status,
+      'activity_date_time' => $now_date,
+      'target_contact_id' => $client_id,
+      'source_contact_id' => $loggedInUser,
+      // yeah this is extra weird, but without it you get the wrong subject
+      'subject' => 'null',
+    ];
+
+    $form->postProcess($actParams);
+
+    // Ok now let's check some things
+
+    $result = $this->callAPISuccess('Case', 'get', [
+      'sequential' => 1,
+      'id' => $case_id,
+    ]);
+    $caseData = array_shift($result['values']);
+
+    $this->assertEquals($caseData['end_date'], $now_date_date_only);
+    $this->assertEquals($caseData['status_id'], $closed_status);
+
+    // now get the latest activity and check some things for it
+
+    $actId = max($caseData['activities']);
+    $this->assertNotEmpty($actId);
+
+    $result = $this->callAPISuccess('Activity', 'get', [
+      'sequential' => 1,
+      'id' => $actId,
+    ]);
+    $activity = array_shift($result['values']);
+
+    $this->assertEquals($activity['subject'], 'Case status changed from Ongoing to Resolved');
+    $this->assertEquals($activity['activity_date_time'], $now_date);
+    $this->assertEquals($activity['status_id'], $completed_status);
+
+    // Now replace old globals
+    if (is_null($oldMETHOD)) {
+      unset($_SERVER['REQUEST_METHOD']);
+    }
+    else {
+      $_SERVER['REQUEST_METHOD'] = $oldMETHOD;
+    }
+    $_GET = $oldGET;
+    $_REQUEST = $oldREQUEST;
+  }
 
 }

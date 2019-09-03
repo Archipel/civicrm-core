@@ -132,9 +132,7 @@ SELECT count( DISTINCT contact_type )
 FROM   civicrm_contact
 WHERE  id IN ( $idString )
 ";
-    $count = CRM_Core_DAO::singleValueQuery($query,
-      CRM_Core_DAO::$_nullArray
-    );
+    $count = CRM_Core_DAO::singleValueQuery($query);
     return $count > 1 ? TRUE : FALSE;
   }
 
@@ -228,8 +226,9 @@ WHERE  id IN ( $idString )
     $inputLF = CRM_Utils_Array::value(2, $input);
 
     $check = self::generateChecksum($contactID, $inputTS, $inputLF);
-
-    if (!hash_equals($check, $inputCheck)) {
+    // Joomla_11 - If $inputcheck is null without explicitly casting to a string
+    // you get an error.
+    if (!hash_equals($check, (string) $inputCheck)) {
       return FALSE;
     }
 
@@ -1086,7 +1085,7 @@ WHERE id IN (" . implode(',', $contactIds) . ")";
    * @param string $greetingType
    *   Greeting type.
    *
-   * @return int|NULL
+   * @return int|null
    */
   public static function defaultGreeting($contactType, $greetingType) {
     $contactTypeFilters = [

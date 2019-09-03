@@ -104,11 +104,14 @@ class api_v3_FinancialTypeACLTest extends CiviUnitTestCase {
 
   /**
    * Clean up after each test.
+   *
+   * @throws \Exception
    */
   public function tearDown() {
     $this->quickCleanUpFinancialEntities();
     $this->quickCleanup(array('civicrm_uf_match'));
     $this->disableFinancialACLs();
+    parent::tearDown();
   }
 
   /**
@@ -197,7 +200,6 @@ class api_v3_FinancialTypeACLTest extends CiviUnitTestCase {
     $this->addFinancialAclPermissions([['view', 'Donation']]);
     $this->callAPISuccessGetSingle('contribution', $params);
     $this->callAPISuccessGetCount('contribution', ['financial_type_id' => 'Member Dues', 'check_permissions' => 1], 0);
-    $this->markTestIncomplete('check_permissions = 0 should be respected but is not - I have added a todo at the right place but not changed it as yet');
     $this->callAPISuccessGetCount('contribution', ['financial_type_id' => 'Member Dues'], 1);
   }
 

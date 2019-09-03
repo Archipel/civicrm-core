@@ -245,7 +245,8 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
     );
     $softParam = array('soft_credit_type_id' => 1);
 
-    $honoreeContactId = CRM_Contact_BAO_Contact::createProfileContact($params, CRM_Core_DAO::$_nullArray,
+    $null = [];
+    $honoreeContactId = CRM_Contact_BAO_Contact::createProfileContact($params, $null,
       NULL, NULL, $honoreeProfileId
     );
 
@@ -1000,22 +1001,6 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
   }
 
   /**
-   * Test checkContributeSettings.
-   */
-  public function testCheckContributeSettings() {
-    $settings = CRM_Contribute_BAO_Contribution::checkContributeSettings('deferred_revenue_enabled');
-    $this->assertNull($settings);
-    $params = array(
-      'contribution_invoice_settings' => array(
-        'deferred_revenue_enabled' => '1',
-      ),
-    );
-    $this->callAPISuccess('Setting', 'create', $params);
-    $settings = CRM_Contribute_BAO_Contribution::checkContributeSettings('deferred_revenue_enabled');
-    $this->assertEquals($settings, 1, 'Check for settings has failed');
-  }
-
-  /**
    * Test allowUpdateRevenueRecognitionDate.
    */
   public function testAllowUpdateRevenueRecognitionDate() {
@@ -1131,7 +1116,8 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
           'previous_line_total' => 100,
           'diff' => -1,
         ),
-        'context' => 'changePaymentInstrument',
+        // Most contexts are ignored. Removing refs to change payment instrument so placeholder.
+        'context' => 'not null',
         'expectedItemAmount' => -100,
       ),
       array(
@@ -1313,36 +1299,35 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
   }
 
   /**
-   * Test for function createProportionalFinancialEntries().
+   * Test to ensure proportional entries are creating when adding a payment..
+   *
+   * In this test we create a pending contribution for $110 consisting of $100 contribution and $10 tax.
+   *
+   * We pay $50, resulting in it being allocated as $45.45 paymnt & $4.55 tax. This is in equivalent proportions
+   * to the original payment - ie. .0909 of the $110 is 10 & that * 50 is $4.54 (note the rounding seems wrong as it should be
+   * saved un-rounded).
    */
-  public function testcreateProportionalFinancialEntries() {
-    list($contribution, $financialAccount) = $this->createContributionWithTax();
-    $params = array(
+  public function testCreateProportionalFinancialEntriesViaPaymentCreate() {
+    list($contribution, $financialAccount) = $this->createContributionWithTax([], FALSE);
+    $params = [
       'total_amount' => 50,
       'to_financial_account_id' => $financialAccount->financial_account_id,
       'payment_instrument_id' => 1,
       'trxn_date' => date('Ymd'),
       'status_id' => 1,
       'entity_id' => $contribution['id'],
-    );
-    $financialTrxn = $this->callAPISuccess('FinancialTrxn', 'create', $params);
-    $entityParams = array(
-      'contribution_total_amount' => $contribution['total_amount'],
-      'trxn_total_amount' => 55,
-      'trxn_id' => $financialTrxn['id'],
-    );
-    $lineItems = CRM_Price_BAO_LineItem::getLineItemsByContributionID($contribution['id']);
-    list($ftIds, $taxItems) = CRM_Contribute_BAO_Contribution::getLastFinancialItemIds($contribution['id']);
-    CRM_Contribute_BAO_Contribution::createProportionalFinancialEntries($entityParams, $lineItems, $ftIds, $taxItems);
-    $eftParams = array(
+      'contribution_id' => $contribution['id'],
+    ];
+    $financialTrxn = $this->callAPISuccess('Payment', 'create', $params);
+    $eftParams = [
       'entity_table' => 'civicrm_financial_item',
       'financial_trxn_id' => $financialTrxn['id'],
-    );
+    ];
     $entityFinancialTrxn = $this->callAPISuccess('EntityFinancialTrxn', 'Get', $eftParams);
     $this->assertEquals($entityFinancialTrxn['count'], 2, 'Invalid count.');
-    $testAmount = array(5, 50);
+    $testAmount = [4.55, 45.45];
     foreach ($entityFinancialTrxn['values'] as $value) {
-      $this->assertEquals($value['amount'], array_pop($testAmount), 'Invalid amount stored in civicrm_entity_financial_trxn.');
+      $this->assertEquals(array_pop($testAmount), $value['amount'], 'Invalid amount stored in civicrm_entity_financial_trxn.');
     }
   }
 
@@ -1372,7 +1357,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
   /**
    * Function to create contribution with tax.
    */
-  public function createContributionWithTax($params = array()) {
+  public function createContributionWithTax($params = array(), $isCompleted = TRUE) {
     if (!isset($params['total_amount'])) {
       $params['total_amount'] = 100;
     }
@@ -1386,7 +1371,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       'total_amount' => $params['total_amount'],
       'financial_type_id' => $financialType['id'],
       'contact_id' => $contactId,
-      'contribution_status_id' => 1,
+      'contribution_status_id' => $isCompleted ? 1 : 2,
       'price_set_id' => 0,
     ), CRM_Core_Action::ADD);
     $contribution = $this->callAPISuccessGetSingle('Contribution',
@@ -1587,6 +1572,104 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       'id' => $result['entity_id'],
       'return' => array("financial_account_id.name"),
     ), $checkAgainst);
+  }
+
+  /**
+   *  https://lab.civicrm.org/dev/financial/issues/56
+   * Changing financial type on a contribution records correct financial items
+   */
+  public function testChangingFinancialTypeWithoutTax() {
+    $ids = $values = [];
+    $contactId = $this->individualCreate();
+    $params = array(
+      'contact_id' => $contactId,
+      'receive_date' => date('YmdHis'),
+      'total_amount' => 100.00,
+      'financial_type_id' => 'Donation',
+      'contribution_status_id' => 'Completed',
+    );
+    /* first test the scenario when sending an email */
+    $contributionId = $this->callAPISuccess(
+      'contribution',
+      'create',
+      $params
+    )['id'];
+
+    // Update Financial Type.
+    $this->callAPISuccess('contribution', 'create', [
+      'id' => $contributionId,
+      'financial_type_id' => 'Event Fee',
+    ]);
+
+    // Get line item
+    $lineItem = $this->callAPISuccessGetSingle('LineItem', [
+      'contribution_id' => $contributionId,
+      'return' => ["financial_type_id.name", "line_total"],
+    ]);
+
+    $this->assertEquals(
+      $lineItem['line_total'],
+      100.00,
+      'Invalid line amount.'
+    );
+
+    $this->assertEquals(
+      $lineItem['financial_type_id.name'],
+      'Event Fee',
+      'Invalid Financial Type stored.'
+    );
+
+    // Get Financial Items.
+    $financialItems = $this->callAPISuccess('FinancialItem', 'get', [
+      'entity_id' => $lineItem['id'],
+      'sequential' => 1,
+      'entity_table' => 'civicrm_line_item',
+      'options' => ['sort' => "id"],
+      'return' => ["financial_account_id.name", "amount", "description"],
+    ]);
+
+    $this->assertEquals($financialItems['count'], 3, 'Count mismatch.');
+
+    $toCheck = [
+      ['Donation', 100.00],
+      ['Donation', -100.00],
+      ['Event Fee', 100.00],
+    ];
+
+    foreach ($financialItems['values'] as $key => $values) {
+      $this->assertEquals(
+        $values['financial_account_id.name'],
+        $toCheck[$key][0],
+        'Invalid Financial Account stored.'
+      );
+      $this->assertEquals(
+        $values['amount'],
+        $toCheck[$key][1],
+        'Amount mismatch.'
+      );
+      $this->assertEquals(
+        $values['description'],
+        'Contribution Amount',
+        'Description mismatch.'
+      );
+    }
+
+    // Check transactions.
+    $financialTransactions = $this->callAPISuccess('EntityFinancialTrxn', 'get', [
+      'return' => ["financial_trxn_id"],
+      'entity_table' => "civicrm_contribution",
+      'entity_id' => $contributionId,
+      'sequential' => 1,
+    ]);
+    $this->assertEquals($financialTransactions['count'], 3, 'Count mismatch.');
+
+    foreach ($financialTransactions['values'] as $key => $values) {
+      $this->callAPISuccessGetCount('EntityFinancialTrxn', [
+        'financial_trxn_id' => $values['financial_trxn_id'],
+        'amount' => $toCheck[$key][1],
+        'financial_trxn_id.total_amount' => $toCheck[$key][1],
+      ], 2);
+    }
   }
 
   /**

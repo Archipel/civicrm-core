@@ -68,6 +68,9 @@
   name        : Amal Sharma
   organization: Abhikalak Consultants
 
+- github      : mecachisenros
+  name        : Andrei Mondoc
+
 - github      : andrew-cormick-dockery
   name        : Andrew Cormick-Dockery
   jira        : andrew_dockery
@@ -178,6 +181,9 @@
 - name        : Brian McFee
   jira        : brian
 
+  github      : brianPHM
+  name        : Brian Matemachani
+
 - github      : brucew2013
   name        : Bruce Wolfe
   organization: Alcohol Justice
@@ -255,6 +261,10 @@
   name        : Chandana Bandara
   organization: CompuCorp
 
+- github      : CsarRamos
+  name        : César Ramos
+  organization: iXiam
+
 - github      : chrisfromredfin
   name        : Chris Wells
   organization: Redfin Solutions
@@ -314,7 +324,7 @@
 
 - github      : demeritcowboy
   name        : Dave D
-  jira        : demeritcowboy
+  jira        : Dave D
 
 - github      : dereklewis123
   name        : Derek Lewis
@@ -385,6 +395,10 @@
   name        : Edsel Lopez
   organization: JMA Consulting
   jira        : edsel
+
+- github      : edvanleeuwen
+  name        : Ed van Leeuwen
+  organization: Centrale Organisatie van Voetbal Scheidsrechters (COVS)
 
 - github      : eileenmcnaughton
   name        : Eileen McNaughton
@@ -480,6 +494,8 @@
 - github      : galgeek
   name        : Barbara Miller
   jira        : galgeek
+
+- github      : gareth-circle
 
 - github      : garethdylan361
   name        : Gareth Small
@@ -669,6 +685,10 @@
 - github      : joels341
   name        : Joel Stevens
 
+- github      : johncronan
+  name        : John Kyle Cronan
+  jira        : johnk
+
 - github      : johntwyman
   name        : John Twyman
   organization: Australian Greens
@@ -847,6 +867,10 @@
 - github      : lsmithgo
   name        : Lionel Smith-Gordon
   jira        : lsmithgo
+
+- github      : ltaliano
+  name        : Lisa Taliano
+  organization: National Urban League
 
 - github      : lyyana
   name        : Yuliyana Liyana
@@ -1225,7 +1249,7 @@
 
 - github      : scoobird
   name        : Morgan Robinson
-  organization: Palante
+  organization: Palante Technology Cooperative
 
 - name        : Steve Binkowski
   jira        : s.bink
@@ -1495,6 +1519,10 @@
 - name        : Milli Aje
   organization: Debre-Genet Holy Trinity Ethiopian Orthodox Tewahedo Church
   jira        : 'website@dght.uk'
+
+- github      : wadelson
+  organization: Webstanz
+  name        : Adelson
 
 - github      : wdecraene
   organization: Wim De Craene

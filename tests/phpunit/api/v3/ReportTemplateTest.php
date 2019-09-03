@@ -36,8 +36,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
 
   use CRMTraits_ACL_PermissionTrait;
   use CRMTraits_PCP_PCPTestTrait;
-
-  protected $_apiversion = 3;
+  use CRMTraits_Custom_CustomDataTrait;
 
   protected $contactIDs = [];
 
@@ -48,7 +47,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    */
   public function tearDown() {
     $this->quickCleanUpFinancialEntities();
-    $this->quickCleanup(array('civicrm_group', 'civicrm_saved_search', 'civicrm_group_contact', 'civicrm_group_contact_cache', 'civicrm_group'));
+    $this->quickCleanup(['civicrm_group', 'civicrm_saved_search', 'civicrm_group_contact', 'civicrm_group_contact_cache', 'civicrm_group'], TRUE);
     parent::tearDown();
   }
 
@@ -128,7 +127,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    *
    * @param $reportID
    *
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testReportTemplateSelectWhere($reportID) {
     $this->hookClass->setHook('civicrm_selectWhereClause', array($this, 'hookSelectWhere'));
@@ -196,7 +195,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    */
   public function testReportTemplateGetRowsContactSummary() {
     $description = "Retrieve rows from a report template (optionally providing the instance_id).";
-    $result = $this->callApiSuccess('report_template', 'getrows', array(
+    $result = $this->callAPISuccess('report_template', 'getrows', array(
       'report_id' => 'contact/summary',
       'options' => array('metadata' => array('labels', 'title')),
     ), __FUNCTION__, __FILE__, $description, 'Getrows');
@@ -220,12 +219,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    */
   public function testReportTemplateGetRowsMailingUniqueOpened() {
     $description = "Retrieve rows from a mailing opened report template.";
-    $op = new PHPUnit_Extensions_Database_Operation_Insert();
-    $op->execute($this->_dbconn,
-      $this->createFlatXMLDataSet(
-        dirname(__FILE__) . '/../../CRM/Mailing/BAO/queryDataset.xml'
-      )
-    );
+    $this->loadXMLDataSet(dirname(__FILE__) . '/../../CRM/Mailing/BAO/queryDataset.xml');
 
     // Check total rows without distinct
     global $_REQUEST;
@@ -260,7 +254,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    *
    * @param $reportID
    *
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testReportTemplateGetRowsAllReports($reportID) {
     //$reportID = 'logging/contact/summary';
@@ -318,7 +312,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    *
    * @param $reportID
    *
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testReportTemplateGetRowsAllReportsACL($reportID) {
     if (stristr($reportID, 'has existing issues')) {
@@ -337,7 +331,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    *
    * @param $reportID
    *
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testReportTemplateGetStatisticsAllReports($reportID) {
     if (stristr($reportID, 'has existing issues')) {
@@ -362,7 +356,6 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
     $reportsToSkip = array(
       'event/income' => 'I do no understand why but error is Call to undefined method CRM_Report_Form_Event_Income::from() in CRM/Report/Form.php on line 2120',
       'contribute/history' => 'Declaration of CRM_Report_Form_Contribute_History::buildRows() should be compatible with CRM_Report_Form::buildRows($sql, &$rows)',
-      'activitySummary' => 'We use temp tables for the main query generation and name are dynamic. These names are not available in stats() when called directly.',
     );
 
     $reports = civicrm_api3('report_template', 'get', array('return' => 'value', 'options' => array('limit' => 500)));
@@ -396,6 +389,11 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
     return array(array('member/detail'));
   }
 
+  /**
+   * Get the membership and contribution reports to test.
+   *
+   * @return array
+   */
   public static function getMembershipAndContributionReportTemplatesForGroupTests() {
     $templates = array_merge(self::getContributionReportTemplates(), self::getMembershipReportTemplates());
     foreach ($templates as $key => $value) {
@@ -917,6 +915,26 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test the custom data order by works when not in select.
+   *
+   * @dataProvider getMembershipAndContributionReportTemplatesForGroupTests
+   *
+   * @param string $template
+   *   Report template unique identifier.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testReportsCustomDataOrderBy($template) {
+    $this->entity = 'Contact';
+    $this->createCustomGroupWithFieldOfType();
+    $this->callAPISuccess('report_template', 'getrows', [
+      'report_id' => $template,
+      'contribution_or_soft_value' => 'contributions_only',
+      'order_bys' => [['column' => 'custom_' . $this->ids['CustomField']['text'], 'order' => 'ASC']],
+    ]);
+  }
+
+  /**
    * Test the group filter works on the various reports.
    *
    * @dataProvider getMembershipAndContributionReportTemplatesForGroupTests
@@ -936,9 +954,9 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test activity summary report - requiring all current fields to be output.
+   * Test activity details report - requiring all current fields to be output.
    */
-  public function testActivitySummary() {
+  public function testActivityDetails() {
     $this->createContactsWithActivities();
     $fields = [
       'contact_source' => '1',
@@ -1106,6 +1124,44 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test contact subtype filter on summary report.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testContactSubtypeNotNull() {
+    $this->individualCreate(['contact_sub_type' => ['Student', 'Parent']]);
+    $this->individualCreate();
+
+    $rows = $this->callAPISuccess('report_template', 'getrows', [
+      'report_id' => 'contact/summary',
+      'contact_sub_type_op' => 'nnll',
+      'contact_sub_type_value' => [],
+      'contact_type_op' => 'eq',
+      'contact_type_value' => 'Individual',
+    ]);
+    $this->assertEquals(1, $rows['count']);
+  }
+
+  /**
+   * Test contact subtype filter on summary report.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testContactSubtypeNull() {
+    $this->individualCreate(['contact_sub_type' => ['Student', 'Parent']]);
+    $this->individualCreate();
+
+    $rows = $this->callAPISuccess('report_template', 'getrows', [
+      'report_id' => 'contact/summary',
+      'contact_sub_type_op' => 'nll',
+      'contact_sub_type_value' => [],
+      'contact_type_op' => 'eq',
+      'contact_type_value' => 'Individual',
+    ]);
+    $this->assertEquals(1, $rows['count']);
+  }
+
+  /**
    * Test PCP report to ensure total donors and total committed is accurate.
    */
   public function testPcpReportTotals() {
@@ -1202,14 +1258,14 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
     );
     $c3 = $this->contributionCreate($contribution3params);
     // Now the soft contribution.
-    $p = array(
+    $p = [
       'contribution_id' => $c3,
       'pcp_id' => $pcp2->id,
       'contact_id' => $pcpOwnerContact2Id,
       'amount' => 200.00,
       'currency' => 'USD',
       'soft_credit_type_id' => $pcp_soft_credit_type_id,
-    );
+    ];
     $this->callAPISuccess('contribution_soft', 'create', $p);
 
     $template = 'contribute/pcp';
@@ -1231,7 +1287,7 @@ class api_v3_ReportTemplateTest extends CiviUnitTestCase {
    */
   public function testGetAddressColumns() {
     $template = 'event/participantlisting';
-    $rows = $this->callAPISuccess('report_template', 'getrows', [
+    $this->callAPISuccess('report_template', 'getrows', [
       'report_id' => $template,
       'fields' => [
         'sort_name' => '1',

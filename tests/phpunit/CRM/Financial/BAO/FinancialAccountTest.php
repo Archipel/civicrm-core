@@ -103,20 +103,21 @@ class CRM_Financial_BAO_FinancialAccountTest extends CiviUnitTestCase {
 
   /**
    * Check method del()
+   *
+   * @throws \CRM_Core_Exception
    */
-  public function testdel() {
-    $params = array(
+  public function testDel() {
+    $params = [
       'name' => 'Donations',
       'is_deductible' => 0,
       'is_active' => 1,
-    );
-    $ids = array();
-    $financialAccount = CRM_Financial_BAO_FinancialAccount::add($params, $ids);
+    ];
+    $financialAccount = CRM_Financial_BAO_FinancialAccount::add($params);
 
     CRM_Financial_BAO_FinancialAccount::del($financialAccount->id);
-    $params = array('id' => $financialAccount->id);
-    $result = CRM_Financial_BAO_FinancialAccount::retrieve($params, $defaults);
-    $this->assertEquals(empty($result), TRUE, 'Verify financial account record deletion.');
+    $params = ['id' => $financialAccount->id];
+    $result = CRM_Financial_BAO_FinancialAccount::retrieve($params);
+    $this->assertEmpty($result, 'Verify financial account record deletion.');
   }
 
   /**
@@ -275,8 +276,8 @@ class CRM_Financial_BAO_FinancialAccountTest extends CiviUnitTestCase {
    * Test for validating financial type has deferred revenue account relationship.
    */
   public function testcheckFinancialTypeHasDeferred() {
-    Civi::settings()->set('contribution_invoice_settings', array('deferred_revenue_enabled' => '1'));
-    $params = array();
+    Civi::settings()->set('deferred_revenue_enabled', 1);
+    $params = [];
     $valid = CRM_Financial_BAO_FinancialAccount::checkFinancialTypeHasDeferred($params);
     $this->assertFalse($valid, "This should have been false");
     $cid = $this->individualCreate();

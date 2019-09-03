@@ -27,6 +27,7 @@
  */
 
 use Civi\Payment\System;
+use League\Csv\Reader;
 
 /**
  *  Include class definitions
@@ -51,7 +52,7 @@ define('API_LATEST_VERSION', 3);
  *  Common functions for unit tests
  * @package CiviCRM
  */
-class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
+class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
 
   use \Civi\Test\Api3DocTrait;
   use \Civi\Test\GenericAssertionsTrait;
@@ -62,7 +63,7 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   /**
    *  Database has been initialized.
    *
-   * @var boolean
+   * @var bool
    */
   private static $dbInit = FALSE;
 
@@ -92,7 +93,7 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   protected $tempDirs;
 
   /**
-   * @var boolean populateOnce allows to skip db resets in setUp
+   * @var bool populateOnce allows to skip db resets in setUp
    *
    *  WARNING! USE WITH CAUTION - IT'LL RENDER DATA DEPENDENCIES
    *  BETWEEN TESTS WHEN RUN IN SUITE. SUITABLE FOR LOCAL, LIMITED
@@ -105,7 +106,7 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   public static $populateOnce = FALSE;
 
   /**
-   * @var boolean DBResetRequired allows skipping DB reset
+   * @var bool DBResetRequired allows skipping DB reset
    *               in specific test case. If you still need
    *               to reset single test (method) of such case, call
    *               $this->cleanDB() in the first line of this
@@ -117,6 +118,16 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
    * @var CRM_Core_Transaction|NULL
    */
   private $tx = NULL;
+
+  /**
+   * Array of IDs created to support the test.
+   *
+   * e.g
+   * $this->ids = ['Contact' => ['descriptive_key' => $contactID], 'Group' => [$groupID]];
+   *
+   * @var array
+   */
+  protected $ids = [];
 
   /**
    * Class used for hooks during tests.
@@ -184,7 +195,10 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
       // FIXME: loosen coupling
       _civix_phpunit_setUp();
     }
-    if (version_compare(PHPUnit_Runner_Version::id(), '5', '>=')) {
+    if (class_exists('PHPUnit_Runner_Version') && version_compare(\PHPUnit_Runner_Version::id(), '5', '>=')) {
+      $this->mockMethod = 'createMock';
+    }
+    elseif (class_exists('PHPUnit\Runner\Version') && version_compare(PHPUnit\Runner\Version::id(), '6', '>=')) {
       $this->mockMethod = 'createMock';
     }
   }
@@ -231,10 +245,8 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
    *
    *  Initialize the test database if it hasn't been initialized
    *
-   * @return PHPUnit_Extensions_Database_DB_IDatabaseConnection connection
    */
   protected function getConnection() {
-    $dbName = self::$_dbName;
     if (!self::$dbInit) {
       $dbName = self::getDBName();
 
@@ -246,7 +258,6 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
       self::$dbInit = TRUE;
     }
 
-    return $this->createDefaultDBConnection(Civi\Test::pdo(), $dbName);
   }
 
   /**
@@ -297,6 +308,8 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
     $session = CRM_Core_Session::singleton();
     $session->set('userID', NULL);
 
+    $this->_apiversion = 3;
+
     // REVERT
     $this->errorScope = CRM_Core_TemporaryErrorScope::useException();
     //  Use a temporary file for STDIN
@@ -320,6 +333,12 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
 
     // disable any left-over test extensions
     CRM_Core_DAO::executeQuery('DELETE FROM civicrm_extension WHERE full_name LIKE "test.%"');
+
+    $extensions = \CRM_Extension_System::singleton()->getManager();
+    $api4Status = $extensions->getStatus('org.civicrm.api4');
+    if ($api4Status != $extensions::STATUS_INSTALLED && $api4Status != $extensions::STATUS_UNKNOWN) {
+      $extensions->enable(['org.civicrm.api4']);
+    }
 
     // reset all the caches
     CRM_Utils_System::flushCache();
@@ -355,25 +374,73 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   public function loadAllFixtures() {
     $fixturesDir = __DIR__ . '/../../fixtures';
 
-    $this->getConnection()->getConnection()->query("SET FOREIGN_KEY_CHECKS = 0;");
+    CRM_Core_DAO::executeQuery("SET FOREIGN_KEY_CHECKS = 0;");
 
-    $xmlFiles = glob($fixturesDir . '/*.xml');
-    foreach ($xmlFiles as $xmlFixture) {
-      $op = new PHPUnit_Extensions_Database_Operation_Insert();
-      $dataset = $this->createXMLDataSet($xmlFixture);
-      $this->_tablesToTruncate = array_merge($this->_tablesToTruncate, $dataset->getTableNames());
-      $op->execute($this->_dbconn, $dataset);
+    $jsonFiles = glob($fixturesDir . '/*.json');
+    foreach ($jsonFiles as $jsonFixture) {
+      $json = json_decode(file_get_contents($jsonFixture));
+      foreach ($json as $tableName => $vars) {
+        if ($tableName === 'civicrm_contact') {
+          CRM_Core_DAO::executeQuery('DELETE c FROM civicrm_contact c LEFT JOIN civicrm_domain d ON d.contact_id = c.id WHERE d.id IS NULL');
+        }
+        else {
+          CRM_Core_DAO::executeQuery("TRUNCATE $tableName");
+        }
+        foreach ($vars as $entity) {
+          $keys = $values = [];
+          foreach ($entity as $key => $value) {
+            $keys[] = $key;
+            $values[] = is_numeric($value) ? $value : "'{$value}'";
+          }
+          CRM_Core_DAO::executeQuery("
+            INSERT INTO $tableName (" . implode(',', $keys) . ') VALUES(' . implode(',', $values) . ')'
+          );
+        }
+
+      }
     }
 
-    $yamlFiles = glob($fixturesDir . '/*.yaml');
-    foreach ($yamlFiles as $yamlFixture) {
-      $op = new PHPUnit_Extensions_Database_Operation_Insert();
-      $dataset = new PHPUnit_Extensions_Database_DataSet_YamlDataSet($yamlFixture);
-      $this->_tablesToTruncate = array_merge($this->_tablesToTruncate, $dataset->getTableNames());
-      $op->execute($this->_dbconn, $dataset);
-    }
+    CRM_Core_DAO::executeQuery("SET FOREIGN_KEY_CHECKS = 1;");
+  }
 
-    $this->getConnection()->getConnection()->query("SET FOREIGN_KEY_CHECKS = 1;");
+  /**
+   * Load the data that used to be handled by the discontinued dbunit class.
+   *
+   * This could do with further tidy up - the initial priority is simply to get rid of
+   * the dbunity package which is no longer supported.
+   *
+   * @param string $fileName
+   */
+  protected function loadXMLDataSet($fileName) {
+    CRM_Core_DAO::executeQuery('SET FOREIGN_KEY_CHECKS = 0');
+    $xml = json_decode(json_encode(simplexml_load_file($fileName)), TRUE);
+    foreach ($xml as $tableName => $element) {
+      if (!empty($element)) {
+        foreach ($element as $row) {
+          $keys = $values = [];
+          if (isset($row['@attributes'])) {
+            foreach ($row['@attributes'] as $key => $value) {
+              $keys[] = $key;
+              $values[] = is_numeric($value) ? $value : "'{$value}'";
+            }
+          }
+          elseif (!empty($row)) {
+            // cos we copied it & it is inconsistent....
+            foreach ($row as $key => $value) {
+              $keys[] = $key;
+              $values[] = is_numeric($value) ? $value : "'{$value}'";
+            }
+          }
+
+          if (!empty($values)) {
+            CRM_Core_DAO::executeQuery("
+            INSERT INTO $tableName (" . implode(',', $keys) . ') VALUES(' . implode(',', $values) . ')'
+            );
+          }
+        }
+      }
+    }
+    CRM_Core_DAO::executeQuery('SET FOREIGN_KEY_CHECKS = 1');
   }
 
   /**
@@ -389,6 +456,8 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
    *  Common teardown functions for all unit tests.
    */
   protected function tearDown() {
+    $this->_apiversion = 3;
+
     error_reporting(E_ALL & ~E_NOTICE);
     CRM_Utils_Hook::singleton()->reset();
     if ($this->hookClass) {
@@ -414,6 +483,8 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
 
     $this->cleanTempDirs();
     $this->unsetExtensionSystem();
+    $this->assertEquals([], CRM_Core_DAO::$_nullArray);
+    $this->assertEquals(NULL, CRM_Core_DAO::$_nullObject);
   }
 
   /**
@@ -1177,13 +1248,15 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
    *
    * @param array $smartGroupParams
    * @param array $groupParams
+   * @param string $contactType
+   *
    * @return int
    */
-  public function smartGroupCreate($smartGroupParams = array(), $groupParams = array()) {
-    $smartGroupParams = array_merge(array(
-      'formValues' => array('contact_type' => array('IN' => array('Household'))),
-    ),
-    $smartGroupParams);
+  public function smartGroupCreate($smartGroupParams = [], $groupParams = [], $contactType = 'Household') {
+    $smartGroupParams = array_merge([
+      'formValues' => ['contact_type' => ['IN' => [$contactType]]],
+    ],
+      $smartGroupParams);
     $savedSearch = CRM_Contact_BAO_SavedSearch::create($smartGroupParams);
 
     $groupParams['saved_search_id'] = $savedSearch->id;
@@ -1310,7 +1383,7 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
       $params['assignee_contact_id'] = $params['target_contact_id'];
     }
 
-    $result = $this->callAPISuccess('Activity', 'create', $params);
+    $result = civicrm_api3('Activity', 'create', $params);
 
     $result['target_contact_id'] = $params['target_contact_id'];
     $result['assignee_contact_id'] = $params['assignee_contact_id'];
@@ -1356,12 +1429,6 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
     );
 
     $params = array_merge($defaults, $params);
-
-    //have a crack @ deleting it first in the hope this will prevent derailing our tests
-    $this->callAPISuccess('custom_group', 'get', array(
-      'title' => $params['title'],
-      array('api.custom_group.delete' => 1),
-    ));
 
     return $this->callAPISuccess('custom_group', 'create', $params);
   }
@@ -1647,11 +1714,11 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
    *
    * @param array $tablesToTruncate
    * @param bool $dropCustomValueTables
-   * @throws \Exception
+   * @throws \CRM_Core_Exception
    */
   public function quickCleanup($tablesToTruncate, $dropCustomValueTables = FALSE) {
     if ($this->tx) {
-      throw new Exception("CiviUnitTestCase: quickCleanup() is not compatible with useTransaction()");
+      throw new \CRM_Core_Exception("CiviUnitTestCase: quickCleanup() is not compatible with useTransaction()");
     }
     if ($dropCustomValueTables) {
       $optionGroupResult = CRM_Core_DAO::executeQuery('SELECT option_group_id FROM civicrm_custom_field');
@@ -1716,6 +1783,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
       'civicrm_participant',
       'civicrm_participant_payment',
       'civicrm_pledge',
+      'civicrm_pledge_block',
       'civicrm_pledge_payment',
       'civicrm_price_set_entity',
       'civicrm_price_field_value',
@@ -1834,7 +1902,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
   public function checkArrayEquals(&$actual, &$expected) {
     self::unsetId($actual);
     self::unsetId($expected);
-    $this->assertEquals($actual, $expected);
+    $this->assertEquals($expected, $actual);
   }
 
   /**
@@ -1948,12 +2016,12 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    * @return void
    */
   public function setMockSettingsMetaData($extras) {
-    Civi::service('settings_manager')->flush();
-
     CRM_Utils_Hook::singleton()
       ->setHook('civicrm_alterSettingsMetaData', function (&$metadata, $domainId, $profile) use ($extras) {
         $metadata = array_merge($metadata, $extras);
       });
+
+    Civi::service('settings_manager')->flush();
 
     $fields = $this->callAPISuccess('setting', 'getfields', array());
     foreach ($extras as $key => $spec) {
@@ -2455,6 +2523,19 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     $this->assertDBQuery($exists ? 1 : 0, 'SELECT count(*) FROM civicrm_entity_file WHERE id = %1', array(
       1 => array($fileId, 'Int'),
     ));
+  }
+
+  /**
+   * Assert 2 sql strings are the same, ignoring double spaces.
+   *
+   * @param string $expectedSQL
+   * @param string $actualSQL
+   * @param string $message
+   */
+  protected function assertLike($expectedSQL, $actualSQL, $message = 'different sql') {
+    $expected = trim((preg_replace('/[ \r\n\t]+/', ' ', $expectedSQL)));
+    $actual = trim((preg_replace('/[ \r\n\t]+/', ' ', $actualSQL)));
+    $this->assertEquals($expected, $actual, $message);
   }
 
   /**
@@ -3085,12 +3166,19 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    * @param string $class
    *   Name of form class.
    *
+   * @param array $formValues
+   *
+   * @param string $pageName
+   *
    * @return \CRM_Core_Form
+   * @throws \CRM_Core_Exception
    */
-  public function getFormObject($class) {
+  public function getFormObject($class, $formValues = [], $pageName = '') {
     $form = new $class();
     $_SERVER['REQUEST_METHOD'] = 'GET';
     $form->controller = new CRM_Core_Controller();
+    $form->controller->setStateMachine(new CRM_Core_StateMachine($form->controller));
+    $_SESSION['_' . $form->controller->_name . '_container']['values'][$pageName] = $formValues;
     return $form;
   }
 
@@ -3101,6 +3189,15 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    */
   public function getThousandSeparators() {
     return array(array('.'), array(','));
+  }
+
+  /**
+   * Get the boolean options as a provider.
+   *
+   * @return array
+   */
+  public function getBooleanDataProvider() {
+    return [[TRUE], [FALSE]];
   }
 
   /**
@@ -3154,6 +3251,71 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
 
     global $dbLocale;
     $dbLocale = '_en_US';
+  }
+
+  /**
+   * Setup or clean up SMS tests
+   * @param bool $teardown
+   *
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function setupForSmsTests($teardown = FALSE) {
+    require_once 'CiviTest/CiviTestSMSProvider.php';
+
+    // Option value params for CiviTestSMSProvider
+    $groupID = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_OptionGroup', 'sms_provider_name', 'id', 'name');
+    $params = array(
+      'option_group_id' => $groupID,
+      'label' => 'unittestSMS',
+      'value' => 'unit.test.sms',
+      'name'  => 'CiviTestSMSProvider',
+      'is_default' => 1,
+      'is_active'  => 1,
+      'version'    => 3,
+    );
+
+    if ($teardown) {
+      // Test completed, delete provider
+      $providerOptionValueResult = civicrm_api3('option_value', 'get', $params);
+      civicrm_api3('option_value', 'delete', array('id' => $providerOptionValueResult['id']));
+      return;
+    }
+
+    // Create an SMS provider "CiviTestSMSProvider". Civi handles "CiviTestSMSProvider" as a special case and allows it to be instantiated
+    //  in CRM/Sms/Provider.php even though it is not an extension.
+    return civicrm_api3('option_value', 'create', $params);
+  }
+
+  /**
+   * Start capturing browser output.
+   *
+   * The starts the process of browser output being captured, setting any variables needed for e-notice prevention.
+   */
+  protected function startCapturingOutput() {
+    ob_start();
+    $_SERVER['HTTP_USER_AGENT'] = 'unittest';
+  }
+
+  /**
+   * Stop capturing browser output and return as a csv.
+   *
+   * @param bool $isFirstRowHeaders
+   *
+   * @return \League\Csv\Reader
+   *
+   * @throws \League\Csv\Exception
+   */
+  protected function captureOutputToCSV($isFirstRowHeaders = TRUE) {
+    $output = ob_get_flush();
+    $stream = fopen('php://memory', 'r+');
+    fwrite($stream, $output);
+    rewind($stream);
+    $csv = Reader::createFromString($output);
+    if ($isFirstRowHeaders) {
+      $csv->setHeaderOffset(0);
+    }
+    ob_clean();
+    return $csv;
   }
 
 }

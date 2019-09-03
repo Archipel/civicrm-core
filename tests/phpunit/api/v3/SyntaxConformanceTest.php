@@ -786,25 +786,6 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    * @dataProvider entities
    * @param $Entity
    */
-  public function testWithoutParam_get($Entity) {
-    // should get php complaining that a param is missing
-    try {
-      $result = civicrm_api($Entity, 'Get');
-      $this->fail('Expected an exception. No exception was thrown.');
-    }
-    // As of php7.1 a new Exception is thrown by PHP ArgumentCountError when not enough params are passed.
-    catch (ArgumentCountError $e) {
-      /* ok */
-    }
-    catch (PHPUnit_Framework_Error $e) {
-      /* ok */
-    }
-  }
-
-  /**
-   * @dataProvider entities
-   * @param $Entity
-   */
   public function testGetFields($Entity) {
     if (in_array($Entity, $this->deprecatedAPI) || $Entity == 'Entity' || $Entity == 'CustomValue') {
       return;
@@ -887,6 +868,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
       'SmsProvider' => 'Provider',
       'AclRole' => 'EntityRole',
       'MailingEventQueue' => 'Queue',
+      'Dedupe' => 'PrevNextCache',
     ];
 
     $usableName = !empty($entitiesWithNamingIssues[$entityName]) ? $entitiesWithNamingIssues[$entityName] : $entityName;
@@ -1180,7 +1162,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    * hence FKs only set by createTestObject when required. e.g parent_id on campaign is not being followed through
    * Currency - only seems to support US
    * @param $entityName
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testByIDAlias_get($entityName) {
     if (in_array($entityName, self::toBeSkipped_automock(TRUE))) {
@@ -1284,7 +1266,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    *
    * Check that create doesn't work with an invalid
    * @param $Entity
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testInvalidSort_get($Entity) {
     $invalidEntitys = array('ActivityType', 'Setting', 'System');
@@ -1299,7 +1281,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    *
    * Check that create doesn't work with an invalid
    * @param $Entity
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testValidSortSingleArrayById_get($Entity) {
     $invalidEntitys = array('ActivityType', 'Setting', 'System');
@@ -1326,7 +1308,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    *
    * Check that create doesn't work with an invalid
    * @param $Entity
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testInvalidID_create($Entity) {
     // turn test off for noew
@@ -1591,25 +1573,6 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   }
 
   /**
-   * @dataProvider entities
-   * @param $Entity
-   */
-  public function testWithoutParam_delete($Entity) {
-    // should delete php complaining that a param is missing
-    try {
-      $result = civicrm_api($Entity, 'Delete');
-      $this->fail('Expected an exception. No exception was thrown.');
-    }
-    // As of php7.1 a new Exception is thrown by PHP ArgumentCountError when not enough params are passed.
-    catch (ArgumentCountError $e) {
-      /* ok */
-    }
-    catch (PHPUnit_Framework_Error $e) {
-      /* ok */
-    }
-  }
-
-  /**
    * @dataProvider entities_delete
    * @param $Entity
    */
@@ -1626,7 +1589,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   /**
    * @dataProvider entities_delete
    * @param $Entity
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testInvalidID_delete($Entity) {
     $result = $this->callAPIFailure($Entity, 'Delete', array('id' => 999999));
@@ -1650,7 +1613,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    * hence FKs only set by createTestObject when required. e.g parent_id on campaign is not being followed through
    * Currency - only seems to support US
    * @param $entityName
-   * @throws \PHPUnit_Framework_IncompleteTestError
+   * @throws \PHPUnit\Framework\IncompleteTestError
    */
   public function testByID_delete($entityName) {
     // turn test off for noew
