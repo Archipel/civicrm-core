@@ -344,7 +344,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     CRM_Utils_System::flushCache();
 
     // initialize the object once db is loaded
-    \Civi::reset();
+    \Civi::$statics = array();
     // ugh, performance
     $config = CRM_Core_Config::singleton(TRUE, TRUE);
 
@@ -1684,7 +1684,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
       'option_value' => array('value1', 'value2'),
       'option_name' => array($name . '_1', $name . '_2'),
       'option_weight' => array(1, 2),
-      'option_status' => 1,
+      'option_status' => array(1, 1),
     );
 
     $params = array_merge($fieldParams, $optionGroup, $optionValue, $extraParams);
@@ -1798,6 +1798,9 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     $this->setCurrencySeparators(',');
     CRM_Core_PseudoConstant::flush('taxRates');
     System::singleton()->flushProcessors();
+    // @fixme this parameter is leaking - it should not be defined as a class static
+    // but for now we just handle in tear down.
+    CRM_Contribute_BAO_Query::$_contribOrSoftCredit = 'only contribs';
   }
 
   public function restoreDefaultPriceSetConfig() {
@@ -2393,6 +2396,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
       'contribution_page_id' => $this->_contributionPageID,
       'payment_processor_id' => $this->_paymentProcessorID,
       'is_test' => 0,
+      'receive_date' => '2019-07-25 07:34:23',
       'skipCleanMoney' => TRUE,
     ], $contributionParams);
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', array_merge(array(
@@ -2436,6 +2440,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
         'financial_type_id' => 1,
         'invoice_id' => 'abcd',
         'trxn_id' => 345,
+        'receive_date' => '2019-07-25 07:34:23',
       ));
     }
     $this->setupRecurringPaymentProcessorTransaction($recurParams);
@@ -2445,6 +2450,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
       'membership_type_id' => $this->ids['membership_type'],
       'contribution_recur_id' => $this->_contributionRecurID,
       'format.only_id' => TRUE,
+      'source' => 'Payment',
     ));
     //CRM-15055 creates line items we don't want so get rid of them so we can set up our own line items
     CRM_Core_DAO::executeQuery("TRUNCATE civicrm_line_item");
@@ -2547,6 +2553,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    *
    * @return int
    *   Price Set ID.
+   * @throws \CRM_Core_Exception
    */
   protected function eventPriceSetCreate($feeTotal, $minAmt = 0, $type = 'Text') {
     // creating price set, price field
@@ -2582,7 +2589,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
       $paramsField['option_value'][2] = $paramsField['option_weight'][2] = $paramsField['option_amount'][2] = 100;
       $paramsField['option_label'][2] = $paramsField['option_name'][2] = 'hundy';
     }
-    CRM_Price_BAO_PriceField::create($paramsField);
+    $this->callAPISuccess('PriceField', 'create', $paramsField);
     $fields = $this->callAPISuccess('PriceField', 'get', array('price_set_id' => $this->_ids['price_set']));
     $this->_ids['price_field'] = array_keys($fields['values']);
     $fieldValues = $this->callAPISuccess('PriceFieldValue', 'get', array('price_field_id' => $this->_ids['price_field'][0]));
