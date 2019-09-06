@@ -1,6 +1,6 @@
 [submodule "api/org.timelab.api"]
 	path = api/org.timelab.api
-	url = git@github.com:AlainBenbassat/org.timelab.api.git
+	url = https://github.com/AlainBenbassat/org.timelab.api.git
 [submodule "ext/CiviProxy"]
 	path = ext/CiviProxy
 	url = https://github.com/systopia/CiviProxy
