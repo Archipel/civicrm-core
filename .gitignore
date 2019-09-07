@@ -26,7 +26,6 @@ tools/stats/config.php
 authors.txt
 WordPress
 joomla
-packages/
 tests/output
 tests/phpunit/CiviTest/civicrm.settings.local.php
 tests/phpunit/CiviTest/truncate.xml
