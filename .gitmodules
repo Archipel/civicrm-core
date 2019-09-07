@@ -7,3 +7,6 @@
 [submodule "ext/nz.co.fuzion.omnipaymultiprocessor"]
 	path = ext/nz.co.fuzion.omnipaymultiprocessor
 	url = https://github.com/Archipel/nz.co.fuzion.omnipaymultiprocessor.git
+[submodule "packages"]
+	path = packages
+	url = https://github.com/civicrm/civicrm-packages.git
