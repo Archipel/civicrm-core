@@ -24,7 +24,12 @@
  | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
  +--------------------------------------------------------------------+
  */
-header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+if(array_key_exists('HTTP_ORIGIN', $_SERVER)) {
+  header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+}
+elseif(array_key_exists('HTTP_REFERER', $_SERVER)) {
+  header("Access-Control-Allow-Origin: {$_SERVER['HTTP_REFERER']}");
+}
 header("Access-Control-Allow-Headers: 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range'");
 header("Access-Control-Allow-Credentials: true");
 

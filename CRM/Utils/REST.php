@@ -313,6 +313,7 @@ class CRM_Utils_REST {
       'CRM_Utils_REST',
       'fatal',
     ]);
+
     $result = civicrm_api($args[1], $args[2], $params);
     unset($errorScope);
 

@@ -20,7 +20,9 @@
  * @return array|int
  */
 function civicrm_api($entity, $action, $params, $extra = NULL) {
-  return \Civi::service('civi_api_kernel')->runSafe($entity, $action, $params, $extra);
+  /* @var $kernel \Civi\Api\Kernel */
+  $kernel = \Civi::service('civi_api_kernel');
+  return $kernel->runSafe($entity, $action, $params, $extra);
 }
 
 /**
