@@ -117,13 +117,15 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Clean up after each test.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function tearDown() {
     $this->quickCleanUpFinancialEntities();
     $this->quickCleanup(['civicrm_uf_match']);
     $financialAccounts = $this->callAPISuccess('FinancialAccount', 'get', []);
     foreach ($financialAccounts['values'] as $financialAccount) {
-      if ($financialAccount['name'] == 'Test Tax financial account ' || $financialAccount['name'] == 'Test taxable financial Type') {
+      if ($financialAccount['name'] === 'Test Tax financial account ' || $financialAccount['name'] === 'Test taxable financial Type') {
         $entityFinancialTypes = $this->callAPISuccess('EntityFinancialAccount', 'get', [
           'financial_account_id' => $financialAccount['id'],
         ]);
@@ -133,6 +135,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
         $this->callAPISuccess('FinancialAccount', 'delete', ['id' => $financialAccount['id']]);
       }
     }
+    $this->restoreUFGroupOne();
   }
 
   /**
@@ -229,11 +232,45 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test Creating a check contribution with original check_number field
+   */
+  public function testCreateCheckContribution() {
+    $params = $this->_params;
+    $params['contribution_check_number'] = 'bouncer';
+    $params['payment_instrument_id'] = 'Check';
+    $params['cancel_date'] = 'yesterday';
+    $params['receipt_date'] = 'yesterday';
+    $params['thankyou_date'] = 'yesterday';
+    $params['revenue_recognition_date'] = 'yesterday';
+    $params['amount_level'] = 'Unreasonable';
+    $params['cancel_reason'] = 'You lose sucker';
+    $params['creditnote_id'] = 'sudo rm -rf';
+    $params['tax_amount'] = '1';
+    $address = $this->callAPISuccess('Address', 'create', [
+      'street_address' => 'Knockturn Alley',
+      'contact_id' => $this->_individualId,
+      'location_type_id' => 'Home',
+    ]);
+    $params['address_id'] = $address['id'];
+    $contributionPage = $this->contributionPageCreate();
+    $params['contribution_page_id'] = $contributionPage['id'];
+    $params['campaign_id'] = $this->campaignCreate();
+    $contributionID = $this->contributionCreate($params);
+    $getResult = $this->callAPISuccess('Contribution', 'get', ['id' => $contributionID]);
+    $this->assertEquals('bouncer', $getResult['values'][$contributionID]['check_number']);
+    $entityFinancialTrxn = $this->callAPISuccess('EntityFinancialTrxn', 'get', ['entity_id' => $contributionID, 'entity_table' => 'civicrm_contribution']);
+    foreach ($entityFinancialTrxn['values'] as $eft) {
+      $financialTrxn = $this->callAPISuccess('FinancialTrxn', 'get', ['id' => $eft['financial_trxn_id']]);
+      $this->assertEquals('bouncer', $financialTrxn['values'][$financialTrxn['id']]['check_number']);
+    }
+  }
+
+  /**
    * Test the 'return' param works for all fields.
    */
   public function testGetContributionReturnFunctionality() {
     $params = $this->_params;
-    $params['check_number'] = 'bouncer';
+    $params['contribution_check_number'] = 'bouncer';
     $params['payment_instrument_id'] = 'Check';
     $params['cancel_date'] = 'yesterday';
     $params['receipt_date'] = 'yesterday';
@@ -300,6 +337,11 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
         $returnField = 'contact_id';
       }
       $this->assertTrue((!empty($contribution[$returnField]) || $contribution[$returnField] === "0"), $returnField);
+    }
+    $entityFinancialTrxn = $this->callAPISuccess('EntityFinancialTrxn', 'get', ['entity_id' => $contributionID, 'entity_table' => 'civicrm_contribution']);
+    foreach ($entityFinancialTrxn['values'] as $eft) {
+      $financialTrxn = $this->callAPISuccess('FinancialTrxn', 'get', ['id' => $eft['financial_trxn_id']]);
+      $this->assertEquals('bouncer', $financialTrxn['values'][$financialTrxn['id']]['check_number']);
     }
   }
 
@@ -923,7 +965,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   public function testContributionCreateExample() {
     //make sure at least on page exists since there is a truncate in tear down
     $this->callAPISuccess('contribution_page', 'create', $this->_pageParams);
-    require_once 'api/v3/examples/Contribution/Create.php';
+    require_once 'api/v3/examples/Contribution/Create.ex.php';
     $result = contribution_create_example();
     $id = $result['id'];
     $expectedResult = contribution_create_expectedresult();
@@ -3019,6 +3061,9 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $this->_individualId = $this->createLoggedInUser();
     $contributionID = $this->createPendingParticipantContribution();
     $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event']);
+    $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event', 'weight' => 2], ['name' => 'post_1', 'title' => 'title_post_2', 'frontend_title' => 'public 2']);
+    $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event', 'weight' => 3], ['name' => 'post_2', 'title' => 'title_post_3', 'frontend_title' => 'public 3']);
+    $this->eliminateUFGroupOne();
 
     $this->callAPISuccess('contribution', 'completetransaction', [
       'id' => $contributionID,
@@ -3035,7 +3080,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'contact_id' => $this->_individualId,
     ])['values'];
 
-    $this->assertEquals(3, count($activities));
+    $this->assertCount(3, $activities);
     $activityNames = array_count_values(CRM_Utils_Array::collect('activity_name', $activities));
     // record two activities before and after completing payment for Event registration
     $this->assertEquals(2, $activityNames['Event Registration']);
@@ -3048,7 +3093,9 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'This letter is a confirmation that your registration has been received and your status has been updated to Registered.',
       'First Name: Logged In',
       'Public title',
-    ], ['Back end title']);
+      'public 2',
+      'public 3',
+    ], ['Back end title', 'title_post_2', 'title_post_3']);
     $mut->stop();
   }
 

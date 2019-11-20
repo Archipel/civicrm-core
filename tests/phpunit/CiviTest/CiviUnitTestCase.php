@@ -334,12 +334,6 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     // disable any left-over test extensions
     CRM_Core_DAO::executeQuery('DELETE FROM civicrm_extension WHERE full_name LIKE "test.%"');
 
-    $extensions = \CRM_Extension_System::singleton()->getManager();
-    $api4Status = $extensions->getStatus('org.civicrm.api4');
-    if ($api4Status != $extensions::STATUS_INSTALLED && $api4Status != $extensions::STATUS_UNKNOWN) {
-      $extensions->enable(['org.civicrm.api4']);
-    }
-
     // reset all the caches
     CRM_Utils_System::flushCache();
 
@@ -1015,6 +1009,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
       'is_monetary' => 0,
       'is_active' => 1,
       'is_show_location' => 0,
+      'is_email_confirm' => 1,
     ), $params);
 
     return $this->callAPISuccess('Event', 'create', $params);
@@ -1373,7 +1368,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     if (!isset($params['target_contact_id'])) {
       $params['target_contact_id'] = $this->individualCreate(array(
         'first_name' => 'Julia',
-        'Last_name' => 'Anderson',
+        'last_name' => 'Anderson',
         'prefix' => 'Ms.',
         'email' => 'julia_anderson@civicrm.org',
         'contact_type' => 'Individual',
