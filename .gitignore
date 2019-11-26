@@ -39,3 +39,4 @@ sql/dummy_processor.mysql
 distmaker/distmaker.conf
 distmaker/out
 /tmp
+package-lock.json
