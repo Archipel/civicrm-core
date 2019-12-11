@@ -2137,6 +2137,8 @@ class api_v3_ContactTest extends CiviUnitTestCase {
 
   /**
    * Ensure consistent return format for option group fields.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testPseudoFields() {
     $params = [
@@ -2173,6 +2175,8 @@ class api_v3_ContactTest extends CiviUnitTestCase {
    *
    * These include value, array & birth_date_high, birth_date_low
    * && deceased.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testContactGetBirthDate() {
     $contact1 = $this->callAPISuccess('contact', 'create', array_merge($this->_params, ['birth_date' => 'first day of next month - 2 years']));

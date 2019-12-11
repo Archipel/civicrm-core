@@ -85,7 +85,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * Track tables we have modified during a test.
    * @var array
    */
-  protected $_tablesToTruncate = array();
+  protected $_tablesToTruncate = [];
 
   /**
    * @var array of temporary directory names
@@ -359,6 +359,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $_REQUEST = $_GET = $_POST = [];
     error_reporting(E_ALL);
 
+    $this->renameLabels();
     $this->_sethtmlGlobals();
   }
 
@@ -451,6 +452,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    */
   protected function tearDown() {
     $this->_apiversion = 3;
+    $this->resetLabels();
 
     error_reporting(E_ALL & ~E_NOTICE);
     CRM_Utils_Hook::singleton()->reset();
@@ -806,9 +808,15 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *
    * @return \CRM_Core_Payment_Dummy
    *   Instance of Dummy Payment Processor
+   *
+   * @throws \CiviCRM_API3_Exception
    */
-  public function dummyProcessorCreate($processorParams = array()) {
+  public function dummyProcessorCreate($processorParams = []) {
     $paymentProcessorID = $this->processorCreate($processorParams);
+    // For the tests we don't need a live processor, but as core ALWAYS creates a processor in live mode and one in test mode we do need to create both
+    //   Otherwise we are testing a scenario that only exists in tests (and some tests fail because the live processor has not been defined).
+    $processorParams['is_test'] = FALSE;
+    $this->processorCreate($processorParams);
     return System::singleton()->getById($paymentProcessorID);
   }
 
@@ -1514,7 +1522,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $params = array('title' => $function);
     $entity = substr(basename($filename), 0, strlen(basename($filename)) - 8);
     $params['extends'] = $entity ? $entity : 'Contact';
-    $customGroup = $this->CustomGroupCreate($params);
+    $customGroup = $this->customGroupCreate($params);
     $customField = $this->customFieldCreate(array('custom_group_id' => $customGroup['id'], 'label' => $function));
     CRM_Core_PseudoConstant::flush();
 
@@ -1537,7 +1545,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $params = array('title' => $function);
     $entity = substr(basename($filename), 0, strlen(basename($filename)) - 8);
     $params['extends'] = $entity ? $entity : 'Contact';
-    $customGroup = $this->CustomGroupCreate($params);
+    $customGroup = $this->customGroupCreate($params);
     $customField = $this->customFieldCreate(array('custom_group_id' => $customGroup['id'], 'label' => $function, 'html_type' => 'Multi-Select', 'default_value' => 1));
     CRM_Core_PseudoConstant::flush();
     $options = [
@@ -1718,7 +1726,11 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     if ($dropCustomValueTables) {
       $optionGroupResult = CRM_Core_DAO::executeQuery('SELECT option_group_id FROM civicrm_custom_field');
       while ($optionGroupResult->fetch()) {
-        if (!empty($optionGroupResult->option_group_id)) {
+        // We have a test that sets the option_group_id for a custom group to that of 'activity_type'.
+        // Then test tearDown deletes it. This is all mildly terrifying but for the context here we can be pretty
+        // sure the low-numbered (50 is arbitrary) option groups are not ones to 'just delete' in a
+        // generic cleanup routine.
+        if (!empty($optionGroupResult->option_group_id) && $optionGroupResult->option_group_id > 50) {
           CRM_Core_DAO::executeQuery('DELETE FROM civicrm_option_group WHERE id = ' . $optionGroupResult->option_group_id);
         }
       }
@@ -1844,10 +1856,10 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     $fields = $this->callAPISuccess($entity, 'getfields', array('version' => 3, 'action' => 'get'));
     foreach ($fields['values'] as $field => $settings) {
       if (array_key_exists($field, $result)) {
-        $keys[CRM_Utils_Array::Value('name', $settings, $field)] = $field;
+        $keys[CRM_Utils_Array::value('name', $settings, $field)] = $field;
       }
       else {
-        $keys[CRM_Utils_Array::Value('name', $settings, $field)] = CRM_Utils_Array::value('name', $settings, $field);
+        $keys[CRM_Utils_Array::value('name', $settings, $field)] = CRM_Utils_Array::value('name', $settings, $field);
       }
       $type = CRM_Utils_Array::value('type', $settings);
       if ($type == CRM_Utils_Type::T_DATE) {
@@ -2618,59 +2630,13 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    * Add participant with contribution
    *
    * @return array
+   *
+   * @throws \CRM_Core_Exception
    */
-  protected function createParticipantWithContribution() {
-    // creating price set, price field
-    $this->_contactId = $this->individualCreate();
-    $event = $this->eventCreate();
-    $this->_eventId = $event['id'];
-    $eventParams = array(
-      'id' => $this->_eventId,
-      'financial_type_id' => 4,
-      'is_monetary' => 1,
-    );
-    $this->callAPISuccess('event', 'create', $eventParams);
-    $priceFields = $this->createPriceSet('event', $this->_eventId);
-    $participantParams = array(
-      'financial_type_id' => 4,
-      'event_id' => $this->_eventId,
-      'role_id' => 1,
-      'status_id' => 14,
-      'fee_currency' => 'USD',
-      'contact_id' => $this->_contactId,
-    );
-    $participant = $this->callAPISuccess('Participant', 'create', $participantParams);
-    $contributionParams = array(
-      'total_amount' => 150,
-      'currency' => 'USD',
-      'contact_id' => $this->_contactId,
-      'financial_type_id' => 4,
-      'contribution_status_id' => 1,
-      'partial_payment_total' => 300.00,
-      'partial_amount_to_pay' => 150,
-      'contribution_mode' => 'participant',
-      'participant_id' => $participant['id'],
-    );
-    foreach ($priceFields['values'] as $key => $priceField) {
-      $lineItems[1][$key] = array(
-        'price_field_id' => $priceField['price_field_id'],
-        'price_field_value_id' => $priceField['id'],
-        'label' => $priceField['label'],
-        'field_title' => $priceField['label'],
-        'qty' => 1,
-        'unit_price' => $priceField['amount'],
-        'line_total' => $priceField['amount'],
-        'financial_type_id' => $priceField['financial_type_id'],
-      );
-    }
-    $contributionParams['line_item'] = $lineItems;
-    $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
-    $paymentParticipant = array(
-      'participant_id' => $participant['id'],
-      'contribution_id' => $contribution['id'],
-    );
-    $this->callAPISuccess('ParticipantPayment', 'create', $paymentParticipant);
-    return array($lineItems, $contribution);
+  protected function createPartiallyPaidParticipantOrder() {
+    $orderParams = $this->getParticipantOrderParams();
+    $orderParams['api.Payment.create'] = ['total_amount' => 150];
+    return $this->callAPISuccess('Order', 'create', $orderParams);
   }
 
   /**
@@ -2723,17 +2689,18 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    * Replace the template with a test-oriented template designed to show all the variables.
    *
    * @param string $templateName
+   * @param string $type
    */
-  protected function swapMessageTemplateForTestTemplate($templateName = 'contribution_online_receipt') {
-    $testTemplate = file_get_contents(__DIR__ . '/../../templates/message_templates/' . $templateName . '_html.tpl');
+  protected function swapMessageTemplateForTestTemplate($templateName = 'contribution_online_receipt', $type = 'html') {
+    $testTemplate = file_get_contents(__DIR__ . '/../../templates/message_templates/' . $templateName . '_' . $type . '.tpl');
     CRM_Core_DAO::executeQuery(
       "UPDATE civicrm_option_group og
       LEFT JOIN civicrm_option_value ov ON ov.option_group_id = og.id
       LEFT JOIN civicrm_msg_template m ON m.workflow_id = ov.id
-      SET m.msg_html = '{$testTemplate}'
-      WHERE og.name = 'msg_tpl_workflow_contribution'
+      SET m.msg_{$type} = %1
+      WHERE og.name LIKE 'msg_tpl_workflow_%'
       AND ov.name = '{$templateName}'
-      AND m.is_default = 1"
+      AND m.is_default = 1", [1 => [$testTemplate, 'String']]
     );
   }
 
@@ -2741,14 +2708,15 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
    * Reinstate the default template.
    *
    * @param string $templateName
+   * @param string $type
    */
-  protected function revertTemplateToReservedTemplate($templateName = 'contribution_online_receipt') {
+  protected function revertTemplateToReservedTemplate($templateName = 'contribution_online_receipt', $type = 'html') {
     CRM_Core_DAO::executeQuery(
       "UPDATE civicrm_option_group og
       LEFT JOIN civicrm_option_value ov ON ov.option_group_id = og.id
       LEFT JOIN civicrm_msg_template m ON m.workflow_id = ov.id
       LEFT JOIN civicrm_msg_template m2 ON m2.workflow_id = ov.id AND m2.is_reserved = 1
-      SET m.msg_html = m2.msg_html
+      SET m.msg_{$type} = m2.msg_{$type}
       WHERE og.name = 'msg_tpl_workflow_contribution'
       AND ov.name = '{$templateName}'
       AND m.is_default = 1"
@@ -3318,6 +3286,112 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     }
     ob_clean();
     return $csv;
+  }
+
+  /**
+   * Rename various labels to not match the names.
+   *
+   * Doing these mimics the fact the name != the label in international installs & triggers failures in
+   * code that expects it to.
+   */
+  protected function renameLabels() {
+    $replacements = ['Pending', 'Refunded'];
+    foreach ($replacements as $name) {
+      CRM_Core_DAO::executeQuery("UPDATE civicrm_option_value SET label = '{$name} Label**' where label = '{$name}' AND name = '{$name}'");
+    }
+  }
+
+  /**
+   * Undo any label renaming.
+   */
+  protected function resetLabels() {
+    CRM_Core_DAO::executeQuery("UPDATE civicrm_option_value SET label = REPLACE(name, ' Label**', '') WHERE label LIKE '% Label**'");
+  }
+
+  /**
+   * Get parameters to set up a multi-line participant order.
+   *
+   * @return array
+   * @throws \CRM_Core_Exception
+   */
+  protected function getParticipantOrderParams(): array {
+    $this->_contactId = $this->individualCreate();
+    $event = $this->eventCreate();
+    $this->_eventId = $event['id'];
+    $eventParams = [
+      'id' => $this->_eventId,
+      'financial_type_id' => 4,
+      'is_monetary' => 1,
+    ];
+    $this->callAPISuccess('event', 'create', $eventParams);
+    $priceFields = $this->createPriceSet('event', $this->_eventId);
+    $participantParams = [
+      'financial_type_id' => 4,
+      'event_id' => $this->_eventId,
+      'role_id' => 1,
+      'status_id' => 14,
+      'fee_currency' => 'USD',
+      'contact_id' => $this->_contactId,
+    ];
+    $participant = $this->callAPISuccess('Participant', 'create', $participantParams);
+    $orderParams = [
+      'total_amount' => 300,
+      'currency' => 'USD',
+      'contact_id' => $this->_contactId,
+      'financial_type_id' => 4,
+      'contribution_status_id' => 'Pending',
+      'contribution_mode' => 'participant',
+      'participant_id' => $participant['id'],
+    ];
+    foreach ($priceFields['values'] as $key => $priceField) {
+      $orderParams['line_items'][] = [
+        'line_item' => [
+          [
+            'price_field_id' => $priceField['price_field_id'],
+            'price_field_value_id' => $priceField['id'],
+            'label' => $priceField['label'],
+            'field_title' => $priceField['label'],
+            'qty' => 1,
+            'unit_price' => $priceField['amount'],
+            'line_total' => $priceField['amount'],
+            'financial_type_id' => $priceField['financial_type_id'],
+            'entity_table' => 'civicrm_participant',
+          ],
+        ],
+        'params' => $participant,
+      ];
+    }
+    return $orderParams;
+  }
+
+  /**
+   * @param $payments
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function validatePayments($payments) {
+    foreach ($payments as $payment) {
+      $items = $this->callAPISuccess('EntityFinancialTrxn', 'get', [
+        'financial_trxn_id' => $payment['id'],
+        'entity_table' => 'civicrm_financial_item',
+        'return' => ['amount'],
+      ])['values'];
+      $itemTotal = 0;
+      foreach ($items as $item) {
+        $itemTotal += $item['amount'];
+      }
+      $this->assertEquals($payment['total_amount'], $itemTotal);
+    }
+  }
+
+  /**
+   * Validate all created payments.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function validateAllPayments() {
+    $payments = $this->callAPISuccess('Payment', 'get', ['options' => ['limit' => 0]])['values'];
+    $this->validatePayments($payments);
   }
 
   /**

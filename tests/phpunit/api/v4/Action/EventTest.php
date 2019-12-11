@@ -1,4 +1,5 @@
 <?php
+
 /*
  +--------------------------------------------------------------------+
  | CiviCRM version 5                                                  |
@@ -28,23 +29,25 @@
 /**
  *
  * @package CRM
- * @copyright TTTP
- * $Id$
- *
+ * @copyright CiviCRM LLC (c) 2004-2019
  */
+
+use Civi\Api4\Event;
 
 /**
- * load a context. If name is asked for only name data is returned.
- * And if name is not provided whole context is returned.
- *
- * @param $params
- * @param $smarty
+ * @group headless
  */
-function smarty_function_crmDBTpl($params, &$smarty) {
-  // $vars = array('context', 'name', 'assign' ); out of which name is optional
+class EventTest extends \api\v4\UnitTestCase {
 
-  $contextNameData = CRM_Core_BAO_Persistent::getContext($params['context'],
-    CRM_Utils_Array::value('name', $params)
-  );
-  $smarty->assign($params['var'], $contextNameData);
+  /**
+   * Test that the event api filters out templates by default.
+   *
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testTemplateFilterByDefault() {
+    Event::create()->setValues(['template_title' => 'Big Event', 'is_template' => 1, 'start_date' => 'now', 'event_type_id' => 'Meeting'])->execute();
+    Event::create()->setValues(['title' => 'Bigger Event', 'start_date' => 'now', 'event_type_id' => 'Meeting'])->execute();
+    $this->assertEquals(1, Event::get()->selectRowCount()->execute()->count());
+  }
+
 }
