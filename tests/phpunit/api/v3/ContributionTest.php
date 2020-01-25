@@ -1,27 +1,11 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 5                                                  |
- +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2019                                |
- +--------------------------------------------------------------------+
- | This file is a part of CiviCRM.                                    |
+ | Copyright CiviCRM LLC. All rights reserved.                        |
  |                                                                    |
- | CiviCRM is free software; you can copy, modify, and distribute it  |
- | under the terms of the GNU Affero General Public License           |
- | Version 3, 19 November 2007 and the CiviCRM Licensing Exception.   |
- |                                                                    |
- | CiviCRM is distributed in the hope that it will be useful, but     |
- | WITHOUT ANY WARRANTY; without even the implied warranty of         |
- | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.               |
- | See the GNU Affero General Public License for more details.        |
- |                                                                    |
- | You should have received a copy of the GNU Affero General Public   |
- | License and the CiviCRM Licensing Exception along                  |
- | with this program; if not, contact CiviCRM LLC                     |
- | at info[AT]civicrm[DOT]org. If you have questions about the        |
- | GNU Affero General Public License or the licensing of CiviCRM,     |
- | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
+ | This work is published under the GNU AGPLv3 license with some      |
+ | permitted exceptions and without any warranty. For full license    |
+ | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
 
@@ -1768,9 +1752,9 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   public function testDeleteParamsNotArrayContribution() {
+    $this->expectException(TypeError::class);
     $params = 'contribution_id= 1';
     $contribution = $this->callAPIFailure('contribution', 'delete', $params);
-    $this->assertEquals($contribution['error_message'], 'Input variable `params` is not an array');
   }
 
   public function testDeleteWrongParamContribution() {
@@ -2380,11 +2364,14 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
    * CRM-19945 Tests that Contribute.repeattransaction DOES NOT renew a membership when contribution status=Failed
    *
    * @dataProvider contributionStatusProvider
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testRepeatTransactionMembershipRenewContributionNotCompleted($contributionStatus) {
     // Completed status should renew so we don't test that here
-    // In Progress status is only for recurring contributions so we don't test that here
-    if (in_array($contributionStatus['name'], ['Completed', 'In Progress'])) {
+    // In Progress status was never actually intended to be available for contributions.
+    // Partially paid is not valid.
+    if (in_array($contributionStatus['name'], ['Completed', 'In Progress', 'Partially paid'])) {
       return;
     }
     list($originalContribution, $membership) = $this->setUpAutoRenewMembership();

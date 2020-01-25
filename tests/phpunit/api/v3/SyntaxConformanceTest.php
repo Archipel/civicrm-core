@@ -1,27 +1,11 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 5                                                  |
- +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2019                                |
- +--------------------------------------------------------------------+
- | This file is a part of CiviCRM.                                    |
+ | Copyright CiviCRM LLC. All rights reserved.                        |
  |                                                                    |
- | CiviCRM is free software; you can copy, modify, and distribute it  |
- | under the terms of the GNU Affero General Public License           |
- | Version 3, 19 November 2007 and the CiviCRM Licensing Exception.   |
- |                                                                    |
- | CiviCRM is distributed in the hope that it will be useful, but     |
- | WITHOUT ANY WARRANTY; without even the implied warranty of         |
- | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.               |
- | See the GNU Affero General Public License for more details.        |
- |                                                                    |
- | You should have received a copy of the GNU Affero General Public   |
- | License and the CiviCRM Licensing Exception along                  |
- | with this program; if not, contact CiviCRM LLC                     |
- | at info[AT]civicrm[DOT]org. If you have questions about the        |
- | GNU Affero General Public License or the licensing of CiviCRM,     |
- | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
+ | This work is published under the GNU AGPLv3 license with some      |
+ | permitted exceptions and without any warranty. For full license    |
+ | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
 
@@ -833,21 +817,6 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
 
   /**
    * @dataProvider entities_get
-   * @param $Entity
-   */
-  public function testEmptyParam_getString($Entity) {
-
-    if (in_array($Entity, $this->toBeImplemented['get'])) {
-      // $this->markTestIncomplete("civicrm_api3_{$Entity}_get to be implemented");
-      return;
-    }
-    $result = $this->callAPIFailure($Entity, 'Get', 'string');
-    $this->assertEquals(2000, $result['error_code']);
-    $this->assertEquals('Input variable `params` is not an array', $result['error_message']);
-  }
-
-  /**
-   * @dataProvider entities_get
    * @Xdepends testEmptyParam_get // no need to test the simple if the empty doesn't work/is skipped. doesn't seem to work
    * @param $Entity
    */
@@ -1340,15 +1309,6 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   }
 
   /**
-   * @dataProvider entities
-   */
-  public function testCreateWrongTypeParamTag_create() {
-    $result = civicrm_api("Tag", 'Create', 'this is not a string');
-    $this->assertEquals(1, $result['is_error']);
-    $this->assertEquals("Input variable `params` is not an array", $result['error_message']);
-  }
-
-  /**
    * @dataProvider entities_updatesingle
    *
    * limitations include the problem with avoiding loops when creating test objects -
@@ -1611,15 +1571,6 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    */
   public function testInvalidID_delete($Entity) {
     $result = $this->callAPIFailure($Entity, 'Delete', ['id' => 999999]);
-  }
-
-  /**
-   * @dataProvider entities
-   */
-  public function testDeleteWrongTypeParamTag_delete() {
-    $result = civicrm_api("Tag", 'Delete', 'this is not a string');
-    $this->assertEquals(1, $result['is_error']);
-    $this->assertEquals("Input variable `params` is not an array", $result['error_message']);
   }
 
   /**

@@ -1,27 +1,11 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 5                                                  |
- +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2019                                |
- +--------------------------------------------------------------------+
- | This file is a part of CiviCRM.                                    |
+ | Copyright CiviCRM LLC. All rights reserved.                        |
  |                                                                    |
- | CiviCRM is free software; you can copy, modify, and distribute it  |
- | under the terms of the GNU Affero General Public License           |
- | Version 3, 19 November 2007 and the CiviCRM Licensing Exception.   |
- |                                                                    |
- | CiviCRM is distributed in the hope that it will be useful, but     |
- | WITHOUT ANY WARRANTY; without even the implied warranty of         |
- | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.               |
- | See the GNU Affero General Public License for more details.        |
- |                                                                    |
- | You should have received a copy of the GNU Affero General Public   |
- | License and the CiviCRM Licensing Exception along                  |
- | with this program; if not, contact CiviCRM LLC                     |
- | at info[AT]civicrm[DOT]org. If you have questions about the        |
- | GNU Affero General Public License or the licensing of CiviCRM,     |
- | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
+ | This work is published under the GNU AGPLv3 license with some      |
+ | permitted exceptions and without any warranty. For full license    |
+ | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
 
@@ -1026,7 +1010,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
       'total_amount' => 40,
       'currency' => 'USD',
       'financial_type_id' => 1,
-      'payment_instrument_id' => array_search('Credit card', $this->paymentInstruments),
+      'payment_instrument_id' => array_search('Credit Card', $this->paymentInstruments),
       'payment_processor_id' => $this->paymentProcessorID,
       'credit_card_exp_date' => ['M' => 5, 'Y' => 2025],
       'credit_card_number' => '411111111111111',
@@ -1096,6 +1080,10 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
 
   /**
    * Test the submit function for FT without tax.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\Payment\Exception\PaymentProcessorException
    */
   public function testSubmitWithOutSaleTax() {
     $this->enableTaxAndInvoicing();
@@ -1120,15 +1108,12 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     $this->assertEquals(NULL, $contribution['tax_amount']);
     $this->callAPISuccessGetCount('FinancialTrxn', [], 1);
     $this->callAPISuccessGetCount('FinancialItem', [], 1);
-    $lineItem = $this->callAPISuccessGetSingle(
-      'LineItem',
-      [
-        'contribution_id' => $contribution['id'],
-        'return' => ['line_total', 'tax_amount'],
-      ]
-    );
+    $lineItem = $this->callAPISuccessGetSingle('LineItem', [
+      'contribution_id' => $contribution['id'],
+      'return' => ['line_total', 'tax_amount'],
+    ]);
     $this->assertEquals(100, $lineItem['line_total']);
-    $this->assertTrue(empty($lineItem['tax_amount']));
+    $this->assertEquals(0.00, $lineItem['tax_amount']);
   }
 
   /**

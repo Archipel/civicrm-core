@@ -1,27 +1,11 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 5                                                  |
- +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2019                                |
- +--------------------------------------------------------------------+
- | This file is a part of CiviCRM.                                    |
+ | Copyright CiviCRM LLC. All rights reserved.                        |
  |                                                                    |
- | CiviCRM is free software; you can copy, modify, and distribute it  |
- | under the terms of the GNU Affero General Public License           |
- | Version 3, 19 November 2007 and the CiviCRM Licensing Exception.   |
- |                                                                    |
- | CiviCRM is distributed in the hope that it will be useful, but     |
- | WITHOUT ANY WARRANTY; without even the implied warranty of         |
- | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.               |
- | See the GNU Affero General Public License for more details.        |
- |                                                                    |
- | You should have received a copy of the GNU Affero General Public   |
- | License and the CiviCRM Licensing Exception along                  |
- | with this program; if not, contact CiviCRM LLC                     |
- | at info[AT]civicrm[DOT]org. If you have questions about the        |
- | GNU Affero General Public License or the licensing of CiviCRM,     |
- | see the CiviCRM license FAQ at http://civicrm.org/licensing        |
+ | This work is published under the GNU AGPLv3 license with some      |
+ | permitted exceptions and without any warranty. For full license    |
+ | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
 
@@ -32,9 +16,13 @@
  */
 class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
   protected $_paymentProcessorType;
-  protected $_apiversion = 3;
   protected $_params;
 
+  /**
+   * Set up class.
+   *
+   * @throws \CRM_Core_Exception
+   */
   public function setUp() {
     parent::setUp();
     $this->useTransaction(TRUE);
@@ -58,17 +46,16 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
   }
 
   /**
-   * Check with no name.
+   * Check create with no name specified.
    */
   public function testPaymentProcessorCreateWithoutName() {
-    $payProcParams = [
-      'is_active' => 1,
-    ];
-    $this->callAPIFailure('payment_processor', 'create', $payProcParams);
+    $this->callAPIFailure('payment_processor', 'create', ['is_active' => 1]);
   }
 
   /**
    * Create payment processor.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testPaymentProcessorCreate() {
     $params = $this->_params;
@@ -88,6 +75,8 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Update payment processor.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testPaymentProcessorUpdate() {
     $params = $this->_params;
@@ -131,6 +120,8 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Check payment processor delete.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testPaymentProcessorDelete() {
     $result = $this->callAPISuccess('payment_processor', 'create', $this->_params);
@@ -143,6 +134,8 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Check with valid params array.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testPaymentProcessorsGet() {
     $params = $this->_params;
