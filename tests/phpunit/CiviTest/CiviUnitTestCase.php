@@ -90,12 +90,14 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   protected $_tablesToTruncate = [];
 
   /**
-   * @var array of temporary directory names
+   * @var array
+   * Array of temporary directory names
    */
   protected $tempDirs;
 
   /**
-   * @var bool populateOnce allows to skip db resets in setUp
+   * @var bool
+   * populateOnce allows to skip db resets in setUp
    *
    *  WARNING! USE WITH CAUTION - IT'LL RENDER DATA DEPENDENCIES
    *  BETWEEN TESTS WHEN RUN IN SUITE. SUITABLE FOR LOCAL, LIMITED
@@ -103,21 +105,22 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *
    *  IF POSSIBLE, USE $this->DBResetRequired = FALSE IN YOUR TEST CASE!
    *
-   *  see also: http://forum.civicrm.org/index.php/topic,18065.0.html
+   * @see http://forum.civicrm.org/index.php/topic,18065.0.html
    */
   public static $populateOnce = FALSE;
 
   /**
-   * @var bool DBResetRequired allows skipping DB reset
-   *               in specific test case. If you still need
-   *               to reset single test (method) of such case, call
-   *               $this->cleanDB() in the first line of this
-   *               test (method).
+   * DBResetRequired allows skipping DB reset
+   * in specific test case. If you still need
+   * to reset single test (method) of such case, call
+   * $this->cleanDB() in the first line of this
+   * test (method).
+   * @var bool
    */
   public $DBResetRequired = TRUE;
 
   /**
-   * @var CRM_Core_Transaction|NULL
+   * @var CRM_Core_Transaction|null
    */
   private $tx = NULL;
 
@@ -138,12 +141,13 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *
    * $this->hookClass->setHook('civicrm_aclWhereClause', array($this, 'aclWhereHookAllResults'));
    *
-   * @var CRM_Utils_Hook_UnitTests hookClass
+   * @var \CRM_Utils_Hook_UnitTests
    */
   public $hookClass = NULL;
 
   /**
-   * @var array common values to be re-used multiple times within a class - usually to create the relevant entity
+   * @var array
+   * Common values to be re-used multiple times within a class - usually to create the relevant entity
    */
   protected $_params = [];
 
@@ -1805,6 +1809,8 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
 
   /**
    * Clean up financial entities after financial tests (so we remember to get all the tables :-))
+   *
+   * @throws \CRM_Core_Exception
    */
   public function quickCleanUpFinancialEntities() {
     $tablesToTruncate = [
@@ -1838,8 +1844,6 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     $this->quickCleanup($tablesToTruncate);
     CRM_Core_DAO::executeQuery("DELETE FROM civicrm_membership_status WHERE name NOT IN('New', 'Current', 'Grace', 'Expired', 'Pending', 'Cancelled', 'Deceased')");
     $this->restoreDefaultPriceSetConfig();
-    $var = TRUE;
-    CRM_Member_BAO_Membership::createRelatedMemberships($var, $var, TRUE);
     $this->disableTaxAndInvoicing();
     $this->setCurrencySeparators(',');
     CRM_Core_PseudoConstant::flush('taxRates');
@@ -1849,11 +1853,28 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     CRM_Contribute_BAO_Query::$_contribOrSoftCredit = 'only contribs';
   }
 
+  /**
+   * Reset the price set config so results exist.
+   */
   public function restoreDefaultPriceSetConfig() {
     CRM_Core_DAO::executeQuery("DELETE FROM civicrm_price_set WHERE name NOT IN('default_contribution_amount', 'default_membership_type_amount')");
     CRM_Core_DAO::executeQuery("UPDATE civicrm_price_set SET id = 1 WHERE name ='default_contribution_amount'");
     CRM_Core_DAO::executeQuery("INSERT INTO `civicrm_price_field` (`id`, `price_set_id`, `name`, `label`, `html_type`, `is_enter_qty`, `help_pre`, `help_post`, `weight`, `is_display_amounts`, `options_per_line`, `is_active`, `is_required`, `active_on`, `expire_on`, `javascript`, `visibility_id`) VALUES (1, 1, 'contribution_amount', 'Contribution Amount', 'Text', 0, NULL, NULL, 1, 1, 1, 1, 1, NULL, NULL, NULL, 1)");
     CRM_Core_DAO::executeQuery("INSERT INTO `civicrm_price_field_value` (`id`, `price_field_id`, `name`, `label`, `description`, `amount`, `count`, `max_value`, `weight`, `membership_type_id`, `membership_num_terms`, `is_default`, `is_active`, `financial_type_id`, `non_deductible_amount`) VALUES (1, 1, 'contribution_amount', 'Contribution Amount', NULL, '1', NULL, NULL, 1, NULL, NULL, 0, 1, 1, 0.00)");
+  }
+
+  /**
+   * Recreate default membership types.
+   */
+  public function restoreMembershipTypes() {
+    CRM_Core_DAO::executeQuery(
+      "REPLACE INTO civicrm_membership_type
+    (id, domain_id, name, description, member_of_contact_id, financial_type_id, minimum_fee, duration_unit, duration_interval, period_type, fixed_period_start_day, fixed_period_rollover_day, relationship_type_id, relationship_direction, visibility, weight, is_active)
+VALUES
+    (1, 1, 'General', 'Regular annual membership.', 1, 2, 100.00, 'year', 2, 'rolling', NULL, NULL, 7, 'b_a', 'Public', 1, 1),
+    (2, 1, 'Student', 'Discount membership for full-time students.', 1, 2, 50.00, 'year', 1, 'rolling', NULL, NULL, NULL, NULL, 'Public', 2, 1),
+    (3, 1, 'Lifetime', 'Lifetime membership.', 1, 2, 1200.00, 'lifetime', 1, 'rolling', NULL, NULL, 7, 'b_a', 'Admin', 3, 1);
+    ");
   }
 
   /*
@@ -3339,6 +3360,7 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
     $stream = fopen('php://memory', 'r+');
     fwrite($stream, $output);
     rewind($stream);
+    $this->assertEquals("\xEF\xBB\xBF", substr($output, 0, 3));
     $csv = Reader::createFromString($output);
     if ($isFirstRowHeaders) {
       $csv->setHeaderOffset(0);

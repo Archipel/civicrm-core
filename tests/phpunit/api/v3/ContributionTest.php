@@ -19,6 +19,7 @@
 class api_v3_ContributionTest extends CiviUnitTestCase {
 
   use CRMTraits_Profile_ProfileTrait;
+  use CRMTraits_Custom_CustomDataTrait;
 
   protected $_individualId;
   protected $_contribution;
@@ -57,6 +58,8 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Setup function.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function setUp() {
     parent::setUp();
@@ -97,6 +100,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'min_amount' => 10,
       'max_amount' => 1000,
     ];
+    $this->entity = $this->_entity;
   }
 
   /**
@@ -124,6 +128,8 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test Get.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testGetContribution() {
     $contributionSettings = $this->enableTaxAndInvoicing();
@@ -209,6 +215,8 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test that test contributions can be retrieved.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testGetTestContribution() {
     $this->callAPISuccess('Contribution', 'create', array_merge($this->_params, ['is_test' => 1]));
@@ -4391,6 +4399,32 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     ]);
     $this->assertEquals('$', $result['values']['USD']);
     $this->assertNotContains('US Dollar', $result['values']);
+  }
+
+  public function testSetCustomDataInCreateAndHook() {
+    $this->createCustomGroupWithFieldsOfAllTypes();
+    $this->hookClass->setHook('civicrm_post', [
+      $this,
+      'civicrmPostContributionCustom',
+    ]);
+    $params = $this->_params;
+    $params['custom_' . $this->ids['CustomField']['text']] = 'Some Text';
+    $contribution = $this->callAPISuccess('Contribution', 'create', $params);
+    $getContribution = $this->callAPISuccess('Contribution', 'get', [
+      'id' => $contribution['id'],
+      'return' => ['id', 'custom_' . $this->ids['CustomField']['text'], 'custom_' . $this->ids['CustomField']['int']],
+    ]);
+    $this->assertEquals(5, $getContribution['values'][$contribution['id']]['custom_' . $this->ids['CustomField']['int']]);
+    $this->assertEquals('Some Text', $getContribution['values'][$contribution['id']]['custom_' . $this->ids['CustomField']['text']]);
+  }
+
+  public function civicrmPostContributionCustom($op, $objectName, $objectId, &$objectRef) {
+    if ($objectName === 'Contribution' && $op === 'create') {
+      $this->callAPISuccess('Contribution', 'create', [
+        'id' => $objectId,
+        'custom_' . $this->ids['CustomField']['int'] => 5,
+      ]);
+    }
   }
 
 }
