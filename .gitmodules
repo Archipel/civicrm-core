@@ -15,4 +15,4 @@
 	url = https://github.com/cividesk/com.cividesk.apikey.git
 [submodule "ext/expense-notes"]
 	path = ext/expense-notes
-	url = ../../weynwebworks/civicrm-extension-expense-notes.git
+	url = https://gitlab+deploy-token-175891:j9x9ePzWvo8DHzzmJshk@gitlab.com/weynwebworks/civicrm-extension-expense-notes.git
