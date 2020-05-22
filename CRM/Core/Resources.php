@@ -774,8 +774,10 @@ class CRM_Core_Resources {
       $items[] = 'bower_components/smartmenus/dist/jquery.smartmenus.min.js';
       $items[] = 'bower_components/smartmenus/dist/addons/keyboard/jquery.smartmenus.keyboard.min.js';
       $items[] = 'js/crm.menubar.js';
+      /* @var $assetBuilder Civi\Core\AssetBuilder */
+      $assetBuilder = Civi::service('asset_builder');
       // @see CRM_Core_Resources::renderMenubarStylesheet
-      $items[] = Civi::service('asset_builder')->getUrl('crm-menubar.css', [
+      $items[] = $assetBuilder->getUrl('crm-menubar.css', [
         'menubarColor' => Civi::settings()->get('menubar_color'),
         'height' => 40,
         'breakpoint' => 768,
