@@ -13,3 +13,6 @@
 [submodule "ext/com.cividesk.apikey"]
 	path = ext/com.cividesk.apikey
 	url = https://github.com/cividesk/com.cividesk.apikey.git
+[submodule "ext/expense-notes"]
+	path = ext/expense-notes
+	url = https://gitlab.com/weynwebworks/civicrm-extension-expense-notes.git
