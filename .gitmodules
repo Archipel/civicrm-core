@@ -9,7 +9,7 @@
 	url = https://github.com/Archipel/nz.co.fuzion.omnipaymultiprocessor.git
 [submodule "packages"]
 	path = packages
-	url = https://github.com/civicrm/civicrm-packages.git
+	url = https://github.com/Archipel/civicrm-packages.git
 [submodule "ext/com.cividesk.apikey"]
 	path = ext/com.cividesk.apikey
 	url = https://github.com/cividesk/com.cividesk.apikey.git
