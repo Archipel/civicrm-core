@@ -184,6 +184,19 @@ class CRM_Core_Error extends PEAR_ErrorStack {
       }
     }
 
+    // Use the custom fatalErrorHandler if defined
+    if ($config->fatalErrorHandler && function_exists($config->fatalErrorHandler)) {
+      $name = $config->fatalErrorHandler;
+      $vars = [
+        'pearError' => $pearError,
+      ];
+      $ret = $name($vars);
+      if ($ret) {
+        // the call has been successfully handled so we just exit
+        self::abend(CRM_Core_Error::FATAL_ERROR);
+      }
+    }
+
     $template->assign_by_ref('error', $error);
     $errorDetails = CRM_Core_Error::debug('', $error, FALSE);
     $template->assign_by_ref('errorDetails', $errorDetails);
@@ -204,7 +217,7 @@ class CRM_Core_Error extends PEAR_ErrorStack {
       exit;
     }
     $runOnce = TRUE;
-    self::abend(1);
+    self::abend(CRM_Core_Error::FATAL_ERROR);
   }
 
   /**
@@ -288,6 +301,7 @@ class CRM_Core_Error extends PEAR_ErrorStack {
    * @throws Exception
    */
   public static function fatal($message = NULL, $code = NULL, $email = NULL) {
+    CRM_Core_Error::deprecatedFunctionWarning('throw new CRM_Core_Exception or use CRM_Core_Error::statusBounce', 'CRM_Core_Error::fatal');
     $vars = [
       'message' => $message,
       'code' => $code,
@@ -570,7 +584,7 @@ class CRM_Core_Error extends PEAR_ErrorStack {
     if (!empty(\Civi::$statics[__CLASS__]['userFrameworkLogging'])) {
       // should call $config->userSystem->logger($message) here - but I got a situation where userSystem was not an object - not sure why
       if ($config->userSystem->is_drupal and function_exists('watchdog')) {
-        watchdog('civicrm', '%message', ['%message' => $message], isset($priority) ? $priority : WATCHDOG_DEBUG);
+        watchdog('civicrm', '%message', ['%message' => $message], $priority ?? WATCHDOG_DEBUG);
       }
     }
 
@@ -608,7 +622,7 @@ class CRM_Core_Error extends PEAR_ErrorStack {
    *
    * @param string $prefix
    *
-   * @return Log
+   * @return Log_file
    */
   public static function createDebugLogger($prefix = '') {
     self::generateLogFileName($prefix);
@@ -651,22 +665,30 @@ class CRM_Core_Error extends PEAR_ErrorStack {
 
       $prefixString = $prefix ? ($prefix . '.') : '';
 
-      $hash = self::generateLogFileHash($config);
-      $fileName = $config->configAndLogDir . 'CiviCRM.' . $prefixString . $hash . '.log';
+      if (CRM_Utils_Constant::value('CIVICRM_LOG_HASH', TRUE)) {
+        $hash = self::generateLogFileHash($config) . '.';
+      }
+      else {
+        $hash = '';
+      }
+      $fileName = $config->configAndLogDir . 'CiviCRM.' . $prefixString . $hash . 'log';
 
-      // Roll log file monthly or if greater than 256M.
+      // Roll log file monthly or if greater than our threshold.
       // Size-based rotation introduced in response to filesize limits on
       // certain OS/PHP combos.
-      if (file_exists($fileName)) {
-        $fileTime = date("Ym", filemtime($fileName));
-        $fileSize = filesize($fileName);
-        if (($fileTime < date('Ym')) ||
-          ($fileSize > 256 * 1024 * 1024) ||
-          ($fileSize < 0)
-        ) {
-          rename($fileName,
-            $fileName . '.' . date('YmdHi')
-          );
+      $maxBytes = CRM_Utils_Constant::value('CIVICRM_LOG_ROTATESIZE', 256 * 1024 * 1024);
+      if ($maxBytes) {
+        if (file_exists($fileName)) {
+          $fileTime = date("Ym", filemtime($fileName));
+          $fileSize = filesize($fileName);
+          if (($fileTime < date('Ym')) ||
+            ($fileSize > $maxBytes) ||
+            ($fileSize < 0)
+          ) {
+            rename($fileName,
+              $fileName . '.' . date('YmdHi')
+            );
+          }
         }
       }
       \Civi::$statics[__CLASS__]['logger_file' . $prefix] = $fileName;
@@ -726,11 +748,11 @@ class CRM_Core_Error extends PEAR_ErrorStack {
     $ret = [];
     foreach ($backTrace as $trace) {
       $args = [];
-      $fnName = CRM_Utils_Array::value('function', $trace);
+      $fnName = $trace['function'] ?? NULL;
       $className = isset($trace['class']) ? ($trace['class'] . $trace['type']) : '';
 
       // Do not show args for a few password related functions
-      $skipArgs = ($className == 'DB::' && $fnName == 'connect') ? TRUE : FALSE;
+      $skipArgs = $className == 'DB::' && $fnName == 'connect';
 
       if (!empty($trace['args'])) {
         foreach ($trace['args'] as $arg) {
@@ -803,16 +825,19 @@ class CRM_Core_Error extends PEAR_ErrorStack {
     if ($e instanceof PEAR_Exception) {
       $ei = $e;
       while (is_callable([$ei, 'getCause'])) {
-        if ($ei->getCause() instanceof PEAR_Error) {
-          $msg .= '<table class="crm-db-error">';
-          $msg .= sprintf('<thead><tr><th>%s</th><th>%s</th></tr></thead>', ts('Error Field'), ts('Error Value'));
-          $msg .= '<tbody>';
-          foreach (['Type', 'Code', 'Message', 'Mode', 'UserInfo', 'DebugInfo'] as $f) {
-            $msg .= sprintf('<tr><td>%s</td><td>%s</td></tr>', $f, call_user_func([$ei->getCause(), "get$f"]));
+        // DB_ERROR doesn't have a getCause but does have a __call function which tricks is_callable.
+        if (!$ei instanceof DB_Error) {
+          if ($ei->getCause() instanceof PEAR_Error) {
+            $msg .= '<table class="crm-db-error">';
+            $msg .= sprintf('<thead><tr><th>%s</th><th>%s</th></tr></thead>', ts('Error Field'), ts('Error Value'));
+            $msg .= '<tbody>';
+            foreach (['Type', 'Code', 'Message', 'Mode', 'UserInfo', 'DebugInfo'] as $f) {
+              $msg .= sprintf('<tr><td>%s</td><td>%s</td></tr>', $f, call_user_func([$ei->getCause(), "get$f"]));
+            }
+            $msg .= '</tbody></table>';
           }
-          $msg .= '</tbody></table>';
+          $ei = $ei->getCause();
         }
-        $ei = $ei->getCause();
       }
       $msg .= $e->toHtml();
     }
@@ -835,12 +860,19 @@ class CRM_Core_Error extends PEAR_ErrorStack {
 
     $ei = $e;
     while (is_callable([$ei, 'getCause'])) {
-      if ($ei->getCause() instanceof PEAR_Error) {
-        foreach (['Type', 'Code', 'Message', 'Mode', 'UserInfo', 'DebugInfo'] as $f) {
-          $msg .= sprintf(" * ERROR %s: %s\n", strtoupper($f), call_user_func([$ei->getCause(), "get$f"]));
+      // DB_ERROR doesn't have a getCause but does have a __call function which tricks is_callable.
+      if (!$ei instanceof DB_Error) {
+        if ($ei->getCause() instanceof PEAR_Error) {
+          foreach (['Type', 'Code', 'Message', 'Mode', 'UserInfo', 'DebugInfo'] as $f) {
+            $msg .= sprintf(" * ERROR %s: %s\n", strtoupper($f), call_user_func([$ei->getCause(), "get$f"]));
+          }
         }
+        $ei = $ei->getCause();
       }
-      $ei = $ei->getCause();
+      // if we have reached a DB_Error assume that is the end of the road.
+      else {
+        $ei = NULL;
+      }
     }
     $msg .= self::formatBacktrace($e->getTrace());
     return $msg;
@@ -990,14 +1022,19 @@ class CRM_Core_Error extends PEAR_ErrorStack {
   /**
    * Output a deprecated function warning to log file.  Deprecated class:function is automatically generated from calling function.
    *
-   * @param $newMethod
+   * @param string $newMethod
    *   description of new method (eg. "buildOptions() method in the appropriate BAO object").
+   * @param string $oldMethod
+   *   optional description of old method (if not the calling method). eg. CRM_MyClass::myOldMethodToGetTheOptions()
    */
-  public static function deprecatedFunctionWarning($newMethod) {
-    $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-    $callerFunction = isset($dbt[1]['function']) ? $dbt[1]['function'] : NULL;
-    $callerClass = isset($dbt[1]['class']) ? $dbt[1]['class'] : NULL;
-    Civi::log()->warning("Deprecated function $callerClass::$callerFunction, use $newMethod.", ['civi.tag' => 'deprecated']);
+  public static function deprecatedFunctionWarning($newMethod, $oldMethod = NULL) {
+    if (!$oldMethod) {
+      $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+      $callerFunction = $dbt[1]['function'] ?? NULL;
+      $callerClass = $dbt[1]['class'] ?? NULL;
+      $oldMethod = "{$callerClass}::{$callerFunction}";
+    }
+    Civi::log()->warning("Deprecated function $oldMethod, use $newMethod.", ['civi.tag' => 'deprecated']);
   }
 
 }

@@ -18,6 +18,9 @@ class CRM_Activity_Selector_SearchTest extends CiviUnitTestCase {
 
   /**
    * Test activity search applies a permission based component filter.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function testActivitySearchComponentPermission() {
     $this->activityCreate(['activity_type_id' => 'Contribution']);
@@ -55,7 +58,7 @@ class CRM_Activity_Selector_SearchTest extends CiviUnitTestCase {
         'name' => 'source_contact',
         'sort' => 'source_contact',
         'direction' => 4,
-        'title' => 'Added By',
+        'title' => 'Added by',
       ],
       5 => [
         'name' => 'activity_status',

@@ -13,8 +13,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 /**
@@ -155,7 +153,8 @@ abstract class CRM_Utils_System_DrupalBase extends CRM_Utils_System_Base {
     $absolute = FALSE,
     $fragment = NULL,
     $frontend = FALSE,
-    $forceBackend = FALSE
+    $forceBackend = FALSE,
+    $htmlize = TRUE
   ) {
     $config = CRM_Core_Config::singleton();
     $script = 'index.php';
@@ -296,7 +295,7 @@ abstract class CRM_Utils_System_DrupalBase extends CRM_Utils_System_Base {
     $result = [];
     $q = db_query('SELECT name, status FROM {system} WHERE type = \'module\' AND schema_version <> -1');
     foreach ($q as $row) {
-      $result[] = new CRM_Core_Module('drupal.' . $row->name, ($row->status == 1) ? TRUE : FALSE);
+      $result[] = new CRM_Core_Module('drupal.' . $row->name, $row->status == 1);
     }
     return $result;
   }
@@ -657,11 +656,45 @@ abstract class CRM_Utils_System_DrupalBase extends CRM_Utils_System_Base {
    * @return bool
    */
   public function isFrontEndPage() {
-    $path = CRM_Utils_System::getUrlPath();
+    $path = CRM_Utils_System::currentPath();
 
     // Get the menu for above URL.
     $item = CRM_Core_Menu::get($path);
-    if (!empty(CRM_Utils_Array::value('is_public', $item))) {
+    return !empty($item['is_public']);
+  }
+
+  /**
+   * Start a new session.
+   */
+  public function sessionStart() {
+    if (function_exists('drupal_session_start')) {
+      // https://issues.civicrm.org/jira/browse/CRM-14356
+      if (!(isset($GLOBALS['lazy_session']) && $GLOBALS['lazy_session'] == TRUE)) {
+        drupal_session_start();
+      }
+      $_SESSION = [];
+    }
+    else {
+      session_start();
+    }
+  }
+
+  /**
+   * Get role names
+   *
+   * @return array|null
+   */
+  public function getRoleNames() {
+    return array_combine(user_roles(), user_roles());
+  }
+
+  /**
+   * Determine if the Views module exists.
+   *
+   * @return bool
+   */
+  public function viewsExists() {
+    if (function_exists('module_exists') && module_exists('views')) {
       return TRUE;
     }
     return FALSE;

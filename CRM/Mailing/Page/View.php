@@ -81,6 +81,10 @@ class CRM_Mailing_Page_View extends CRM_Core_Page {
       $this->_mailingID = CRM_Utils_Request::retrieve('id', 'String', CRM_Core_DAO::$_nullObject, TRUE);
     }
 
+    // Retrieve contact ID and checksum from the URL
+    $cs = CRM_Utils_Request::retrieve('cs', 'String');
+    $cid = CRM_Utils_Request::retrieve('cid', 'Int');
+
     // # CRM-7651
     // override contactID from the function level if passed in
     if (isset($contactID) &&
@@ -88,6 +92,12 @@ class CRM_Mailing_Page_View extends CRM_Core_Page {
     ) {
       $this->_contactID = $contactID;
     }
+
+    // Support checksummed view of the mailing to replace tokens
+    elseif (!empty($cs) && !empty($cid) && CRM_Contact_BAO_Contact_Utils::validChecksum($cid, $cs)) {
+      $this->_contactID = $cid;
+    }
+
     else {
       $this->_contactID = CRM_Core_Session::getLoggedInContactID();
     }
@@ -131,13 +141,13 @@ class CRM_Mailing_Page_View extends CRM_Core_Page {
       return NULL;
     }
 
-    $contactId = isset($this->_contactID) ? $this->_contactID : 0;
+    $contactId = $this->_contactID ?? 0;
 
     $result = civicrm_api3('Mailing', 'preview', [
       'id' => $this->_mailingID,
       'contact_id' => $contactId,
     ]);
-    $mailing = \CRM_Utils_Array::value('values', $result);
+    $mailing = $result['values'] ?? NULL;
 
     $title = NULL;
     if (isset($mailing['body_html']) && empty($_GET['text'])) {

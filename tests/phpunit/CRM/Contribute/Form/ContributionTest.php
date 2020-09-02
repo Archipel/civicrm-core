@@ -413,7 +413,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
       'contact_id' => $this->_individualId,
       'contribution_status_id' => 'Completed',
     ]);
-    $this->assertEquals('50', $contribution['total_amount']);
+    $this->assertEquals('50.00', $contribution['total_amount']);
     $this->assertEquals(.08, $contribution['fee_amount']);
     $this->assertEquals(49.92, $contribution['net_amount']);
     $this->assertEquals('tx', $contribution['trxn_id']);
@@ -464,7 +464,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
       'contact_id' => $this->_individualId,
       'contribution_status_id' => 'Completed',
     ]);
-    $this->assertEquals('50', $contribution['total_amount']);
+    $this->assertEquals('50.00', $contribution['total_amount']);
     $this->assertEquals(0, $contribution['non_deductible_amount']);
   }
 
@@ -479,6 +479,9 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
    *  - 1 Contribution with status = Pending
    *  - 1 Line item
    *  - 1 civicrm_financial_item. This is linked to the line item and has a status of 3
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function testSubmitCreditCardInvalid() {
     $form = new CRM_Contribute_Form_Contribution();
@@ -517,6 +520,9 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function creates a billing address if provided.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function testSubmitCreditCardWithBillingAddress() {
     $form = new CRM_Contribute_Form_Contribution();
@@ -1168,13 +1174,13 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
 
     $mut->checkMailLog($strings);
     $this->callAPISuccessGetCount('FinancialTrxn', [], 3);
-    $items = $this->callAPISuccess('FinancialItem', 'get', ['sequential' => 1]);
-    $this->assertEquals(2, $items['count']);
-    $this->assertEquals('Contribution Amount', $items['values'][0]['description']);
-    $this->assertEquals('Sales Tax', $items['values'][1]['description']);
+    $items = $this->callAPISuccess('FinancialItem', 'get', ['sequential' => 1])['values'];
+    $this->assertEquals(2, count($items));
+    $this->assertEquals('Contribution Amount', $items[0]['description']);
+    $this->assertEquals('Sales Tax', $items[1]['description']);
 
-    $this->assertEquals(10000, $items['values'][0]['amount']);
-    $this->assertEquals(1000, $items['values'][1]['amount']);
+    $this->assertEquals(10000, $items[0]['amount']);
+    $this->assertEquals(1000, $items[1]['amount']);
   }
 
   /**

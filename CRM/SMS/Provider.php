@@ -22,7 +22,7 @@ abstract class CRM_SMS_Provider {
    *
    * @var object
    */
-  static private $_singleton = array();
+  static private $_singleton = [];
   const MAX_SMS_CHAR = 460;
 
   /**
@@ -34,10 +34,10 @@ abstract class CRM_SMS_Provider {
    * @return object
    * @throws CRM_Core_Exception
    */
-  public static function &singleton($providerParams = array(), $force = FALSE) {
-    $mailingID = CRM_Utils_Array::value('mailing_id', $providerParams);
-    $providerID = CRM_Utils_Array::value('provider_id', $providerParams);
-    $providerName = CRM_Utils_Array::value('provider', $providerParams);
+  public static function &singleton($providerParams = [], $force = FALSE) {
+    $mailingID = $providerParams['mailing_id'] ?? NULL;
+    $providerID = $providerParams['provider_id'] ?? NULL;
+    $providerName = $providerParams['provider'] ?? NULL;
 
     if (!$providerID && $mailingID) {
       $providerID = CRM_Core_DAO::getFieldValue('CRM_Mailing_DAO_Mailing', $mailingID, 'sms_provider_id', 'id');
@@ -125,7 +125,7 @@ abstract class CRM_SMS_Provider {
    * @return self|null|object
    * @throws CRM_Core_Exception
    */
-  public function createActivity($apiMsgID, $message, $headers = array(), $jobID = NULL, $userID = NULL) {
+  public function createActivity($apiMsgID, $message, $headers = [], $jobID = NULL, $userID = NULL) {
     if ($jobID) {
       $sql = "
 SELECT scheduled_id FROM civicrm_mailing m
@@ -141,7 +141,7 @@ INNER JOIN civicrm_mailing_job mj ON mj.mailing_id = m.id AND mj.id = %1";
     }
 
     if (!$sourceContactID) {
-      $sourceContactID = CRM_Utils_Array::value('Contact', $headers);
+      $sourceContactID = $headers['Contact'] ?? NULL;
     }
     if (!$sourceContactID) {
       return FALSE;

@@ -34,10 +34,8 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
     }
 
     if (empty($params['id'])) {
-
       if (empty($params['created_id'])) {
-        $session = CRM_Core_Session::singleton();
-        $params['created_id'] = $session->get('userID');
+        $params['created_id'] = CRM_Core_Session::getLoggedInContactID();
       }
 
       if (empty($params['created_date'])) {
@@ -47,26 +45,11 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
       if (empty($params['name'])) {
         $params['name'] = CRM_Utils_String::titleToVar($params['title'], 64);
       }
-
-      CRM_Utils_Hook::pre('create', 'Campaign', NULL, $params);
-    }
-    else {
-      CRM_Utils_Hook::pre('edit', 'Campaign', $params['id'], $params);
     }
 
-    $campaign = new CRM_Campaign_DAO_Campaign();
-    $campaign->copyValues($params);
-    $campaign->save();
-
-    if (!empty($params['id'])) {
-      CRM_Utils_Hook::post('edit', 'Campaign', $campaign->id, $campaign);
-    }
-    else {
-      CRM_Utils_Hook::post('create', 'Campaign', $campaign->id, $campaign);
-    }
+    $campaign = self::writeRecord($params);
 
     /* Create the campaign group record */
-
     $groupTableName = CRM_Contact_BAO_Group::getTableName();
 
     if (isset($params['groups']) && !empty($params['groups']['include']) && is_array($params['groups']['include'])) {
@@ -81,9 +64,7 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
     }
 
     //store custom data
-    if (!empty($params['custom']) &&
-      is_array($params['custom'])
-    ) {
+    if (!empty($params['custom']) && is_array($params['custom'])) {
       CRM_Core_BAO_CustomValueTable::store($params['custom'], 'civicrm_campaign', $campaign->id);
     }
 
@@ -383,6 +364,7 @@ INNER JOIN civicrm_option_group grp ON ( campaign_type.option_group_id = grp.id 
       if ($orderOnCampaignTable) {
         $orderByClause = "ORDER BY campaign.{$sortParams['sort']} {$sortParams['sortOrder']}";
       }
+      $orderByClause = ($orderByClause) ? $orderByClause . ", campaign.id {$sortParams['sortOrder']}" : $orderByClause;
       $limitClause = "LIMIT {$sortParams['offset']}, {$sortParams['rowCount']}";
     }
 
@@ -415,18 +397,12 @@ INNER JOIN civicrm_option_group grp ON ( campaign_type.option_group_id = grp.id 
       $queryParams[6] = ['%' . trim($params['description']) . '%', 'String'];
     }
     if (!empty($params['campaign_type_id'])) {
-      $typeId = $params['campaign_type_id'];
-      if (is_array($params['campaign_type_id'])) {
-        $typeId = implode(' , ', $params['campaign_type_id']);
-      }
-      $where[] = "( campaign.campaign_type_id IN ( {$typeId} ) )";
+      $where[] = "( campaign.campaign_type_id IN ( %7 ) )";
+      $queryParams[7] = [implode(',', (array) $params['campaign_type_id']), 'CommaSeparatedIntegers'];
     }
     if (!empty($params['status_id'])) {
-      $statusId = $params['status_id'];
-      if (is_array($params['status_id'])) {
-        $statusId = implode(' , ', $params['status_id']);
-      }
-      $where[] = "( campaign.status_id IN ( {$statusId} ) )";
+      $where[] = "( campaign.status_id IN ( %8 ) )";
+      $queryParams[8] = [implode(',', (array) $params['status_id']), 'CommaSeparatedIntegers'];
     }
     if (array_key_exists('is_active', $params)) {
       $active = "( campaign.is_active = 1 )";
@@ -574,10 +550,10 @@ INNER JOIN  civicrm_group grp ON ( grp.id = campgrp.entity_id )
     }
 
     $campaignDetails = self::getPermissionedCampaigns($connectedCampaignId, NULL, TRUE, TRUE, $appendDates);
-    $fields = ['campaigns', 'hasAccessCampaign', 'isCampaignEnabled'];
-    foreach ($fields as $fld) {
-      $$fld = CRM_Utils_Array::value($fld, $campaignDetails);
-    }
+
+    $campaigns = $campaignDetails['campaigns'] ?? NULL;
+    $hasAccessCampaign = $campaignDetails['hasAccessCampaign'] ?? NULL;
+    $isCampaignEnabled = $campaignDetails['isCampaignEnabled'] ?? NULL;
 
     $showAddCampaign = FALSE;
     if ($connectedCampaignId || ($isCampaignEnabled && $hasAccessCampaign)) {
@@ -594,14 +570,12 @@ INNER JOIN  civicrm_group grp ON ( grp.id = campgrp.entity_id )
     }
 
     //carry this info to templates.
-    $infoFields = [
-      'showAddCampaign',
-      'hasAccessCampaign',
-      'isCampaignEnabled',
+    $campaignInfo = [
+      'showAddCampaign' => $showAddCampaign,
+      'hasAccessCampaign' => $hasAccessCampaign,
+      'isCampaignEnabled' => $isCampaignEnabled,
     ];
-    foreach ($infoFields as $fld) {
-      $campaignInfo[$fld] = $$fld;
-    }
+
     $form->assign('campaignInfo', $campaignInfo);
   }
 
@@ -617,7 +591,7 @@ INNER JOIN  civicrm_group grp ON ( grp.id = campgrp.entity_id )
     $campaignDetails = self::getPermissionedCampaigns(NULL, NULL, FALSE, FALSE, FALSE, TRUE);
     $fields = ['campaigns', 'hasAccessCampaign', 'isCampaignEnabled'];
     foreach ($fields as $fld) {
-      $$fld = CRM_Utils_Array::value($fld, $campaignDetails);
+      $$fld = $campaignDetails[$fld] ?? NULL;
     }
     $showCampaignInSearch = FALSE;
     if ($isCampaignEnabled && $hasAccessCampaign && !empty($campaigns)) {

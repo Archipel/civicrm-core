@@ -13,8 +13,16 @@ namespace Civi\Api4\Generic;
 
 /**
  * Container for api results.
+ *
+ * The Result object has three functions:
+ *
+ *  1. Store the results of the API call (accessible via ArrayAccess).
+ *  2. Store metadata like the Entity & Action names.
+ *     - Note: some actions extend the Result object to store extra metadata.
+ *       For example, BasicReplaceAction returns ReplaceResult which includes the additional $deleted property to list any items deleted by the operation.
+ *  3. Provide convenience methods like `$result->first()` and `$result->indexBy($field)`.
  */
-class Result extends \ArrayObject {
+class Result extends \ArrayObject implements \JsonSerializable {
   /**
    * @var string
    */
@@ -24,10 +32,18 @@ class Result extends \ArrayObject {
    */
   public $action;
   /**
+   * @var array
+   */
+  public $debug;
+  /**
    * Api version
    * @var int
    */
   public $version = 4;
+  /**
+   * @var int
+   */
+  public $rowCount;
 
   private $indexedBy;
 
@@ -95,11 +111,7 @@ class Result extends \ArrayObject {
    * @return int
    */
   public function count() {
-    $count = parent::count();
-    if ($count == 1 && is_array($this->first()) && array_keys($this->first()) == ['row_count']) {
-      return $this->first()['row_count'];
-    }
-    return $count;
+    return $this->rowCount ?? parent::count();
   }
 
   /**
@@ -110,6 +122,13 @@ class Result extends \ArrayObject {
    */
   public function column($name) {
     return array_column($this->getArrayCopy(), $name, $this->indexedBy);
+  }
+
+  /**
+   * @return array
+   */
+  public function jsonSerialize() {
+    return $this->getArrayCopy();
   }
 
 }

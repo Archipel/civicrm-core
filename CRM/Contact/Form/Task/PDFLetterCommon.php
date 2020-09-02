@@ -104,14 +104,14 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
    * Process the form after the input has been submitted and validated.
    *
    * @param CRM_Core_Form $form
-   *
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public static function postProcess(&$form) {
     $formValues = $form->controller->exportValues($form->getName());
     list($formValues, $categories, $html_message, $messageToken, $returnProperties) = self::processMessageTemplate($formValues);
-    $skipOnHold = isset($form->skipOnHold) ? $form->skipOnHold : FALSE;
-    $skipDeceased = isset($form->skipDeceased) ? $form->skipDeceased : TRUE;
+    $skipOnHold = $form->skipOnHold ?? FALSE;
+    $skipDeceased = $form->skipDeceased ?? TRUE;
     $html = $activityIds = [];
 
     // CRM-16725 Skip creation of activities if user is previewing their PDF letter(s)
@@ -126,6 +126,14 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
     foreach ($form->_contactIds as $item => $contactId) {
       $caseId = NULL;
       $params = ['contact_id' => $contactId];
+
+      $caseId = $form->getVar('_caseId');
+      if (empty($caseId) && !empty($form->_caseIds[$item])) {
+        $caseId = $form->_caseIds[$item];
+      }
+      if ($caseId) {
+        $params['case_id'] = $caseId;
+      }
 
       list($contact) = CRM_Utils_Token::getTokenDetails($params,
         $returnProperties,
@@ -142,12 +150,7 @@ class CRM_Contact_Form_Task_PDFLetterCommon extends CRM_Core_Form_Task_PDFLetter
       }
 
       $tokenHtml = CRM_Utils_Token::replaceContactTokens($html_message, $contact[$contactId], TRUE, $messageToken);
-      if (!empty($form->_caseId)) {
-        $caseId = $form->_caseId;
-      }
-      if (empty($caseId) && !empty($form->_caseIds[$item])) {
-        $caseId = $form->_caseIds[$item];
-      }
+
       if ($caseId) {
         $tokenHtml = CRM_Utils_Token::replaceCaseTokens($caseId, $tokenHtml, $messageToken);
       }

@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -23,6 +21,8 @@ namespace Civi\Api4;
 
 /**
  * CustomField entity.
+ *
+ * @see https://docs.civicrm.org/user/en/latest/organising-your-data/creating-custom-fields/
  *
  * @package Civi\Api4
  */

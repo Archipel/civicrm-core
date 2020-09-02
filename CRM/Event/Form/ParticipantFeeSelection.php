@@ -252,7 +252,6 @@ class CRM_Event_Form_ParticipantFeeSelection extends CRM_Core_Form {
         'note' => $params['note'],
         'entity_id' => $this->_participantId,
         'contact_id' => $this->_contactId,
-        'modified_date' => date('Ymd'),
       ];
       CRM_Core_BAO_Note::add($noteParams);
     }
@@ -297,7 +296,7 @@ class CRM_Event_Form_ParticipantFeeSelection extends CRM_Core_Form {
     unset($event['end_date']);
 
     $role = CRM_Event_PseudoConstant::participantRole();
-    $participantRoles = CRM_Utils_Array::value('role_id', $params);
+    $participantRoles = $params['role_id'] ?? NULL;
     if (is_array($participantRoles)) {
       $selectedRoles = [];
       foreach (array_keys($participantRoles) as $roleId) {
@@ -306,7 +305,7 @@ class CRM_Event_Form_ParticipantFeeSelection extends CRM_Core_Form {
       $event['participant_role'] = implode(', ', $selectedRoles);
     }
     else {
-      $event['participant_role'] = CRM_Utils_Array::value($participantRoles, $role);
+      $event['participant_role'] = $role[$participantRoles] ?? NULL;
     }
     $event['is_monetary'] = $this->_isPaidEvent;
 
@@ -375,8 +374,8 @@ class CRM_Event_Form_ParticipantFeeSelection extends CRM_Core_Form {
       $sendTemplateParams['from'] = $receiptFrom;
       $sendTemplateParams['toName'] = $this->_contributorDisplayName;
       $sendTemplateParams['toEmail'] = $this->_contributorEmail;
-      $sendTemplateParams['cc'] = CRM_Utils_Array::value('cc', $this->_fromEmails);
-      $sendTemplateParams['bcc'] = CRM_Utils_Array::value('bcc', $this->_fromEmails);
+      $sendTemplateParams['cc'] = $this->_fromEmails['cc'] ?? NULL;
+      $sendTemplateParams['bcc'] = $this->_fromEmails['bcc'] ?? NULL;
     }
 
     list($mailSent, $subject, $message, $html) = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);

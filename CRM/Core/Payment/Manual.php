@@ -24,6 +24,19 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
   public function checkConfig() {}
 
   /**
+   * Constructor.
+   */
+  public function __construct() {
+    $this->_paymentProcessor = [
+      'payment_type' => 0,
+      'billing_mode' => 0,
+      'id' => 0,
+      'url_recur' => '',
+      'is_recur' => 0,
+    ];
+  }
+
+  /**
    * Get billing fields required for this processor.
    *
    * We apply the existing default of returning fields only for payment processor type 1. Processors can override to
@@ -117,7 +130,7 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
    */
   protected function getResult() {
     if (!$this->result) {
-      $this->setResult(CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'status_id', 'Pending'));
+      $this->setResult(CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Pending'));
     }
     return $this->result;
   }
@@ -161,6 +174,24 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
   }
 
   /**
+   * Are live payments supported - e.g dummy doesn't support this.
+   *
+   * @return bool
+   */
+  protected function supportsLiveMode() {
+    return TRUE;
+  }
+
+  /**
+   * Are test payments supported.
+   *
+   * @return bool
+   */
+  protected function supportsTestMode() {
+    return TRUE;
+  }
+
+  /**
    * Declare that more than one payment can be processed at once.
    *
    * @return bool
@@ -179,11 +210,31 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
   }
 
   /**
+   * Does the processor support the user having a choice as to whether to cancel the recurring with the processor?
+   *
+   * If this returns TRUE then there will be an option to send a cancellation request in the cancellation form.
+   *
+   * This would normally be false for processors where CiviCRM maintains the schedule.
+   *
+   * @return bool
+   */
+  protected function supportsCancelRecurringNotifyOptional() {
+    return FALSE;
+  }
+
+  /**
    * Are back office payments supported.
    *
    * @return bool
    */
   protected function supportsBackOffice() {
+    return TRUE;
+  }
+
+  /**
+   * Does the processor work without an email address?
+   */
+  protected function supportsNoEmailProvided() {
     return TRUE;
   }
 

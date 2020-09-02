@@ -29,7 +29,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
         ts('This system uses PHP version %1 which meets or exceeds the recommendation of %2.',
           [
             1 => $phpVersion,
-            2 => CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER,
+            2 => preg_replace(';^(\d+\.\d+(?:\.[1-9]\d*)?).*$;', '\1', CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER),
           ]),
           ts('PHP Up-to-Date'),
           \Psr\Log\LogLevel::INFO,
@@ -56,7 +56,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
           [
             1 => $phpVersion,
             2 => CRM_Upgrade_Incremental_General::MIN_RECOMMENDED_PHP_VER,
-            3 => CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER,
+            3 => preg_replace(';^(\d+\.\d+(?:\.[1-9]\d*)?).*$;', '\1', CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER),
           ]),
           ts('PHP Out-of-Date'),
           \Psr\Log\LogLevel::WARNING,
@@ -66,11 +66,11 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
     else {
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__,
-        ts('This system uses PHP version %1. To ensure the continued operation of CiviCRM, upgrade your server now. At least PHP version %2 is recommended; the preferrred version is %3.',
+        ts('This system uses PHP version %1. To ensure the continued operation of CiviCRM, upgrade your server now. At least PHP version %2 is recommended; the preferred version is %3.',
           [
             1 => $phpVersion,
             2 => CRM_Upgrade_Incremental_General::MIN_RECOMMENDED_PHP_VER,
-            3 => CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER,
+            3 => preg_replace(';^(\d+\.\d+(?:\.[1-9]\d*)?).*$;', '\1', CRM_Upgrade_Incremental_General::RECOMMENDED_PHP_VER),
           ]),
           ts('PHP Out-of-Date'),
           \Psr\Log\LogLevel::ERROR,
@@ -118,7 +118,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__,
         ts('Timestamps reported by MySQL (eg "%2") and PHP (eg "%3" ) are mismatched.<br /><a href="%1">Read more about this warning</a>', [
-          1 => CRM_Utils_System::getWikiBaseURL() . 'checkMysqlTime',
+          1 => CRM_Utils_System::docURL2('sysadmin/requirements/#mysql-time', TRUE),
           2 => $sqlNow,
           3 => $phpNow,
         ]),
@@ -471,7 +471,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
         'warning' => CRM_Utils_Check::severityMap(\Psr\Log\LogLevel::WARNING) ,
         'critical' => CRM_Utils_Check::severityMap(\Psr\Log\LogLevel::CRITICAL),
       ];
-      foreach ($vc->getVersionMessages() as $msg) {
+      foreach ($vc->getVersionMessages() ?? [] as $msg) {
         $messages[] = new CRM_Utils_Check_Message(__FUNCTION__ . '_' . $msg['name'],
           $msg['message'], $msg['title'], $severities[$msg['severity']], 'fa-cloud-upload');
       }
@@ -595,13 +595,13 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       $row = CRM_Admin_Page_Extensions::createExtendedInfo($obj);
       switch ($row['status']) {
         case CRM_Extension_Manager::STATUS_INSTALLED_MISSING:
-          $errors[] = ts('%1 extension (%2) is installed but missing files.', [1 => CRM_Utils_Array::value('label', $row), 2 => $key]);
+          $errors[] = ts('%1 extension (%2) is installed but missing files.', [1 => $row['label'] ?? NULL, 2 => $key]);
           break;
 
         case CRM_Extension_Manager::STATUS_INSTALLED:
           if (!empty($remotes[$key]) && version_compare($row['version'], $remotes[$key]->version, '<')) {
             $updates[] = ts('%1 (%2) version %3 is installed. <a %4>Upgrade to version %5</a>.', [
-              1 => CRM_Utils_Array::value('label', $row),
+              1 => $row['label'] ?? NULL,
               2 => $key,
               3 => $row['version'],
               4 => 'href="' . CRM_Utils_System::url('civicrm/admin/extensions', "action=update&id=$key&key=$key") . '"',
@@ -739,10 +739,8 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       );
     }
     else {
-      $codeVersion = CRM_Utils_System::version();
-
       // if db.ver < code.ver, time to upgrade
-      if (version_compare($dbVersion, $codeVersion) < 0) {
+      if (CRM_Core_BAO_Domain::isDBUpdateRequired()) {
         $messages[] = new CRM_Utils_Check_Message(
           __FUNCTION__,
           ts('New codebase version detected. You must visit <a href=\'%1\'>upgrade screen</a> to upgrade the database.', [1 => $upgradeUrl]),
@@ -753,6 +751,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       }
 
       // if db.ver > code.ver, sth really wrong
+      $codeVersion = CRM_Utils_System::version();
       if (version_compare($dbVersion, $codeVersion) > 0) {
         $messages[] = new CRM_Utils_Check_Message(
           __FUNCTION__,
@@ -932,6 +931,43 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       }
     }
 
+    return $messages;
+  }
+
+  public function checkMysqlVersion() {
+    $messages = [];
+    $version = CRM_Utils_SQL::getDatabaseVersion();
+    $minRecommendedVersion = CRM_Upgrade_Incremental_General::MIN_RECOMMENDED_MYSQL_VER;
+    $mariaDbRecommendedVersion = '10.1';
+    $upcomingCiviChangeVersion = '5.34';
+    if (version_compare(CRM_Utils_SQL::getDatabaseVersion(), $minRecommendedVersion, '<')) {
+      $messages[] = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        ts('To prepare for CiviCRM v%4, please upgrade MySQL. The recommended version will be MySQL v%2 or MariaDB v%3.', [
+          1 => $version,
+          2 => $minRecommendedVersion . '+',
+          3 => $mariaDbRecommendedVersion . '+',
+          4 => $upcomingCiviChangeVersion . '+',
+        ]),
+        ts('MySQL Out-of-Date'),
+        \Psr\Log\LogLevel::NOTICE,
+        'fa-server'
+      );
+    }
+    return $messages;
+  }
+
+  public function checkPHPIntlExists() {
+    $messages = [];
+    if (!extension_loaded('intl')) {
+      $messages[] = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        ts('This system currently does not have the PHP-Intl extension enabled.  Please contact your system administrator about getting the extension enabled.'),
+        ts('Missing PHP Extension: INTL'),
+        \Psr\Log\LogLevel::WARNING,
+        'fa-server'
+      );
+    }
     return $messages;
   }
 

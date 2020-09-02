@@ -21,7 +21,7 @@
  *
  * @param array $params
  *
- * @code
+ * ```
  * // REQUIRED for create:
  * 'case_type_id' => int OR
  * 'case_type' => str (provide one or the other)
@@ -38,7 +38,7 @@
  * 'start_date' => str datestamp // defaults to: date('YmdHis')
  * 'duration' => int // in minutes
  * 'details' => str // html format
- * @endcode
+ * ```
  *
  * @throws API_Exception
  * @return array
@@ -145,19 +145,19 @@ function _civicrm_api3_case_create_xmlProcessor($params, $caseBAO) {
   // Initialize XML processor with $params
   $xmlProcessor = new CRM_Case_XMLProcessor_Process();
   $xmlProcessorParams = [
-    'clientID' => CRM_Utils_Array::value('contact_id', $params),
-    'creatorID' => CRM_Utils_Array::value('creator_id', $params),
+    'clientID' => $params['contact_id'] ?? NULL,
+    'creatorID' => $params['creator_id'] ?? NULL,
     'standardTimeline' => 1,
     'activityTypeName' => 'Open Case',
-    'caseID' => CRM_Utils_Array::value('id', $params),
-    'subject' => CRM_Utils_Array::value('subject', $params),
-    'location' => CRM_Utils_Array::value('location', $params),
-    'activity_date_time' => CRM_Utils_Array::value('start_date', $params),
-    'duration' => CRM_Utils_Array::value('duration', $params),
-    'medium_id' => CRM_Utils_Array::value('medium_id', $params),
-    'details' => CRM_Utils_Array::value('details', $params),
+    'caseID' => $params['id'] ?? NULL,
+    'subject' => $params['subject'] ?? NULL,
+    'location' => $params['location'] ?? NULL,
+    'activity_date_time' => $params['start_date'] ?? NULL,
+    'duration' => $params['duration'] ?? NULL,
+    'medium_id' => $params['medium_id'] ?? NULL,
+    'details' => $params['details'] ?? NULL,
     'custom' => [],
-    'relationship_end_date' => CRM_Utils_Array::value('end_date', $params),
+    'relationship_end_date' => $params['end_date'] ?? NULL,
   ];
 
   // Do it! :-D
@@ -556,13 +556,13 @@ function civicrm_api3_case_update($params) {
  *
  * @param array $params
  *
- * @code
+ * ```
  *   //REQUIRED:
  *   'id' => int
  *
  *   //OPTIONAL
  *   'move_to_trash' => bool (defaults to false)
- * @endcode
+ * ```
  *
  * @throws API_Exception
  * @return mixed

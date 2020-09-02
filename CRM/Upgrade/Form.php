@@ -10,11 +10,7 @@
  */
 
 /**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
+ * Class CRM_Upgrade_Form
  */
 class CRM_Upgrade_Form extends CRM_Core_Form {
   const QUEUE_NAME = 'CRM_Upgrade';
@@ -30,13 +26,6 @@ class CRM_Upgrade_Form extends CRM_Core_Form {
    * Minimum previous CiviCRM version we can directly upgrade from
    */
   const MINIMUM_UPGRADABLE_VERSION = '4.2.9';
-
-  /**
-   * Minimum php version required to run (equal to or lower than the minimum install version)
-   *
-   * As of Civi 5.16, using PHP 5.x will lead to a hard crash during bootstrap.
-   */
-  const MINIMUM_PHP_VERSION = '7.0.0';
 
   /**
    * @var \CRM_Core_Config
@@ -179,7 +168,7 @@ class CRM_Upgrade_Form extends CRM_Core_Form {
       if (!isset($errorMessage)) {
         $errorMessage = 'pre-condition failed for current upgrade step';
       }
-      CRM_Core_Error::fatal($errorMessage);
+      throw new CRM_Core_Exception($errorMessage);
     }
     $this->assign('recentlyViewed', FALSE);
   }
@@ -245,7 +234,7 @@ class CRM_Upgrade_Form extends CRM_Core_Form {
       if (!isset($errorMessage)) {
         $errorMessage = 'post-condition failed for current upgrade step';
       }
-      CRM_Core_Error::fatal($errorMessage);
+      throw new CRM_Core_Exception($errorMessage);
     }
   }
 
@@ -308,7 +297,7 @@ SET    version = '$version'
       $version, 'id',
       'version'
     );
-    return $domainID ? TRUE : FALSE;
+    return (bool) $domainID;
   }
 
   /**
@@ -396,7 +385,7 @@ SET    version = '$version'
     }
     else {
       if (!file_exists($sqlFile)) {
-        CRM_Core_Error::fatal("sqlfile - $rev.mysql not found.");
+        throw new CRM_Core_Exception("sqlfile - $rev.mysql not found.");
       }
       $this->source($sqlFile);
     }
@@ -411,13 +400,13 @@ SET    version = '$version'
     $latestVer = CRM_Utils_System::version();
     $currentVer = CRM_Core_BAO_Domain::version(TRUE);
     if (!$currentVer) {
-      CRM_Core_Error::fatal(ts('Version information missing in civicrm database.'));
+      throw new CRM_Core_Exception(ts('Version information missing in civicrm database.'));
     }
     elseif (stripos($currentVer, 'upgrade')) {
-      CRM_Core_Error::fatal(ts('Database check failed - the database looks to have been partially upgraded. You may want to reload the database with the backup and try the upgrade process again.'));
+      throw new CRM_Core_Exception(ts('Database check failed - the database looks to have been partially upgraded. You may want to reload the database with the backup and try the upgrade process again.'));
     }
     if (!$latestVer) {
-      CRM_Core_Error::fatal(ts('Version information missing in civicrm codebase.'));
+      throw new CRM_Core_Exception(ts('Version information missing in civicrm codebase.'));
     }
 
     return [$currentVer, $latestVer];
@@ -455,12 +444,22 @@ SET    version = '$version'
       );
     }
 
-    if (version_compare(phpversion(), self::MINIMUM_PHP_VERSION) < 0) {
+    if (version_compare(phpversion(), CRM_Upgrade_Incremental_General::MIN_INSTALL_PHP_VER) < 0) {
       $error = ts('CiviCRM %3 requires PHP version %1 (or newer), but the current system uses %2 ',
         [
-          1 => self::MINIMUM_PHP_VERSION,
+          1 => CRM_Upgrade_Incremental_General::MIN_INSTALL_PHP_VER,
           2 => phpversion(),
           3 => $latestVer,
+        ]);
+    }
+
+    if (version_compare(CRM_Utils_SQL::getDatabaseVersion(), CRM_Upgrade_Incremental_General::MIN_INSTALL_MYSQL_VER) < 0) {
+      $error = ts('CiviCRM %4 requires MySQL version v%1 or MariaDB v%3 (or newer), but the current system uses %2 ',
+        [
+          1 => CRM_Upgrade_Incremental_General::MIN_INSTALL_MYSQL_VER,
+          2 => CRM_Utils_SQL::getDatabaseVersion(),
+          3 => '10.1',
+          4 => $latestVer,
         ]);
     }
 
@@ -521,7 +520,7 @@ SET    version = '$version'
 
     // Ensure that queue can be created
     if (!CRM_Queue_BAO_QueueItem::findCreateTable()) {
-      CRM_Core_Error::fatal(ts('Failed to find or create queueing table'));
+      throw new CRM_Core_Exception(ts('Failed to find or create queueing table'));
     }
     $queue = CRM_Queue_Service::singleton()->create([
       'name' => self::QUEUE_NAME,
@@ -718,7 +717,7 @@ SET    version = '$version'
     // pre-db check for major release.
     if ($upgrade->checkVersionRelease($rev, 'alpha1')) {
       if (!(is_callable([$versionObject, 'verifyPreDBstate']))) {
-        CRM_Core_Error::fatal("verifyPreDBstate method was not found for $rev");
+        throw new CRM_Core_Exception("verifyPreDBstate method was not found for $rev");
       }
 
       $error = NULL;
@@ -726,7 +725,7 @@ SET    version = '$version'
         if (!isset($error)) {
           $error = "post-condition failed for current upgrade for $rev";
         }
-        CRM_Core_Error::fatal($error);
+        throw new CRM_Core_Exception($error);
       }
 
     }
@@ -776,17 +775,18 @@ SET    version = '$version'
   }
 
   public static function doFinish() {
+    Civi::dispatcher()->setDispatchPolicy(\CRM_Upgrade_DispatchPolicy::get('upgrade.finish'));
+    $restore = \CRM_Utils_AutoClean::with(function() {
+      Civi::dispatcher()->setDispatchPolicy(\CRM_Upgrade_DispatchPolicy::get('upgrade.main'));
+    });
+
     $upgrade = new CRM_Upgrade_Form();
     list($ignore, $latestVer) = $upgrade->getUpgradeVersions();
     // Seems extraneous in context, but we'll preserve old behavior
     $upgrade->setVersion($latestVer);
 
-    // Clear cached metadata.
-    Civi::service('settings_manager')->flush();
-
-    // cleanup caches CRM-8739
-    $config = CRM_Core_Config::singleton();
-    $config->cleanupCaches(1);
+    CRM_Core_Invoke::rebuildMenuAndCaches(FALSE, TRUE);
+    // NOTE: triggerRebuild is FALSE becaues it will run again in a moment (via fixSchemaDifferences).
 
     $versionCheck = new CRM_Utils_VersionCheck();
     $versionCheck->flushCache();
@@ -794,8 +794,6 @@ SET    version = '$version'
     // Rebuild all triggers and re-enable logging if needed
     $logging = new CRM_Logging_Schema();
     $logging->fixSchemaDifferences();
-
-    CRM_Core_ManagedEntities::singleton(TRUE)->reconcile(TRUE);
   }
 
   /**

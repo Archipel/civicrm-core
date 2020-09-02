@@ -10,10 +10,7 @@
  */
 
 /**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
+ * Class CRM_Logging_ReportSummary
  */
 class CRM_Logging_ReportSummary extends CRM_Report_Form {
   protected $cid;
@@ -280,7 +277,7 @@ WHERE  log_date <= %1 AND id = %2 ORDER BY log_date DESC LIMIT 1";
         if (array_key_exists('options', $this->_logTables[$entity]['bracket_info']) &&
           $entityID
         ) {
-          return CRM_Utils_Array::value($entityID, $this->_logTables[$entity]['bracket_info']['options']);
+          return $this->_logTables[$entity]['bracket_info']['options'][$entityID] ?? NULL;
         }
       }
     }
@@ -342,7 +339,7 @@ WHERE  log_date <= %1 AND id = %2 ORDER BY log_date DESC LIMIT 1";
     $this->addToDeveloperTab($this->temporaryTable->getCreateSql());
     $this->temporaryTableName = $this->temporaryTable->getName();
 
-    $logTypes = CRM_Utils_Array::value('log_type_value', $this->_params);
+    $logTypes = $this->_params['log_type_value'] ?? NULL;
     unset($this->_params['log_type_value']);
     if (empty($logTypes)) {
       foreach (array_keys($this->_logTables) as $table) {

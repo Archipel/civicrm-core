@@ -85,10 +85,8 @@ class CRM_Financial_BAO_FinancialItem extends CRM_Financial_DAO_FinancialItem {
     ];
 
     if ($taxTrxnID) {
-      $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-      $taxTerm = CRM_Utils_Array::value('tax_term', $invoiceSettings);
       $params['amount'] = $lineItem->tax_amount;
-      $params['description'] = $taxTerm;
+      $params['description'] = Civi::settings()->get('tax_term');
       $accountRelName = 'Sales Tax Account is';
     }
     else {
@@ -142,7 +140,7 @@ class CRM_Financial_BAO_FinancialItem extends CRM_Financial_DAO_FinancialItem {
     }
 
     $financialItem->save();
-    $financialtrxnIDS = CRM_Utils_Array::value('id', $trxnIds);
+    $financialtrxnIDS = $trxnIds['id'] ?? NULL;
     if (!empty($financialtrxnIDS)) {
       if (!is_array($financialtrxnIDS)) {
         $financialtrxnIDS = [$financialtrxnIDS];

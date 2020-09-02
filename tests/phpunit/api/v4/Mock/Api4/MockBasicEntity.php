@@ -38,13 +38,13 @@ class MockBasicEntity extends Generic\AbstractEntity {
       return [
         [
           'name' => 'id',
-          'type' => 'Integer',
+          'data_type' => 'Integer',
         ],
         [
           'name' => 'group',
           'options' => [
-            'one' => 'One',
-            'two' => 'Two',
+            'one' => 'First',
+            'two' => 'Second',
           ],
         ],
         [
@@ -58,6 +58,30 @@ class MockBasicEntity extends Generic\AbstractEntity {
         ],
         [
           'name' => 'weight',
+          'data_type' => 'Integer',
+        ],
+        [
+          'name' => 'fruit',
+          'options' => [
+            [
+              'id' => 1,
+              'name' => 'apple',
+              'label' => 'Apple',
+              'color' => 'red',
+            ],
+            [
+              'id' => 2,
+              'name' => 'pear',
+              'label' => 'Pear',
+              'color' => 'green',
+            ],
+            [
+              'id' => 3,
+              'name' => 'banana',
+              'label' => 'Banana',
+              'color' => 'yellow',
+            ],
+          ],
         ],
       ];
     });

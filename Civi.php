@@ -19,11 +19,11 @@ class Civi {
   /**
    * A central location for static variable storage.
    * @var array
-   * @code
+   * ```
    * `Civi::$statics[__CLASS__]['foo'] = 'bar';
-   * @endcode
+   * ```
    */
-  public static $statics = array();
+  public static $statics = [];
 
   /**
    * Retrieve a named cache instance.
@@ -75,7 +75,7 @@ class Civi {
   }
 
   /**
-   * @return \Psr\Log\LoggerInterface
+   * @return \CRM_Core_Error_Log
    */
   public static function log() {
     return Civi\Core\Container::singleton()->get('psr_log');
@@ -106,7 +106,7 @@ class Civi {
    * singletons, containers.
    */
   public static function reset() {
-    self::$statics = array();
+    self::$statics = [];
     Civi\Core\Container::singleton();
   }
 

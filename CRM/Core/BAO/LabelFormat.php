@@ -61,10 +61,11 @@ class CRM_Core_BAO_LabelFormat extends CRM_Core_DAO_OptionValue {
       'default' => 'portrait',
     ],
     'font-name' => [
-      // Font name: 'courier', 'helvetica', 'times'
+      // Font name: 'dejavusans', 'courier', 'helvetica', 'times'
+      // dejavusans is the only one that supports unicode
       'name' => 'font-name',
       'type' => CRM_Utils_Type::T_STRING,
-      'default' => 'helvetica',
+      'default' => 'dejavusans',
     ],
     'font-size' => [
       // Font size: always in points
@@ -526,7 +527,7 @@ class CRM_Core_BAO_LabelFormat extends CRM_Core_DAO_OptionValue {
     // make sure serialized array will fit in the 'value' column
     $attribute = CRM_Core_DAO::getAttribute('CRM_Core_BAO_LabelFormat', 'value');
     if (strlen($this->value) > $attribute['maxlength']) {
-      CRM_Core_Error::fatal(ts('Label Format does not fit in database.'));
+      throw new CRM_Core_Exception(ts('Label Format does not fit in database.'));
     }
     $this->save();
 

@@ -87,11 +87,16 @@ class CRM_Contact_Form_Merge extends CRM_Core_Form {
       if (!$this->_rgid) {
         // Unset browse URL as we have come from the search screen.
         $browseUrl = '';
-        $this->_rgid = civicrm_api3('RuleGroup', 'getvalue', [
-          'contact_type' => $this->_contactType,
-          'used' => 'Supervised',
-          'return' => 'id',
-        ]);
+        try {
+          $this->_rgid = civicrm_api3('RuleGroup', 'getvalue', [
+            'contact_type' => $this->_contactType,
+            'used' => 'Supervised',
+            'return' => 'id',
+          ]);
+        }
+        catch (Exception $e) {
+          throw new CRM_Core_Exception(ts('There is no Supervised dedupe rule configured for contact type %1.', [1 => $this->_contactType]));
+        }
       }
       $this->assign('browseUrl', $browseUrl);
       if ($browseUrl) {
@@ -112,6 +117,7 @@ class CRM_Contact_Form_Merge extends CRM_Core_Form {
       $mainUfId = CRM_Core_BAO_UFMatch::getUFId($this->_cid);
       $mainUser = NULL;
       if ($mainUfId) {
+        // @todo also calculate & assign url here & get it out of getRowsElementsAndInfo as it is form layer functionality.
         $mainUser = $config->userSystem->getUser($this->_cid);
         $this->assign('mainUfId', $mainUfId);
         $this->assign('mainUfName', $mainUser ? $mainUser['name'] : NULL);
@@ -149,12 +155,13 @@ class CRM_Contact_Form_Merge extends CRM_Core_Form {
       $otherUser = NULL;
 
       if ($otherUfId) {
+        // @todo also calculate & assign url here & get it out of getRowsElementsAndInfo as it is form layer functionality.
         $otherUser = $config->userSystem->getUser($this->_oid);
         $this->assign('otherUfId', $otherUfId);
         $this->assign('otherUfName', $otherUser ? $otherUser['name'] : NULL);
       }
 
-      $cmsUser = ($mainUfId && $otherUfId) ? TRUE : FALSE;
+      $cmsUser = $mainUfId && $otherUfId;
       $this->assign('user', $cmsUser);
 
       $rowsElementsAndInfo = CRM_Dedupe_Merger::getRowsElementsAndInfo($this->_cid, $this->_oid);
@@ -223,8 +230,8 @@ class CRM_Contact_Form_Merge extends CRM_Core_Form {
 
       // add related table elements
       foreach ($rowsElementsAndInfo['rel_table_elements'] as $relTableElement) {
-        $element = $this->addElement($relTableElement[0], $relTableElement[1]);
-        $element->setChecked(TRUE);
+        $this->addElement($relTableElement[0], $relTableElement[1]);
+        $this->_defaults[$relTableElement[1]] = 1;
       }
 
       $this->assign('rel_tables', $rowsElementsAndInfo['rel_tables']);
@@ -405,6 +412,16 @@ class CRM_Contact_Form_Merge extends CRM_Core_Form {
         'other_contact_value' => CRM_Utils_Date::customFormat($contacts[$this->_oid]['modified_date']) . ($mostRecent == $this->_oid ? ' (' . ts('Most Recent') . ')' : ''),
       ],
     ]);
+  }
+
+  /**
+   * Set the defaults for the form.
+   *
+   * @return array
+   *   Array of default values
+   */
+  public function setDefaultValues() {
+    return $this->_defaults;
   }
 
 }

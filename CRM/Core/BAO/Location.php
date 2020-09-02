@@ -260,13 +260,14 @@ WHERE e.id = %1";
    *   Contact id.
    * @param int $locationTypeId
    *   Id of the location to delete.
+   * @throws CRM_Core_Exception
    */
   public static function deleteLocationBlocks($contactId, $locationTypeId) {
     // ensure that contactId has a value
     if (empty($contactId) ||
       !CRM_Utils_Rule::positiveInteger($contactId)
     ) {
-      CRM_Core_Error::fatal();
+      throw new CRM_Core_Exception('Incorrect contact id parameter passed to deleteLocationBlocks');
     }
 
     if (empty($locationTypeId) ||
@@ -283,57 +284,6 @@ WHERE e.id = %1";
     foreach ($blocks as $name) {
       CRM_Core_BAO_Block::blockDelete($name, $params);
     }
-  }
-
-  /**
-   * Copy or update location block.
-   *
-   * @param int $locBlockId
-   *   Location block id.
-   * @param int $updateLocBlockId
-   *   Update location block id.
-   *
-   * @return int
-   *   newly created/updated location block id.
-   */
-  public static function copyLocBlock($locBlockId, $updateLocBlockId = NULL) {
-    CRM_Core_Error::deprecatedFunctionWarning('unused function which will be removed');
-    //get the location info.
-    $defaults = $updateValues = [];
-    $locBlock = ['id' => $locBlockId];
-    CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_LocBlock', $locBlock, $defaults);
-
-    if ($updateLocBlockId) {
-      //get the location info for update.
-      $copyLocationParams = ['id' => $updateLocBlockId];
-      CRM_Core_DAO::commonRetrieve('CRM_Core_DAO_LocBlock', $copyLocationParams, $updateValues);
-      foreach ($updateValues as $key => $value) {
-        if ($key != 'id') {
-          $copyLocationParams[$key] = 'null';
-        }
-      }
-    }
-
-    //copy all location blocks (email, phone, address, etc)
-    foreach ($defaults as $key => $value) {
-      if ($key != 'id') {
-        $tbl = explode("_", $key);
-        $name = ucfirst($tbl[0]);
-        $updateParams = NULL;
-        if ($updateId = CRM_Utils_Array::value($key, $updateValues)) {
-          $updateParams = ['id' => $updateId];
-        }
-
-        $copy = CRM_Core_DAO::copyGeneric('CRM_Core_DAO_' . $name, ['id' => $value], $updateParams);
-        $copyLocationParams[$key] = $copy->id;
-      }
-    }
-
-    $copyLocation = CRM_Core_DAO::copyGeneric('CRM_Core_DAO_LocBlock',
-      ['id' => $locBlock['id']],
-      $copyLocationParams
-    );
-    return $copyLocation->id;
   }
 
   /**

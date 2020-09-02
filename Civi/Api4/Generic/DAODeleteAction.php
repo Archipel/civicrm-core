@@ -14,15 +14,15 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
 namespace Civi\Api4\Generic;
 
 /**
- * Delete one or more items, based on criteria specified in Where param (required).
+ * Delete one or more $ENTITIES.
+ *
+ * $ENTITIES are deleted based on criteria specified in `where` parameter (required).
  */
 class DAODeleteAction extends AbstractBatchAction {
   use Traits\DAOActionTrait;
@@ -32,19 +32,14 @@ class DAODeleteAction extends AbstractBatchAction {
    */
   public function _run(Result $result) {
     $defaults = $this->getParamDefaults();
-    if ($defaults['where'] && !array_diff_key($this->where, $defaults['where'])) {
+    if ($defaults['where'] && $this->where === $defaults['where']) {
       throw new \API_Exception('Cannot delete ' . $this->getEntityName() . ' with no "where" parameter specified');
     }
 
-    $items = $this->getObjects();
-
-    if (!$items) {
-      throw new \API_Exception('Cannot delete ' . $this->getEntityName() . ', no records found with ' . $this->whereClauseToString());
+    $items = $this->getBatchRecords();
+    if ($items) {
+      $result->exchangeArray($this->deleteObjects($items));
     }
-
-    $ids = $this->deleteObjects($items);
-
-    $result->exchangeArray($ids);
   }
 
   /**
@@ -57,8 +52,9 @@ class DAODeleteAction extends AbstractBatchAction {
     $baoName = $this->getBaoName();
 
     if ($this->getCheckPermissions()) {
-      foreach ($items as $item) {
-        $this->checkContactPermissions($baoName, $item);
+      foreach (array_keys($items) as $key) {
+        $items[$key]['check_permissions'] = TRUE;
+        $this->checkContactPermissions($baoName, $items[$key]);
       }
     }
 
@@ -76,16 +72,8 @@ class DAODeleteAction extends AbstractBatchAction {
     }
     else {
       foreach ($items as $item) {
-        $bao = new $baoName();
-        $bao->id = $item['id'];
-        // delete it
-        $action_result = $bao->delete();
-        if ($action_result) {
-          $ids[] = ['id' => $item['id']];
-        }
-        else {
-          throw new \API_Exception("Could not delete {$this->getEntityName()} id {$item['id']}");
-        }
+        $baoName::deleteRecord($item);
+        $ids[] = ['id' => $item['id']];
       }
     }
     return $ids;

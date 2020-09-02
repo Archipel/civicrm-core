@@ -14,13 +14,12 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 namespace Civi\Api4\Generic;
 
 use Civi\API\Exception\NotImplementedException;
+use Civi\Api4\Utils\ReflectionUtils;
 
 /**
  * Base class for all api entities.
@@ -30,17 +29,20 @@ use Civi\API\Exception\NotImplementedException;
  *
  * The recommended way to create a non-DAO-based api is to extend this class
  * and then add a getFields function and any other actions you wish, e.g.
- * - a get() function which returns BasicGetAction using your custom getter callback
- * - a create() function which returns BasicCreateAction using your custom setter callback
- * - an update() function which returns BasicUpdateAction using your custom setter callback
- * - a delete() function which returns BasicBatchAction using your custom delete callback
+ * - a get() function which returns BasicGetAction using your custom getter callback.
+ * - a create() function which returns BasicCreateAction using your custom setter callback.
+ * - a save() function which returns BasicSaveAction using your custom setter callback.
+ * - an update() function which returns BasicUpdateAction using your custom setter callback.
+ * - a delete() function which returns BasicBatchAction using your custom delete callback.
  * - a replace() function which returns BasicReplaceAction (no callback needed but
- *   depends on the existence of get, create, update & delete actions)
+ *   depends on the existence of get, save & delete actions).
  *
  * Note that you can use the same setter callback function for update as create -
  * that function can distinguish between new & existing records by checking if the
  * unique identifier has been set (identifier field defaults to "id" but you can change
- * that when constructing BasicUpdateAction)
+ * that when constructing BasicUpdateAction).
+ *
+ * @see https://lab.civicrm.org/extensions/api4example
  */
 abstract class AbstractEntity {
 
@@ -52,13 +54,9 @@ abstract class AbstractEntity {
   }
 
   /**
-   * Should return \Civi\Api4\Generic\BasicGetFieldsAction
-   * @todo make this function abstract when we require php 7.
-   * @throws \Civi\API\Exception\NotImplementedException
+   * @return \Civi\Api4\Generic\BasicGetFieldsAction
    */
-  public static function getFields() {
-    throw new NotImplementedException(self::getEntityName() . ' should implement getFields action.');
-  }
+  abstract public static function getFields();
 
   /**
    * Returns a list of permissions needed to access the various actions in this api.
@@ -69,10 +67,9 @@ abstract class AbstractEntity {
     $permissions = \CRM_Core_Permission::getEntityActionPermissions();
 
     // For legacy reasons the permissions are keyed by lowercase entity name
-    // Note: Convert to camel & back in order to circumvent all the api3 naming oddities
-    $lcentity = _civicrm_api_get_entity_name_from_camel(\CRM_Utils_String::convertStringToCamel(self::getEntityName()));
+    $lcentity = \CRM_Core_DAO_AllCoreTables::convertEntityNameToLower(self::getEntityName());
     // Merge permissions for this entity with the defaults
-    return \CRM_Utils_Array::value($lcentity, $permissions, []) + $permissions['default'];
+    return ($permissions[$lcentity] ?? []) + $permissions['default'];
   }
 
   /**
@@ -82,6 +79,15 @@ abstract class AbstractEntity {
    */
   protected static function getEntityName() {
     return substr(static::class, strrpos(static::class, '\\') + 1);
+  }
+
+  /**
+   * Overridable function to return a localized title for this entity.
+   *
+   * @return string
+   */
+  protected static function getEntityTitle() {
+    return static::getEntityName();
   }
 
   /**
@@ -103,6 +109,23 @@ abstract class AbstractEntity {
       throw new NotImplementedException("Api $entity $action version 4 does not exist.");
     }
     return $actionObject;
+  }
+
+  /**
+   * Reflection function called by Entity::get()
+   *
+   * @see \Civi\Api4\Action\Entity\Get
+   * @return array
+   */
+  public static function getInfo() {
+    $info = [
+      'name' => static::getEntityName(),
+      'title' => static::getEntityTitle(),
+    ];
+    $reflection = new \ReflectionClass(static::class);
+    $info += ReflectionUtils::getCodeDocs($reflection, NULL, ['entity' => $info['name']]);
+    unset($info['package'], $info['method']);
+    return $info;
   }
 
 }

@@ -6,7 +6,10 @@
  */
 class CRM_Logging_SchemaTest extends CiviUnitTestCase {
 
+  protected $databaseVersion;
+
   public function setUp() {
+    $this->databaseVersion = CRM_Utils_SQL::getDatabaseVersion();
     parent::setUp();
   }
 
@@ -18,6 +21,7 @@ class CRM_Logging_SchemaTest extends CiviUnitTestCase {
   public function tearDown() {
     $schema = new CRM_Logging_Schema();
     $schema->disableLogging();
+    $this->databaseVersion = NULL;
     parent::tearDown();
     $this->quickCleanup(['civicrm_contact'], TRUE);
     $schema->dropAllLogTables();
@@ -235,13 +239,17 @@ class CRM_Logging_SchemaTest extends CiviUnitTestCase {
     $this->assertEquals('int', $ci['test_id']['DATA_TYPE']);
     $this->assertEquals('NO', $ci['test_id']['IS_NULLABLE']);
     $this->assertEquals('auto_increment', $ci['test_id']['EXTRA']);
-    $this->assertEquals('10', $ci['test_id']['LENGTH']);
+    if (!$this->isMySQL8()) {
+      $this->assertEquals('10', $ci['test_id']['LENGTH']);
+    }
 
     $this->assertEquals('varchar', $ci['test_varchar']['DATA_TYPE']);
     $this->assertEquals('42', $ci['test_varchar']['LENGTH']);
 
     $this->assertEquals('int', $ci['test_integer']['DATA_TYPE']);
-    $this->assertEquals('8', $ci['test_integer']['LENGTH']);
+    if (!$this->isMySQL8()) {
+      $this->assertEquals('8', $ci['test_integer']['LENGTH']);
+    }
     $this->assertEquals('YES', $ci['test_integer']['IS_NULLABLE']);
 
     $this->assertEquals('decimal', $ci['test_decimal']['DATA_TYPE']);
@@ -279,27 +287,24 @@ class CRM_Logging_SchemaTest extends CiviUnitTestCase {
       CHANGE COLUMN test_integer test_integer int(6) NULL,
       CHANGE COLUMN test_decimal test_decimal decimal(22,2) NULL"
     );
-    \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
-    $schema->fixSchemaDifferences();
-    // need to do it twice so the columnSpecs static is refreshed
-    \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
     $schema->fixSchemaDifferences();
     $ci = \Civi::$statics['CRM_Logging_Schema']['columnSpecs'];
     // length should increase
-    $this->assertEquals(6, $ci['log_civicrm_test_length_change']['test_integer']['LENGTH']);
+    if (!$this->isMySQL8()) {
+      $this->assertEquals(6, $ci['log_civicrm_test_length_change']['test_integer']['LENGTH']);
+    }
     $this->assertEquals('22,2', $ci['log_civicrm_test_length_change']['test_decimal']['LENGTH']);
     CRM_Core_DAO::executeQuery(
       "ALTER TABLE civicrm_test_length_change
       CHANGE COLUMN test_integer test_integer int(4) NULL,
       CHANGE COLUMN test_decimal test_decimal decimal(20,2) NULL"
     );
-    \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
-    $schema->fixSchemaDifferences();
-    \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
     $schema->fixSchemaDifferences();
     $ci = \Civi::$statics['CRM_Logging_Schema']['columnSpecs'];
     // length should not decrease
-    $this->assertEquals(6, $ci['log_civicrm_test_length_change']['test_integer']['LENGTH']);
+    if (!$this->isMySQL8()) {
+      $this->assertEquals(6, $ci['log_civicrm_test_length_change']['test_integer']['LENGTH']);
+    }
     $this->assertEquals('22,2', $ci['log_civicrm_test_length_change']['test_decimal']['LENGTH']);
   }
 
@@ -314,12 +319,18 @@ class CRM_Logging_SchemaTest extends CiviUnitTestCase {
     CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_test_enum_change CHANGE COLUMN test_enum test_enum enum('A','B','C','D') NULL");
     \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
     $schema->fixSchemaDifferences();
-    // need to do it twice so the columnSpecs static is refreshed
-    \Civi::$statics['CRM_Logging_Schema']['columnSpecs'] = [];
-    $schema->fixSchemaDifferences();
     $ci = \Civi::$statics['CRM_Logging_Schema']['columnSpecs'];
     // new enum value should be included
     $this->assertEquals("'A','B','C','D'", $ci['civicrm_test_enum_change']['test_enum']['ENUM_VALUES']);
+  }
+
+  /**
+   * Determine if we are running on MySQL 8 version 8.0.19 or later.
+   *
+   * @return bool
+   */
+  protected function isMySQL8() {
+    return (bool) (version_compare($this->databaseVersion, '8.0.19', '>=') && stripos($this->databaseVersion, 'mariadb') === FALSE);
   }
 
 }

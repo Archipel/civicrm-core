@@ -150,17 +150,17 @@ class CRM_Financial_Form_PaymentEdit extends CRM_Core_Form {
     $params = [
       'id' => $this->_id,
       'payment_instrument_id' => $this->_submitValues['payment_instrument_id'],
-      'trxn_id' => CRM_Utils_Array::value('trxn_id', $this->_submitValues),
+      'trxn_id' => $this->_submitValues['trxn_id'] ?? NULL,
       'trxn_date' => CRM_Utils_Array::value('trxn_date', $this->_submitValues, date('YmdHis')),
     ];
 
     $paymentInstrumentName = CRM_Core_PseudoConstant::getName('CRM_Financial_DAO_FinancialTrxn', 'payment_instrument_id', $params['payment_instrument_id']);
     if ($paymentInstrumentName == 'Credit Card') {
-      $params['card_type_id'] = CRM_Utils_Array::value('card_type_id', $this->_submitValues);
-      $params['pan_truncation'] = CRM_Utils_Array::value('pan_truncation', $this->_submitValues);
+      $params['card_type_id'] = $this->_submitValues['card_type_id'] ?? NULL;
+      $params['pan_truncation'] = $this->_submitValues['pan_truncation'] ?? NULL;
     }
     elseif ($paymentInstrumentName == 'Check') {
-      $params['check_number'] = CRM_Utils_Array::value('check_number', $this->_submitValues);
+      $params['check_number'] = $this->_submitValues['check_number'] ?? NULL;
     }
 
     $this->submit($params);
@@ -214,7 +214,7 @@ class CRM_Financial_Form_PaymentEdit extends CRM_Core_Form {
       civicrm_api3('FinancialTrxn', 'create', $submittedValues);
     }
 
-    self::updateRelatedContribution($submittedValues, $this->_contributionID);
+    CRM_Financial_BAO_Payment::updateRelatedContribution($submittedValues, $this->_contributionID);
   }
 
   /**
@@ -228,35 +228,6 @@ class CRM_Financial_Form_PaymentEdit extends CRM_Core_Form {
     $this->_values = civicrm_api3('FinancialTrxn', 'getsingle', ['id' => $params['id']]);
 
     $this->submit($params);
-  }
-
-  /**
-   * Function to update contribution's check_number and trxn_id by
-   *  concatenating values from financial trxn's check_number and trxn_id respectively
-   *
-   * @param array $params
-   * @param int $contributionID
-   */
-  public static function updateRelatedContribution($params, $contributionID) {
-    $contributionDAO = new CRM_Contribute_DAO_Contribution();
-    $contributionDAO->id = $contributionID;
-    $contributionDAO->find(TRUE);
-
-    foreach (['trxn_id', 'check_number'] as $fieldName) {
-      if (!empty($params[$fieldName])) {
-        if (!empty($contributionDAO->$fieldName)) {
-          $values = explode(',', $contributionDAO->$fieldName);
-          // if submitted check_number or trxn_id value is
-          //   already present then ignore else add to $values array
-          if (!in_array($params[$fieldName], $values)) {
-            $values[] = $params[$fieldName];
-          }
-          $contributionDAO->$fieldName = implode(',', $values);
-        }
-      }
-    }
-
-    $contributionDAO->save();
   }
 
   /**

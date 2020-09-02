@@ -24,6 +24,8 @@ class CRM_Invoicing_Utils {
    * @param bool $oldValue
    * @param bool $newValue
    * @param array $metadata
+   *
+   * @throws \CiviCRM_API3_Exception
    */
   public static function onToggle($oldValue, $newValue, $metadata) {
     if ($oldValue == $newValue) {
@@ -32,7 +34,7 @@ class CRM_Invoicing_Utils {
     $existingUserViewOptions = civicrm_api3('Setting', 'get', ['return' => 'user_dashboard_options'])['values'][CRM_Core_Config::domainID()]['user_dashboard_options'];
     $optionValues = civicrm_api3('Setting', 'getoptions', ['field' => 'user_dashboard_options'])['values'];
     $invoiceKey = array_search('Invoices / Credit Notes', $optionValues);
-    $existingIndex = in_array($invoiceKey, $existingUserViewOptions);
+    $existingIndex = array_search($invoiceKey, $existingUserViewOptions);
 
     if ($newValue && $existingIndex === FALSE) {
       $existingUserViewOptions[] = $invoiceKey;
@@ -57,25 +59,7 @@ class CRM_Invoicing_Utils {
       return TRUE;
     }
     $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-    return CRM_Utils_Array::value('invoicing', $invoiceSettings);
-  }
-
-  /**
-   * Function to call to determine default invoice page.
-   *
-   * Historically the invoicing was declared as a setting but actually
-   * set within contribution_invoice_settings (which stores multiple settings
-   * as an array in a non-standard way).
-   *
-   * We check both here. But will deprecate the latter in time.
-   */
-  public static function getDefaultPaymentPage() {
-    $value = Civi::settings()->get('default_invoice_page');
-    if (is_numeric($value)) {
-      return $value;
-    }
-    $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-    return CRM_Utils_Array::value('default_invoice_page', $invoiceSettings);
+    return $invoiceSettings['invoicing'] ?? NULL;
   }
 
   /**
@@ -85,8 +69,7 @@ class CRM_Invoicing_Utils {
    * is unsupported. Here we have a wrapper function to make later cleanup easier.
    */
   public static function getTaxTerm() {
-    $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-    return CRM_Utils_Array::value('tax_term', $invoiceSettings);
+    return Civi::settings()->get('tax_term');
   }
 
 }

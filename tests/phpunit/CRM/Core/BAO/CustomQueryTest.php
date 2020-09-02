@@ -85,6 +85,7 @@ class CRM_Core_BAO_CustomQueryTest extends CiviUnitTestCase {
       'type' => 4,
       'where' => 'civicrm_value_testsearchcus_' . $ids['custom_group_id'] . '.date_field_' . $dateCustomField['id'],
       'import' => 1,
+      'serialize' => NULL,
     ], $queryObj->getFieldSpec('custom_' . $dateCustomField['id']));
 
   }
@@ -95,7 +96,9 @@ class CRM_Core_BAO_CustomQueryTest extends CiviUnitTestCase {
    * The conversion to date picker will result int these fields
    * being renamed _high & _low and needing to return correctly.
    *
+   * @throws \API_Exception
    * @throws \CRM_Core_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testSearchCustomDataDateHighLow() {
     $this->createCustomGroupWithFieldOfType([], 'date');
@@ -127,7 +130,9 @@ class CRM_Core_BAO_CustomQueryTest extends CiviUnitTestCase {
    * The conversion to date picker will result int these fields
    * being renamed _high & _low and needing to return correctly.
    *
+   * @throws \API_Exception
    * @throws \CRM_Core_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testSearchCustomDataDateLowWithPermsInPlay() {
     $this->createLoggedInUser();
@@ -149,9 +154,9 @@ class CRM_Core_BAO_CustomQueryTest extends CiviUnitTestCase {
       trim($queryObject->_where[0][0])
     );
     $this->assertEquals(
-      'FROM civicrm_contact contact_a   LEFT JOIN civicrm_address ON ( contact_a.id = civicrm_address.contact_id AND civicrm_address.is_primary = 1 )  LEFT JOIN civicrm_country ON ( civicrm_address.country_id = civicrm_country.id )  LEFT JOIN civicrm_email ON (contact_a.id = civicrm_email.contact_id AND civicrm_email.is_primary = 1)  LEFT JOIN civicrm_phone ON (contact_a.id = civicrm_phone.contact_id AND civicrm_phone.is_primary = 1)  LEFT JOIN civicrm_im ON (contact_a.id = civicrm_im.contact_id AND civicrm_im.is_primary = 1)  LEFT JOIN civicrm_worldregion ON civicrm_country.region_id = civicrm_worldregion.id  
-LEFT JOIN ' . $this->getCustomGroupTable() . ' ON ' . $this->getCustomGroupTable() . '.entity_id = `contact_a`.id',
-      trim($queryObject->_fromClause)
+      'FROM civicrm_contact contact_a LEFT JOIN civicrm_address ON ( contact_a.id = civicrm_address.contact_id AND civicrm_address.is_primary = 1 ) LEFT JOIN civicrm_country ON ( civicrm_address.country_id = civicrm_country.id ) LEFT JOIN civicrm_email ON (contact_a.id = civicrm_email.contact_id AND civicrm_email.is_primary = 1) LEFT JOIN civicrm_phone ON (contact_a.id = civicrm_phone.contact_id AND civicrm_phone.is_primary = 1) LEFT JOIN civicrm_im ON (contact_a.id = civicrm_im.contact_id AND civicrm_im.is_primary = 1) LEFT JOIN civicrm_worldregion ON civicrm_country.region_id = civicrm_worldregion.id' .
+      ' LEFT JOIN ' . $this->getCustomGroupTable() . ' ON ' . $this->getCustomGroupTable() . '.entity_id = `contact_a`.id',
+      preg_replace('/\s+/', ' ', trim($queryObject->_fromClause))
     );
     $this->assertEquals('Test Date - greater than or equal to "June 6th, 2014 12:00 AM"', $queryObject->_qill[0][0]);
     $this->assertEquals(1, $queryObject->_whereTables['civicrm_contact']);
@@ -329,7 +334,7 @@ LEFT JOIN ' . $this->getCustomGroupTable() . ' ON ' . $this->getCustomGroupTable
       'default_value' => NULL,
     ]);
     $dateCustomFieldName = 'custom_' . $dateCustomField['id'];
-    $this->individualCreate([$dateCustomFieldName => "2015-01-01"]);
+    $this->individualCreate([$dateCustomFieldName => '2015-01-01']);
     // Assigning the relevant form value to be within a custom key is normally done in
     // build field params. It would be better if it were all done in convertFormValues
     // but for now we just imitate it.
@@ -348,7 +353,9 @@ LEFT JOIN ' . $this->getCustomGroupTable() . ' ON ' . $this->getCustomGroupTable
   /**
    * Test search builder style query including custom address fields.
    *
+   * @throws \API_Exception
    * @throws \CRM_Core_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testAddressCustomFields() {
     $this->createCustomGroupWithFieldOfType(['extends' => 'Address'], 'int');

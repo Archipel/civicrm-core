@@ -84,7 +84,6 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
     /**
      * set the button names
      */
-    $this->_searchButtonName = $this->getButtonName('refresh');
     $this->_actionButtonName = $this->getButtonName('next', 'action');
 
     $this->_done = FALSE;
@@ -100,7 +99,7 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
       $this->_context
     );
     $prefix = NULL;
-    if ($this->_context == 'user') {
+    if ($this->_context === 'user') {
       $prefix = $this->_prefix;
     }
 
@@ -127,6 +126,7 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
    * @return void
    *
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function buildQuickForm() {
     parent::buildQuickForm();
@@ -189,7 +189,7 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
       $this->assign('participantCount', $participantCount);
       $this->assign('lineItems', $lineItems);
 
-      $taskParams['ssID'] = isset($this->_ssID) ? $this->_ssID : NULL;
+      $taskParams['ssID'] = $this->_ssID ?? NULL;
       $tasks = CRM_Event_Task::permissionedTaskTitles(CRM_Core_Permission::getPermission(), $taskParams);
 
       if (isset($this->_ssID)) {
@@ -301,8 +301,6 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
       $this->controller->resetPage($formName);
       return;
     }
-
-    $this->_queryParams = CRM_Contact_BAO_Query::convertFormValues($this->_formValues, 0, FALSE, NULL, ['event_id']);
 
     $selector = new CRM_Event_Selector_Search($this->_queryParams,
       $this->_action,
@@ -439,6 +437,7 @@ class CRM_Event_Form_Search extends CRM_Core_Form_Search {
    *
    * @return array
    *   the default array reference
+   * @throws \CRM_Core_Exception
    */
   public function setDefaultValues() {
     $this->_defaults = array_merge(parent::setDefaultValues(), (array) $this->_formValues);

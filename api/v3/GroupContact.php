@@ -52,7 +52,7 @@ function civicrm_api3_group_contact_get($params) {
   }
   $status = CRM_Utils_Array::value('status', $params, 'Added');
 
-  $groupId = CRM_Utils_Array::value('group_id', $params);
+  $groupId = $params['group_id'] ?? NULL;
   $values = CRM_Contact_BAO_GroupContact::getContactGroup($params['contact_id'], $status, NULL, FALSE, TRUE, FALSE, TRUE, $groupId);
   return civicrm_api3_create_success($values, $params, 'GroupContact');
 }
@@ -72,7 +72,7 @@ function _civicrm_api3_group_contact_create_spec(&$params) {
  *
  * This api has a legacy/nonstandard signature.
  * On success, the return array will be structured as follows:
- * @code
+ * ```
  * array(
  *   "is_error" => 0,
  *   "version"  => 3,
@@ -83,16 +83,16 @@ function _civicrm_api3_group_contact_create_spec(&$params) {
  *     "total_count" => integer
  *   )
  * )
- * @endcode
+ * ```
  *
  * On failure, the return array will be structured as follows:
- * @code
+ * ```
  * array(
  *   'is_error' => 1,
  *   'error_message' = string,
  *   'error_data' = mixed or undefined
  * )
- * @endcode
+ * ```
  *
  * @param array $params
  *   Input parameters:
@@ -219,7 +219,7 @@ function _civicrm_api3_group_contact_common($params, $op = 'Added') {
 
   $method = CRM_Utils_Array::value('method', $params, 'API');
   $status = CRM_Utils_Array::value('status', $params, $op);
-  $tracking = CRM_Utils_Array::value('tracking', $params);
+  $tracking = $params['tracking'] ?? NULL;
 
   if ($op == 'Added' || $op == 'Pending') {
     $extraReturnValues = [

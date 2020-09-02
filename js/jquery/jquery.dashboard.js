@@ -1,7 +1,7 @@
 // https://civicrm.org/licensing
 /* global CRM, ts */
 /*jshint loopfunc: true */
-(function($) {
+(function($, _) {
   'use strict';
   // Constructor for dashboard object.
   $.fn.dashboard = function(options) {
@@ -364,7 +364,7 @@
 
       // Adds controls to a widget.  id is for internal use and image file name in images/dashboard/ (a .gif).
       widget.addControl = function(id, control) {
-          var markup = '<a class="crm-i ' + control.icon + '" alt="' + control.description + '" title="' + control.description + '"></a>';
+          var markup = '<a class="crm-i ' + control.icon + '" alt="' + control.description + '" title="' + control.description + '" aria-hidden="true"></a>';
           control.element = $(markup).prependTo($('.widget-controls', widget.element)).click(control.callback);
       };
 
@@ -389,7 +389,7 @@
         });
         CRM.alert(
           ts('You can re-add it by clicking the "Configure Your Dashboard" button.'),
-          ts('"%1" Removed', {1: CRM.utils.escapeHtml(widget.title)}),
+          ts('"%1" Removed', {1: _.escape(widget.title)}),
           'success'
         );
       };
@@ -483,7 +483,7 @@
       function widgetHTML() {
         var html = '';
         html += '<div class="widget-wrapper">';
-        html += '  <div class="widget-controls"><h3 class="widget-header">' + CRM.utils.escapeHtml(widget.title) + '</h3></div>';
+        html += '  <div class="widget-controls"><h3 class="widget-header">' + _.escape(widget.title) + '</h3></div>';
         html += '  <div class="widget-content"></div>';
         html += '</div>';
         return html;
@@ -577,4 +577,4 @@
       // id, url, fullscreenUrl, title, name, cacheMinutes
     }
   };
-})(jQuery);
+})(jQuery, CRM._);

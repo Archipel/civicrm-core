@@ -120,7 +120,7 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
     $mailingGroup = new CRM_Mailing_DAO_MailingGroup();
     $recipientsGroup = $excludeSmartGroupIDs = $includeSmartGroupIDs = $priorMailingIDs = [];
     $dao = CRM_Utils_SQL_Select::from('civicrm_mailing_group')
-      ->select('GROUP_CONCAT(entity_id SEPARATOR ",") as group_ids, group_type, entity_table')
+      ->select('GROUP_CONCAT(DISTINCT entity_id SEPARATOR ",") as group_ids, group_type, entity_table')
       ->where('mailing_id = #mailing_id AND entity_table RLIKE "^civicrm_(group.*|mailing)$" ')
       ->groupBy(['group_type', 'entity_table'])
       ->param('!groupTableName', CRM_Contact_BAO_Group::getTableName())
@@ -689,6 +689,9 @@ class CRM_Mailing_BAO_Mailing extends CRM_Mailing_DAO_Mailing {
         $this->templates['subject'] = implode("\n", $template);
       }
 
+      $this->templates['mailingID'] = $this->id;
+      $this->templates['campaign_id'] = $this->campaign_id;
+      $this->templates['template_type'] = $this->template_type;
       CRM_Utils_Hook::alterMailContent($this->templates);
     }
     return $this->templates;
@@ -1078,15 +1081,18 @@ ORDER BY   civicrm_email.is_bulkmail DESC
     elseif ($contactId === 0) {
       //anonymous user
       $contact = [];
-      CRM_Utils_Hook::tokenValues($contact, $contactId, $job_id);
+      CRM_Utils_Hook::tokenValues($contact, [$contactId], $job_id);
     }
     else {
       $params = [['contact_id', '=', $contactId, 0, 0]];
       list($contact) = CRM_Contact_BAO_Query::apiQuery($params);
+      // $contact is an array of [ contactID => contactDetails ]
 
-      //CRM-4524
+      // also call the hook to get contact details
+      CRM_Utils_Hook::tokenValues($contact, [$contactId], $job_id);
+
+      // Don't send if contact doesn't exist
       $contact = reset($contact);
-
       if (!$contact || is_a($contact, 'CRM_Core_Error')) {
         CRM_Core_Error::debug_log_message(ts('CiviMail will not send email to a non-existent contact: %1',
           [1 => $contactId]
@@ -1096,16 +1102,13 @@ ORDER BY   civicrm_email.is_bulkmail DESC
         $res = NULL;
         return $res;
       }
-
-      // also call the hook to get contact details
-      CRM_Utils_Hook::tokenValues($contact, $contactId, $job_id);
     }
 
     $pTemplates = $this->getPreparedTemplates();
     $pEmails = [];
 
     foreach ($pTemplates as $type => $pTemplate) {
-      $html = ($type == 'html') ? TRUE : FALSE;
+      $html = $type == 'html';
       $pEmails[$type] = [];
       $pEmail = &$pEmails[$type];
       $template = &$pTemplates[$type]['template'];
@@ -1139,14 +1142,14 @@ ORDER BY   civicrm_email.is_bulkmail DESC
 
     // push the tracking url on to the html email if necessary
     if ($this->open_tracking && $html) {
-      array_push($html, "\n" . '<img src="' . $config->userFrameworkResourceURL .
-        "extern/open.php?q=$event_queue_id\" width='1' height='1' alt='' border='0'>"
+      array_push($html, "\n" . '<img src="' . CRM_Utils_System::externUrl('extern/open', "q=$event_queue_id")
+        . '" width="1" height="1" alt="" border="0">'
       );
     }
 
     $message = new Mail_mime("\n");
 
-    $useSmarty = defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY ? TRUE : FALSE;
+    $useSmarty = defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY;
     if ($useSmarty) {
       $smarty = CRM_Core_Smarty::singleton();
       // also add the contact tokens to the template
@@ -1189,7 +1192,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
 
     $mailParams['attachments'] = $attachments;
 
-    $mailParams['Subject'] = CRM_Utils_Array::value('subject', $pEmails);
+    $mailParams['Subject'] = $pEmails['subject'] ?? NULL;
     if (is_array($mailParams['Subject'])) {
       $mailParams['Subject'] = implode('', $mailParams['Subject']);
     }
@@ -1298,7 +1301,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
         $mailing->templates[$type] = CRM_Utils_Token::replaceDomainTokens(
           $mailing->templates[$type],
           $domain,
-          $type == 'html' ? TRUE : FALSE,
+          $type == 'html',
           $tokens[$type]
         );
         $mailing->templates[$type] = CRM_Utils_Token::replaceMailingTokens($mailing->templates[$type], $mailing, NULL, $tokens[$type]);
@@ -1327,7 +1330,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
     $token = $token_a['token'];
     $data = $token;
 
-    $useSmarty = defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY ? TRUE : FALSE;
+    $useSmarty = defined('CIVICRM_MAIL_SMARTY') && CIVICRM_MAIL_SMARTY;
 
     if ($type == 'embedded_url') {
       $embed_data = [];
@@ -1394,7 +1397,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
       }
     }
     else {
-      $data = CRM_Utils_Array::value("{$type}.{$token}", $contact);
+      $data = $contact["{$type}.{$token}"] ?? NULL;
     }
     return $data;
   }
@@ -1440,7 +1443,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
    * @return CRM_Mailing_DAO_Mailing
    */
   public static function add(&$params, $ids = []) {
-    $id = CRM_Utils_Array::value('id', $params, CRM_Utils_Array::value('mailing_id', $ids));
+    $id = $params['id'] ?? $ids['mailing_id'] ?? NULL;
 
     if (empty($params['id']) && !empty($ids)) {
       \Civi::log('Parameter $ids is no longer used by Mailing::add. Use the api or just pass $params', ['civi.tag' => 'deprecated']);
@@ -1514,12 +1517,14 @@ ORDER BY   civicrm_email.is_bulkmail DESC
    *
    * @return object
    *   $mailing      The new mailing object
-   * @throws \Exception
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public static function create(&$params, $ids = []) {
 
     if (empty($params['id']) && (array_filter($ids) !== [])) {
-      $params['id'] = isset($ids['mailing_id']) ? $ids['mailing_id'] : $ids['id'];
+      $params['id'] = $ids['mailing_id'] ?? $ids['id'];
       \Civi::log('Parameter $ids is no longer used by Mailing::create. Use the api or just pass $params', ['civi.tag' => 'deprecated']);
     }
 
@@ -1546,8 +1551,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
         $domain_name = 'EXAMPLE.ORG';
       }
       if (!isset($params['created_id'])) {
-        $session =& CRM_Core_Session::singleton();
-        $params['created_id'] = $session->get('userID');
+        $params['created_id'] = CRM_Core_Session::getLoggedInContactID();
       }
       $defaults = [
         // load the default config settings for each
@@ -1555,8 +1559,8 @@ ORDER BY   civicrm_email.is_bulkmail DESC
         // correct template IDs here
         'override_verp' => TRUE,
         'forward_replies' => FALSE,
-        'open_tracking' => TRUE,
-        'url_tracking' => TRUE,
+        'open_tracking' => Civi::settings()->get('open_tracking_default'),
+        'url_tracking' => Civi::settings()->get('url_tracking_default'),
         'visibility' => 'Public Pages',
         'replyto_email' => $domain_email,
         'header_id' => CRM_Mailing_PseudoConstant::defaultComponent('header_id', ''),
@@ -2099,7 +2103,7 @@ ORDER BY   civicrm_email.is_bulkmail DESC
         'link_unique' => CRM_Utils_System::url($path, "reset=1&event=click&mid=$mailing_id&uid={$mailing->id}&distinct=1"),
         'clicks' => $mailing->clicks,
         'unique' => $mailing->unique_clicks,
-        'rate' => CRM_Utils_Array::value('delivered', $report['event_totals']) ? (100.0 * $mailing->unique_clicks) / $report['event_totals']['delivered'] : 0,
+        'rate' => !empty($report['event_totals']['delivered']) ? (100.0 * $mailing->unique_clicks) / $report['event_totals']['delivered'] : 0,
         'report' => CRM_Report_Utils_Report::getNextUrl('mailing/clicks', "reset=1&mailing_id_value={$mailing_id}&url_value={$mailing->url}", FALSE, TRUE),
       ];
     }
@@ -2855,7 +2859,7 @@ ORDER BY civicrm_mailing.name";
     // format the params
     $params['offset'] = ($params['page'] - 1) * $params['rp'];
     $params['rowCount'] = $params['rp'];
-    $params['sort'] = CRM_Utils_Array::value('sortBy', $params);
+    $params['sort'] = $params['sortBy'] ?? NULL;
     $params['caseId'] = NULL;
 
     // get contact mailings
@@ -2948,7 +2952,7 @@ ORDER BY civicrm_mailing.name";
     $params['version'] = 3;
     $params['offset'] = ($params['page'] - 1) * $params['rp'];
     $params['limit'] = $params['rp'];
-    $params['sort'] = CRM_Utils_Array::value('sortBy', $params);
+    $params['sort'] = $params['sortBy'] ?? NULL;
 
     $result = civicrm_api('MailingContact', 'get', $params);
     return $result['values'];

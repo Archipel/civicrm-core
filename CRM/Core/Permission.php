@@ -278,7 +278,7 @@ class CRM_Core_Permission {
     }
 
     $groups = self::ufGroup($type);
-    return !empty($groups) && in_array($gid, $groups) ? TRUE : FALSE;
+    return !empty($groups) && in_array($gid, $groups);
   }
 
   /**
@@ -465,7 +465,7 @@ class CRM_Core_Permission {
         'CiviMail' => 'access CiviMail',
         'CiviAuction' => 'add auction items',
       ];
-      $permissionName = CRM_Utils_Array::value($module, $editPermissions);
+      $permissionName = $editPermissions[$module] ?? NULL;
     }
 
     if ($module == 'CiviCase' && !$permissionName) {
@@ -508,7 +508,7 @@ class CRM_Core_Permission {
   public static function checkMenuItem(&$item) {
     if (!array_key_exists('access_callback', $item)) {
       CRM_Core_Error::backtrace();
-      CRM_Core_Error::fatal();
+      throw new CRM_Core_Exception('Missing Access Callback key in menu item');
     }
 
     // if component_id is present, ensure it is enabled
@@ -531,7 +531,7 @@ class CRM_Core_Permission {
     if (empty($item['access_callback']) ||
       is_numeric($item['access_callback'])
     ) {
-      return (boolean ) $item['access_callback'];
+      return (bool) $item['access_callback'];
     }
 
     // check whether the following Ajax requests submitted the right key
@@ -1627,7 +1627,7 @@ class CRM_Core_Permission {
    * @return bool
    */
   public static function isMultisiteEnabled() {
-    return Civi::settings()->get('is_enabled') ? TRUE : FALSE;
+    return (bool) Civi::settings()->get('is_enabled');
   }
 
   /**

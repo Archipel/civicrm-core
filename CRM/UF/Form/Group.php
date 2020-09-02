@@ -91,13 +91,6 @@ class CRM_UF_Form_Group extends CRM_Core_Form {
   }
 
   /**
-   * The form id saved to the session for an update.
-   *
-   * @var int
-   */
-  protected $_id;
-
-  /**
    * The title for group.
    *
    * @var int
@@ -271,14 +264,14 @@ class CRM_UF_Form_Group extends CRM_Core_Form {
 
       $params = ['id' => $this->_id];
       CRM_Core_BAO_UFGroup::retrieve($params, $defaults);
-      $defaults['group'] = CRM_Utils_Array::value('limit_listings_group_id', $defaults);
-      $defaults['add_contact_to_group'] = CRM_Utils_Array::value('add_to_group_id', $defaults);
+      $defaults['group'] = $defaults['limit_listings_group_id'] ?? NULL;
+      $defaults['add_contact_to_group'] = $defaults['add_to_group_id'] ?? NULL;
       //get the uf join records for current uf group
       $ufJoinRecords = CRM_Core_BAO_UFGroup::getUFJoinRecord($this->_id);
       foreach ($ufJoinRecords as $key => $value) {
         $checked[$value] = 1;
       }
-      $defaults['uf_group_type'] = isset($checked) ? $checked : "";
+      $defaults['uf_group_type'] = $checked ?? "";
 
       $showAdvanced = 0;
       $advFields = [
@@ -390,7 +383,7 @@ class CRM_UF_Form_Group extends CRM_Core_Form {
 
       if (!empty($params['is_active'])) {
         //make entry in uf join table
-        CRM_Core_BAO_UFGroup::createUFJoin($params, $ufGroup->id);
+        CRM_Core_BAO_UFGroup::createUFJoin($params['weight'], $params['uf_group_type'] ?? [], $ufGroup->id);
       }
       elseif ($this->_id) {
         // this profile has been set to inactive, delete all corresponding UF Join's

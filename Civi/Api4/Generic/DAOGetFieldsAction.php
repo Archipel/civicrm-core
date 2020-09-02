@@ -24,9 +24,7 @@ namespace Civi\Api4\Generic;
 use Civi\Api4\Service\Spec\SpecFormatter;
 
 /**
- * Get fields for a DAO-based entity.
- *
- * @method $this setIncludeCustom(bool $value)
+ * @inheritDoc
  * @method bool getIncludeCustom()
  */
 class DAOGetFieldsAction extends BasicGetFieldsAction {
@@ -39,7 +37,7 @@ class DAOGetFieldsAction extends BasicGetFieldsAction {
   protected $includeCustom = TRUE;
 
   /**
-   * Get fields for a DAO-based entity
+   * Get fields for a DAO-based entity.
    *
    * @return array
    */
@@ -63,6 +61,10 @@ class DAOGetFieldsAction extends BasicGetFieldsAction {
     ];
     $fields[] = [
       'name' => 'help_post',
+      'data_type' => 'String',
+    ];
+    $fields[] = [
+      'name' => 'column_name',
       'data_type' => 'String',
     ];
     $fields[] = [

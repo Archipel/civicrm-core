@@ -90,7 +90,7 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
     $financialType = new CRM_Financial_DAO_FinancialType();
     $financialType->copyValues($params);
     if (!empty($ids['financialType'])) {
-      $financialType->id = CRM_Utils_Array::value('financialType', $ids);
+      $financialType->id = $ids['financialType'] ?? NULL;
       if (self::isACLFinancialTypeStatus()) {
         $prevName = CRM_Core_DAO::getFieldValue('CRM_Financial_DAO_FinancialType', $financialType->id, 'name');
         if ($prevName != $params['name']) {
@@ -153,7 +153,7 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
     $entityFinancialType->entity_id = $financialTypeId;
     $entityFinancialType->entity_table = 'civicrm_financial_type';
     $entityFinancialType->delete();
-    return FALSE;
+    return TRUE;
   }
 
   /**
@@ -422,7 +422,7 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
     foreach ($lineItems as $items) {
       if (!CRM_Core_Permission::check($op . ' contributions of type ' . CRM_Contribute_PseudoConstant::financialType($items['financial_type_id']))) {
         if ($force) {
-          CRM_Core_Error::fatal(ts('You do not have permission to access this page.'));
+          throw new CRM_Core_Exception(ts('You do not have permission to access this page.'));
           break;
         }
         $flag = FALSE;

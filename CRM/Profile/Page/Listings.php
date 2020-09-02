@@ -100,7 +100,7 @@ class CRM_Profile_Page_Listings extends CRM_Core_Page {
 
       // check if we are rendering mixed profiles
       if (CRM_Core_BAO_UFGroup::checkForMixProfiles($this->_profileIds)) {
-        CRM_Core_Error::fatal(ts('You cannot combine profiles of multiple types.'));
+        CRM_Core_Error::statusBounce(ts('You cannot combine profiles of multiple types.'));
       }
 
       $this->_gid = $this->_profileIds[0];
@@ -205,7 +205,7 @@ class CRM_Profile_Page_Listings extends CRM_Core_Page {
         }
       }
 
-      $customField = CRM_Utils_Array::value($name, $this->_customFields);
+      $customField = $this->_customFields[$name] ?? NULL;
 
       if (!empty($_POST) && empty($_POST[$name])) {
         if ($customField) {
@@ -282,7 +282,7 @@ class CRM_Profile_Page_Listings extends CRM_Core_Page {
       $ufgroupDAO = new CRM_Core_DAO_UFGroup();
       $ufgroupDAO->id = $this->_gid;
       if (!$ufgroupDAO->find(TRUE)) {
-        CRM_Core_Error::fatal();
+        CRM_Core_Error::statusBounce('Unable to find matching UF Group');
       }
     }
 
@@ -410,7 +410,7 @@ class CRM_Profile_Page_Listings extends CRM_Core_Page {
       CRM_Core_Error::statusBounce(ts('This profile does not have the map feature turned on.'));
     }
 
-    $groupId = CRM_Utils_Array::value('limit_listings_group_id', $details);
+    $groupId = $details['limit_listings_group_id'] ?? NULL;
 
     // add group id to params if a uf group belong to a any group
     if ($groupId) {

@@ -13,8 +13,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 /**
@@ -567,7 +565,7 @@ AND       CEF.entity_id    = %2";
         $extraParams = [
           'description' => $formValues[$attachDesc],
           'tag' => $tagParams,
-          'attachment_taglist' => CRM_Utils_Array::value($attachFreeTags, $formValues, []),
+          'attachment_taglist' => $formValues[$attachFreeTags] ?? [],
         ];
 
         CRM_Utils_File::formatFile($formValues, $attachName, $extraParams);
@@ -679,7 +677,7 @@ AND       CEF.entity_id    = %2";
 
   /**
    * Delete a file attachment from an entity table / entity ID
-   *
+   * @throws CRM_Core_Exception
    */
   public static function deleteAttachment() {
     $params = [];
@@ -691,7 +689,7 @@ AND       CEF.entity_id    = %2";
 
     $signer = new CRM_Utils_Signer(CRM_Core_Key::privateKey(), self::$_signableFields);
     if (!$signer->validate($signature, $params)) {
-      CRM_Core_Error::fatal('Request signature is invalid');
+      throw new CRM_Core_Exception('Request signature is invalid');
     }
 
     self::deleteEntityFile($params['entityTable'], $params['entityID'], NULL, $params['fileID']);
@@ -728,17 +726,19 @@ AND       CEF.entity_id    = %2";
           $fileType == 'image/x-png' ||
           $fileType == 'image/png'
         ) {
-          $file_url[$fileID] = "
-              <a href='$url' class='crm-image-popup' title='$title'>
-                <i class='crm-i fa-file-image-o'></i>
-              </a>";
+          $file_url[$fileID] = <<<HEREDOC
+              <a href="$url" class="crm-image-popup" title="$title">
+                <i class="crm-i fa-file-image-o" aria-hidden="true"></i>
+              </a>
+HEREDOC;
         }
         // for non image files
         else {
-          $file_url[$fileID] = "
-              <a href='$url' title='$title'>
-                <i class='crm-i fa-paperclip'></i>
-              </a>";
+          $file_url[$fileID] = <<<HEREDOC
+              <a href="$url" title="$title">
+                <i class="crm-i fa-paperclip" aria-hidden="true"></i>
+              </a>
+HEREDOC;
         }
       }
     }
@@ -807,8 +807,8 @@ AND       CEF.entity_id    = %2";
    */
   public static function validateFileHash($hash, $entityId, $fileId) {
     $input = CRM_Utils_System::explode('_', $hash, 3);
-    $inputTs = CRM_Utils_Array::value(1, $input);
-    $inputLF = CRM_Utils_Array::value(2, $input);
+    $inputTs = $input[1] ?? NULL;
+    $inputLF = $input[2] ?? NULL;
     $testHash = CRM_Core_BAO_File::generateFileHash($entityId, $fileId, $inputTs, $inputLF);
     if (hash_equals($testHash, $hash)) {
       $now = time();

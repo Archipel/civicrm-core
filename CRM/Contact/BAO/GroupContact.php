@@ -129,14 +129,13 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
 
     CRM_Utils_Hook::pre('create', 'GroupContact', $groupId, $contactIds);
 
-    list($numContactsAdded, $numContactsNotAdded)
-      = self::bulkAddContactsToGroup($contactIds, $groupId, $method, $status, $tracking);
-
+    $result = self::bulkAddContactsToGroup($contactIds, $groupId, $method, $status, $tracking);
+    CRM_Contact_BAO_GroupContactCache::invalidateGroupContactCache($groupId);
     CRM_Contact_BAO_Contact_Utils::clearContactCaches();
 
     CRM_Utils_Hook::post('create', 'GroupContact', $groupId, $contactIds);
 
-    return [count($contactIds), $numContactsAdded, $numContactsNotAdded];
+    return [count($contactIds), $result['count_added'], $result['count_not_added']];
   }
 
   /**
@@ -763,7 +762,7 @@ AND    contact_id IN ( $contactStr )
       }
     }
 
-    return [$numContactsAdded, $numContactsNotAdded];
+    return ['count_added' => $numContactsAdded, 'count_not_added' => $numContactsNotAdded];
   }
 
   /**
@@ -779,8 +778,7 @@ AND    contact_id IN ( $contactStr )
    * @return array|bool
    */
   public static function buildOptions($fieldName, $context = NULL, $props = []) {
-
-    $options = CRM_Core_PseudoConstant::get(__CLASS__, $fieldName, $props, $context);
+    $options = CRM_Core_PseudoConstant::get(__CLASS__, $fieldName, [], $context);
 
     // Sort group list by hierarchy
     // TODO: This will only work when api.entity is "group_contact". What about others?

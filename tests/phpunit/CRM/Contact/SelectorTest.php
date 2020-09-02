@@ -33,6 +33,7 @@ class CRM_Contact_SelectorTest extends CiviUnitTestCase {
    */
   public function testSelectorQuery($dataSet) {
     $params = CRM_Contact_BAO_Query::convertFormValues($dataSet['form_values'], 0, FALSE, NULL, []);
+    $isDeleted = in_array(['deleted_contacts', '=', 1, 0, 0], $params);
     foreach ($dataSet['settings'] as $setting) {
       $this->callAPISuccess('Setting', 'create', [$setting['name'] => $setting['value']]);
     }
@@ -49,30 +50,30 @@ class CRM_Contact_SelectorTest extends CiviUnitTestCase {
     $queryObject = $selector->getQueryObject();
     // Make sure there is no fail on alphabet query.
     $selector->alphabetQuery()->fetchAll();
-    $sql = $queryObject->query();
+    $sql = $queryObject->query(FALSE, FALSE, FALSE, $isDeleted);
     $this->wrangleDefaultClauses($dataSet['expected_query']);
     foreach ($dataSet['expected_query'] as $index => $queryString) {
       $this->assertLike($this->strWrangle($queryString), $this->strWrangle($sql[$index]));
     }
     // Ensure that search builder return individual contact as per criteria
-    if ($dataSet['context'] == 'builder') {
+    if ($dataSet['context'] === 'builder') {
       $contactID = $this->individualCreate(['first_name' => 'James', 'last_name' => 'Bond']);
-      if ('Search builder behaviour for Activity' == $dataSet['description']) {
+      if ('Search builder behaviour for Activity' === $dataSet['description']) {
         $this->callAPISuccess('Activity', 'create', [
           'activity_type_id' => 'Meeting',
-          'subject' => "Test",
+          'subject' => 'Test',
           'source_contact_id' => $contactID,
         ]);
         $rows = CRM_Core_DAO::executeQuery(implode(' ', $sql))->fetchAll();
-        $this->assertEquals(1, count($rows));
+        $this->assertCount(1, $rows);
         $this->assertEquals($contactID, $rows[0]['source_contact_id']);
       }
       else {
         $this->callAPISuccess('Address', 'create', [
           'contact_id' => $contactID,
-          'location_type_id' => "Home",
+          'location_type_id' => 'Home',
           'is_primary' => 1,
-          'country_id' => "IN",
+          'country_id' => 'IN',
         ]);
         $rows = $selector->getRows(CRM_Core_Action::VIEW, 0, 50, '');
         $this->assertEquals(1, count($rows));
@@ -296,6 +297,23 @@ class CRM_Contact_SelectorTest extends CiviUnitTestCase {
         ],
       ],
       [
+        [
+          'description' => 'Site set to not pre-pend wildcard and check that trash value is respected',
+          'class' => 'CRM_Contact_Selector',
+          'settings' => [['name' => 'includeWildCardInName', 'value' => FALSE]],
+          'form_values' => ['email' => 'mickey@mouseville.com', 'sort_name' => 'Mouse', 'deleted_contacts' => 1],
+          'params' => [],
+          'return_properties' => NULL,
+          'context' => 'advanced',
+          'action' => CRM_Core_Action::ADVANCED,
+          'includeContactIds' => NULL,
+          'searchDescendentGroups' => FALSE,
+          'expected_query' => [
+            0 => 'default',
+            1 => 'default',
+            2 => "WHERE  ( civicrm_email.email LIKE 'mickey@mouseville.com%'  AND ( ( ( contact_a.sort_name LIKE 'Mouse%' ) OR ( civicrm_email.email LIKE 'Mouse%' ) ) ) ) AND (contact_a.is_deleted)",
+          ],
+        ],
         [
           'description' => 'Use of quotes for exact string',
           'use_case_comments' => 'This is something that was in the code but seemingly not working. No UI info on it though!',

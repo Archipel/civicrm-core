@@ -74,7 +74,7 @@ class CRM_Member_Form_Task_Batch extends CRM_Member_Form_Task {
     $ufGroupId = $this->get('ufGroupId');
 
     if (!$ufGroupId) {
-      CRM_Core_Error::fatal('ufGroupId is missing');
+      CRM_Core_Error::statusBounce('ufGroupId is missing');
     }
     $this->_title = ts('Update multiple memberships') . ' - ' . CRM_Core_BAO_UFGroup::getTitle($ufGroupId);
     CRM_Utils_System::setTitle($this->_title);
@@ -133,7 +133,7 @@ class CRM_Member_Form_Task_Batch extends CRM_Member_Form_Task {
       $typeId = CRM_Core_DAO::getFieldValue("CRM_Member_DAO_Membership", $memberId, 'membership_type_id');
       foreach ($this->_fields as $name => $field) {
         if ($customFieldID = CRM_Core_BAO_CustomField::getKeyID($name)) {
-          $customValue = CRM_Utils_Array::value($customFieldID, $customFields);
+          $customValue = $customFields[$customFieldID] ?? NULL;
           $entityColumnValue = [];
           if (!empty($customValue['extends_entity_column_value'])) {
             $entityColumnValue = explode(CRM_Core_DAO::VALUE_SEPARATOR,

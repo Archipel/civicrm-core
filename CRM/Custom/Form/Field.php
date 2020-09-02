@@ -62,9 +62,34 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
   private static $_dataTypeValues = NULL;
   private static $_dataTypeKeys = NULL;
 
-  private static $_dataToHTML = NULL;
-
   private static $_dataToLabels = NULL;
+
+  /**
+   * Used for mapping data types to html type options.
+   *
+   * Each item in this array corresponds to the same index in the dataType array
+   * @var array
+   */
+  public static $_dataToHTML = [
+    [
+      'Text' => 'Text',
+      'Select' => 'Select',
+      'Radio' => 'Radio',
+      'CheckBox' => 'CheckBox',
+      'Autocomplete-Select' => 'Autocomplete-Select',
+    ],
+    ['Text' => 'Text', 'Select' => 'Select', 'Radio' => 'Radio'],
+    ['Text' => 'Text', 'Select' => 'Select', 'Radio' => 'Radio'],
+    ['Text' => 'Text', 'Select' => 'Select', 'Radio' => 'Radio'],
+    ['TextArea' => 'TextArea', 'RichTextEditor' => 'RichTextEditor'],
+    ['Date' => 'Select Date'],
+    ['Radio' => 'Radio'],
+    ['StateProvince' => 'Select State/Province'],
+    ['Country' => 'Select Country'],
+    ['File' => 'File'],
+    ['Link' => 'Link'],
+    ['ContactReference' => 'Autocomplete-Select'],
+  ];
 
   /**
    * Set variables up before form is built.
@@ -77,10 +102,6 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       self::$_dataTypeValues = array_values(CRM_Core_BAO_CustomField::dataType());
     }
 
-    if (!self::$_dataToHTML) {
-      self::$_dataToHTML = CRM_Core_BAO_CustomField::dataToHtml();
-    }
-
     //custom field id
     $this->_id = CRM_Utils_Request::retrieve('id', 'Positive', $this);
 
@@ -90,7 +111,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       $params = ['id' => $this->_id];
       CRM_Core_BAO_CustomField::retrieve($params, $this->_values);
       // note_length is an alias for the text_length field
-      $this->_values['note_length'] = CRM_Utils_Array::value('text_length', $this->_values);
+      $this->_values['note_length'] = $this->_values['text_length'] ?? NULL;
       // custom group id
       $this->_gid = $this->_values['custom_group_id'];
     }
@@ -100,7 +121,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     }
 
     if ($isReserved = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'is_reserved', 'id')) {
-      CRM_Core_Error::fatal("You cannot add or edit fields in a reserved custom field-set.");
+      CRM_Core_Error::statusBounce("You cannot add or edit fields in a reserved custom field-set.");
     }
 
     if ($this->_gid) {
@@ -119,7 +140,6 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
           'Select' => ts('Select'),
           'Radio' => ts('Radio'),
           'CheckBox' => ts('CheckBox'),
-          'Multi-Select' => ts('Multi-Select'),
           'Autocomplete-Select' => ts('Autocomplete-Select'),
         ],
         [
@@ -140,8 +160,8 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
         ['TextArea' => ts('TextArea'), 'RichTextEditor' => ts('Rich Text Editor')],
         ['Date' => ts('Select Date')],
         ['Radio' => ts('Radio')],
-        ['StateProvince' => ts('Select State/Province'), 'Multi-Select' => ts('Multi-Select State/Province')],
-        ['Country' => ts('Select Country'), 'Multi-Select' => ts('Multi-Select Country')],
+        ['StateProvince' => ts('Select State/Province')],
+        ['Country' => ts('Select Country')],
         ['File' => ts('Select File')],
         ['Link' => ts('Link')],
         ['ContactReference' => ts('Autocomplete-Select')],
@@ -306,6 +326,8 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       'options' => ['limit' => 0, 'sort' => "title ASC"],
       'return' => ['title'],
     ];
+
+    $this->add('checkbox', 'serialize', ts('Multi-Select'));
 
     if ($this->_action == CRM_Core_Action::UPDATE) {
       $this->freeze('data_type');
@@ -571,7 +593,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    *                  true otherwise
    */
   public static function formRule($fields, $files, $self) {
-    $default = CRM_Utils_Array::value('default_value', $fields);
+    $default = $fields['default_value'] ?? NULL;
 
     $errors = [];
 
@@ -596,7 +618,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     //checks the given custom field name doesnot start with digit
     if (!empty($title)) {
       // gives the ascii value
-      $asciiValue = ord($title{0});
+      $asciiValue = ord($title[0]);
       if ($asciiValue >= 48 && $asciiValue <= 57) {
         $errors['label'] = ts("Name cannot not start with a digit");
       }
@@ -705,7 +727,7 @@ SELECT count(*)
     if (isset($fields['data_type'][1])) {
       $dataField = $fields['data_type'][1];
     }
-    $optionFields = ['Select', 'Multi-Select', 'CheckBox', 'Radio'];
+    $optionFields = ['Select', 'CheckBox', 'Radio'];
 
     if (isset($fields['option_type']) && $fields['option_type'] == 1) {
       //capture duplicate Custom option values
@@ -926,6 +948,17 @@ AND    option_group_id = %2";
     }
     else {
       $params['is_search_range'] = 0;
+    }
+
+    // Serialization cannot be changed on update
+    if ($this->_id) {
+      unset($params['serialize']);
+    }
+    elseif (strpos($params['html_type'], 'Select') === 0) {
+      $params['serialize'] = $params['serialize'] ? CRM_Core_DAO::SERIALIZE_SEPARATOR_BOOKEND : 'null';
+    }
+    else {
+      $params['serialize'] = $params['html_type'] == 'CheckBox' ? CRM_Core_DAO::SERIALIZE_SEPARATOR_BOOKEND : 'null';
     }
 
     $filter = 'null';

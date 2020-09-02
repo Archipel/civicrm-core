@@ -18,7 +18,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * The ChainSubscriber looks for API parameters which specify a nested or
  * chained API call. For example:
  *
- * @code
+ * ```
  * $result = civicrm_api('Contact', 'create', array(
  *   'version' => 3,
  *   'first_name' => 'Amy',
@@ -27,7 +27,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *     'location_type_id' => 123,
  *   ),
  * ));
- * @endcode
+ * ```
  *
  * The ChainSubscriber looks for any parameters of the form "api.Email.create";
  * if found, it issues the nested API call (and passes some extra context --
@@ -40,7 +40,7 @@ class ChainSubscriber implements EventSubscriberInterface {
    */
   public static function getSubscribedEvents() {
     return [
-      Events::RESPOND => ['onApiRespond', Events::W_EARLY],
+      'civi.api.respond' => ['onApiRespond', Events::W_EARLY],
     ];
   }
 
@@ -54,7 +54,7 @@ class ChainSubscriber implements EventSubscriberInterface {
     $apiRequest = $event->getApiRequest();
     if ($apiRequest['version'] < 4) {
       $result = $event->getResponse();
-      if (\CRM_Utils_Array::value('is_error', $result, 0) == 0) {
+      if (is_array($result) && empty($result['is_error'])) {
         $this->callNestedApi($event->getApiKernel(), $apiRequest['params'], $result, $apiRequest['action'], $apiRequest['entity'], $apiRequest['version']);
         $event->setResponse($result);
       }
@@ -106,7 +106,7 @@ class ChainSubscriber implements EventSubscriberInterface {
 
         $subaction = empty($subAPI[2]) ? $action : $subAPI[2];
         $subParams = [
-          'debug' => \CRM_Utils_Array::value('debug', $params),
+          'debug' => $params['debug'] ?? NULL,
         ];
         $subEntity = _civicrm_api_get_entity_name_from_camel($subAPI[1]);
 
@@ -183,7 +183,7 @@ class ChainSubscriber implements EventSubscriberInterface {
             foreach ($newparams as $entityparams) {
               $subParams = array_merge($genericParams, $entityparams);
               _civicrm_api_replace_variables($subParams, $result['values'][$idIndex], $separator);
-              $result['values'][$idIndex][$field][] = $apiKernel->run($subEntity, $subaction, $subParams);
+              $result['values'][$idIndex][$field][] = $apiKernel->runSafe($subEntity, $subaction, $subParams);
               if ($result['is_error'] === 1) {
                 throw new \Exception($subEntity . ' ' . $subaction . 'call failed with' . $result['error_message']);
               }
@@ -193,7 +193,7 @@ class ChainSubscriber implements EventSubscriberInterface {
 
             $subParams = array_merge($subParams, $newparams);
             _civicrm_api_replace_variables($subParams, $result['values'][$idIndex], $separator);
-            $result['values'][$idIndex][$field] = $apiKernel->run($subEntity, $subaction, $subParams);
+            $result['values'][$idIndex][$field] = $apiKernel->runSafe($subEntity, $subaction, $subParams);
             if (!empty($result['is_error'])) {
               throw new \Exception($subEntity . ' ' . $subaction . 'call failed with' . $result['error_message']);
             }

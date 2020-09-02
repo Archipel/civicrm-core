@@ -10,19 +10,13 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
- */
-
-
 namespace Civi\Api4\Utils;
 
-use CRM_Utils_Array as UtilsArray;
-
+/**
+ * Class ArrayInsertionUtil
+ *
+ * @package Civi\Api4\Utils
+ */
 class ArrayInsertionUtil {
 
   /**
@@ -67,11 +61,11 @@ class ArrayInsertionUtil {
    * @return array|mixed
    */
   private static function filterValues($parentArray, $isMulti, $values) {
-    $parentID = UtilsArray::value('id', $parentArray);
+    $parentID = $parentArray['id'] ?? NULL;
 
     if ($parentID) {
       $values = array_filter($values, function ($value) use ($parentID) {
-        return UtilsArray::value('_parent_id', $value) == $parentID;
+        return ($value['_parent_id'] ?? NULL) == $parentID;
       });
     }
 

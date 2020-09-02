@@ -108,7 +108,7 @@ class CRM_Contribute_Form_ContributionView extends CRM_Core_Form {
 
     // show billing address location details, if exists
     if (!empty($values['address_id'])) {
-      $addressParams = ['id' => CRM_Utils_Array::value('address_id', $values)];
+      $addressParams = ['id' => $values['address_id']];
       $addressDetails = CRM_Core_BAO_Address::getValues($addressParams, FALSE, 'id');
       $addressDetails = array_values($addressDetails);
       $values['billing_address'] = $addressDetails[0]['display'];
@@ -165,10 +165,9 @@ class CRM_Contribute_Form_ContributionView extends CRM_Core_Form {
 
     // assign values to the template
     $this->assign($values);
-    $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
     $invoicing = CRM_Invoicing_Utils::isInvoicingEnabled();
     $this->assign('invoicing', $invoicing);
-    $this->assign('isDeferred', CRM_Utils_Array::value('deferred_revenue_enabled', $invoiceSettings));
+    $this->assign('isDeferred', Civi::settings()->get('deferred_revenue_enabled'));
     if ($invoicing && isset($values['tax_amount'])) {
       $this->assign('totalTaxAmount', $values['tax_amount']);
     }

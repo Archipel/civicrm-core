@@ -180,6 +180,8 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
 
   /**
    * Test IPN response updates contribution_recur & contribution for first & second contribution
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testIPNPaymentRecurSuccessSuppliedReceiveDate() {
     $this->setupRecurringPaymentProcessorTransaction();
@@ -192,7 +194,7 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
     $this->assertTrue(substr($contribution['contribution_source'], 0, 20) == "Online Contribution:");
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'getsingle', ['id' => $this->_contributionRecurID]);
     $this->assertEquals(5, $contributionRecur['contribution_status_id']);
-    $IPN = new CRM_Core_Payment_AuthorizeNetIPN(array_merge(['receive_date' => '1 July 2010'], $this->getRecurSubsequentTransaction()));
+    $IPN = new CRM_Core_Payment_AuthorizeNetIPN(array_merge(['receive_date' => '2010-07-01'], $this->getRecurSubsequentTransaction()));
     $IPN->main();
     $contribution = $this->callAPISuccess('contribution', 'get', [
       'contribution_recur_id' => $this->_contributionRecurID,
@@ -242,6 +244,8 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
 
   /**
    * Test IPN response mails don't leak.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testIPNPaymentMembershipRecurSuccessNoLeakage() {
     $mut = new CiviMailUtils($this, TRUE);
@@ -377,9 +381,9 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
    */
   public function getRecurTransaction($params = []) {
     return array_merge([
-      "x_amount" => "200.00",
+      'x_amount' => '200.00',
       "x_country" => 'US',
-      "x_phone" => "",
+      'x_phone' => "",
       "x_fax" => "",
       "x_email" => "me@gmail.com",
       "x_description" => "lots of money",

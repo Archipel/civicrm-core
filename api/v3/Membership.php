@@ -66,6 +66,9 @@ function civicrm_api3_membership_delete($params) {
  *
  * @return array
  *   API result array.
+ *
+ * @throws \CRM_Core_Exception
+ * @throws \CiviCRM_API3_Exception
  */
 function civicrm_api3_membership_create($params) {
   // check params for membership id during update
@@ -121,10 +124,6 @@ function civicrm_api3_membership_create($params) {
   $ids = [];
   if (empty($params['id'])) {
     $params['action'] = CRM_Core_Action::ADD;
-    // we need user id during add mode
-    if (!empty($params['contact_id'])) {
-      $ids['userId'] = $params['contact_id'];
-    }
   }
   else {
     // edit mode
@@ -134,9 +133,9 @@ function civicrm_api3_membership_create($params) {
   }
 
   // @todo stop passing $ids (membership and userId may be set above)
-  $membershipBAO = CRM_Member_BAO_Membership::create($params, $ids, TRUE);
+  $membershipBAO = CRM_Member_BAO_Membership::create($params, $ids);
 
-  if (array_key_exists('is_error', $membershipBAO)) {
+  if (property_exists($membershipBAO, 'is_error')) {
     // In case of no valid status for given dates, $membershipBAO
     // is going to contain 'is_error' => "Error Message"
     return civicrm_api3_create_error(ts('The membership can not be saved, no valid membership status for given dates'));
@@ -209,7 +208,7 @@ function _civicrm_api3_membership_get_spec(&$params) {
 function civicrm_api3_membership_get($params) {
   $activeOnly = $membershipTypeId = $membershipType = NULL;
 
-  $contactID = CRM_Utils_Array::value('contact_id', $params);
+  $contactID = $params['contact_id'] ?? NULL;
   if (!empty($params['filters']) && is_array($params['filters']) && isset($params['filters']['is_current'])) {
     $activeOnly = $params['filters']['is_current'];
     unset($params['filters']['is_current']);
@@ -292,7 +291,7 @@ function _civicrm_api3_membership_relationsship_get_customv2behaviour(&$params, 
 
     // populating relationship type name.
     $relationshipType = new CRM_Contact_BAO_RelationshipType();
-    $relationshipType->id = CRM_Utils_Array::value('relationship_type_id', $membershipType);
+    $relationshipType->id = $membershipType['relationship_type_id'] ?? NULL;
     if ($relationshipType->find(TRUE)) {
       $membershipValues[$membershipId]['relationship_name'] = $relationshipType->name_a_b;
     }

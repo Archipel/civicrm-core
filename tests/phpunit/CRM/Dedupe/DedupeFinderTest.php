@@ -23,6 +23,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Clean up after the test.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function tearDown() {
 
@@ -65,6 +67,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Test duplicate contact retrieval with 2 email fields.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testUnsupervisedWithTwoEmailFields() {
     $this->setupForGroupDedupe();
@@ -89,6 +93,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
    * Test that a rule set to is_reserved = 0 works.
    *
    * There is a different search used dependent on this variable.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testCustomRule() {
     $this->setupForGroupDedupe();
@@ -129,6 +135,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Test a custom rule with a non-default field.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testCustomRuleWithAddress() {
     $this->setupForGroupDedupe();
@@ -158,6 +166,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Test rule from Richard
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testRuleThreeContactFieldsEqualWeightWIthThresholdtheTotalSumOfAllWeight() {
     $this->setupForGroupDedupe();
@@ -180,11 +190,13 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
       ]);
     }
     $foundDupes = CRM_Dedupe_Finder::dupesInGroup($ruleGroup['id'], $this->groupID);
-    $this->assertEquals(1, count($foundDupes));
+    $this->assertCount(1, $foundDupes);
   }
 
   /**
    * Test a custom rule with a non-default field.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testInclusiveRule() {
     $this->setupForGroupDedupe();
@@ -199,7 +211,7 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
       ]);
     }
     $foundDupes = CRM_Dedupe_Finder::dupesInGroup($ruleGroup['id'], $this->groupID);
-    $this->assertEquals(4, count($foundDupes));
+    $this->assertCount(4, $foundDupes);
     CRM_Dedupe_Finder::dupes($ruleGroup['id']);
   }
 
@@ -223,6 +235,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Test dupesByParams function.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testDupesByParams() {
     // make dupe checks based on based on following contact sets:
@@ -354,6 +368,8 @@ class CRM_Dedupe_DedupeFinderTest extends CiviUnitTestCase {
 
   /**
    * Set up a group of dedupable contacts.
+   *
+   * @throws \CRM_Core_Exception
    */
   protected function setupForGroupDedupe() {
     $params = [

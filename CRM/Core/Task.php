@@ -132,7 +132,7 @@ abstract class CRM_Core_Task {
    */
   public static function corePermissionedTaskTitles($tasks, $permission, $params) {
     // Only offer the "Update Smart Group" task if a smart group/saved search is already in play and we have edit permissions
-    if (!empty($params['ssID']) && ($permission == CRM_Core_Permission::EDIT)) {
+    if (!empty($params['ssID']) && ($permission == CRM_Core_Permission::EDIT) && CRM_Core_Permission::check('edit groups')) {
       $tasks[self::SAVE_SEARCH_UPDATE] = self::$_tasks[self::SAVE_SEARCH_UPDATE]['title'];
     }
     else {
@@ -155,7 +155,7 @@ abstract class CRM_Core_Task {
   public static function getTask($value) {
     static::tasks();
 
-    if (!CRM_Utils_Array::value($value, self::$_tasks)) {
+    if (empty(self::$_tasks[$value])) {
       // Children can specify a default task (eg. print), pick another if it is not valid.
       $value = key(self::$_tasks);
     }

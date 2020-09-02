@@ -71,11 +71,8 @@ class CRM_Admin_Page_JobLog extends CRM_Core_Page_Basic {
 
   /**
    * Browse all jobs.
-   *
-   * @param null $action
    */
-  public function browse($action = NULL) {
-
+  public function browse() {
     $jid = CRM_Utils_Request::retrieve('jid', 'Positive', $this);
 
     $sj = new CRM_Core_JobManager();
@@ -98,7 +95,7 @@ class CRM_Admin_Page_JobLog extends CRM_Core_Page_Basic {
     }
     $dao->find();
 
-    $rows = array();
+    $rows = [];
     while ($dao->fetch()) {
       unset($row);
       CRM_Core_DAO::storeValues($dao, $row);

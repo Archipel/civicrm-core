@@ -53,13 +53,6 @@ class CRM_Contact_Form_CustomData extends CRM_Core_Form {
   //protected $_groupTree;
 
   /**
-   * Which blocks should we show and hide.
-   *
-   * @var CRM_Core_ShowHideBlocks
-   */
-  protected $_showHide;
-
-  /**
    * Array group titles.
    *
    * @var array
@@ -90,7 +83,7 @@ class CRM_Contact_Form_CustomData extends CRM_Core_Form {
    * Gets session variables for table name, id of entity in table, type of entity and stores them.
    */
   public function preProcess() {
-    $this->_cdType = CRM_Utils_Array::value('type', $_GET);
+    $this->_cdType = $_GET['type'] ?? NULL;
     $this->assign('cdType', FALSE);
     $this->_multiRecordDisplay = CRM_Utils_Request::retrieve('multiRecordDisplay', 'String', $this);
     if ($this->_cdType || $this->_multiRecordDisplay == 'single') {

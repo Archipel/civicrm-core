@@ -40,6 +40,7 @@ class CRM_Core_BAO_Block {
    *
    * @return array
    *   Array of $block objects.
+   * @throws CRM_Core_Exception
    */
   public static function &getValues($blockName, $params) {
     if (empty($params)) {
@@ -52,7 +53,7 @@ class CRM_Core_BAO_Block {
     if (!isset($params['entity_table'])) {
       $block->contact_id = $params['contact_id'];
       if (!$block->contact_id) {
-        CRM_Core_Error::fatal();
+        throw new CRM_Core_Exception('Invalid Contact ID parameter passed');
       }
       $blocks = self::retrieveBlock($block, $blockName);
     }
@@ -231,7 +232,7 @@ class CRM_Core_BAO_Block {
     //get existing block ids.
     $blockIds = self::getBlockIds($blockName, $contactId, $entityElements);
     foreach ($params[$blockName] as $count => $value) {
-      $blockId = CRM_Utils_Array::value('id', $value);
+      $blockId = $value['id'] ?? NULL;
       if ($blockId) {
         if (is_array($blockIds) && array_key_exists($blockId, $blockIds)) {
           unset($blockIds[$blockId]);
@@ -275,13 +276,13 @@ class CRM_Core_BAO_Block {
         if (empty($value['id']) && $blockValue['locationTypeId'] == CRM_Utils_Array::value('location_type_id', $value) && !$isIdSet) {
           $valueId = FALSE;
           if ($blockName == 'phone') {
-            $phoneTypeBlockValue = CRM_Utils_Array::value('phoneTypeId', $blockValue);
+            $phoneTypeBlockValue = $blockValue['phoneTypeId'] ?? NULL;
             if ($phoneTypeBlockValue == CRM_Utils_Array::value('phone_type_id', $value)) {
               $valueId = TRUE;
             }
           }
           elseif ($blockName == 'im') {
-            $providerBlockValue = CRM_Utils_Array::value('providerId', $blockValue);
+            $providerBlockValue = $blockValue['providerId'] ?? NULL;
             if (!empty($value['provider_id']) && $providerBlockValue == $value['provider_id']) {
               $valueId = TRUE;
             }
@@ -312,7 +313,7 @@ class CRM_Core_BAO_Block {
       }
       $contactFields = [
         'contact_id' => $contactId,
-        'location_type_id' => CRM_Utils_Array::value('location_type_id', $value),
+        'location_type_id' => $value['location_type_id'] ?? NULL,
       ];
 
       $contactFields['is_primary'] = 0;
@@ -399,7 +400,7 @@ class CRM_Core_BAO_Block {
     }
 
     // contact_id in params might be empty or the string 'null' so cast to integer
-    $contactId = (int) CRM_Utils_Array::value('contact_id', $params);
+    $contactId = (int) ($params['contact_id'] ?? 0);
     // If id is set & we haven't been passed a contact_id, retrieve it
     if (!empty($params['id']) && !isset($params['contact_id'])) {
       $entity = new $class();
@@ -474,8 +475,8 @@ class CRM_Core_BAO_Block {
    * @return int
    */
   public static function primaryComparison($location1, $location2) {
-    $l1 = CRM_Utils_Array::value('is_primary', $location1);
-    $l2 = CRM_Utils_Array::value('is_primary', $location2);
+    $l1 = $location1['is_primary'] ?? NULL;
+    $l2 = $location2['is_primary'] ?? NULL;
     if ($l1 == $l2) {
       return 0;
     }

@@ -106,7 +106,7 @@ class CRM_Mailing_BAO_Query {
       }
     }
 
-    if (CRM_Utils_Array::value('mailing_campaign_id', $query->_returnProperties)) {
+    if (!empty($query->_returnProperties['mailing_campaign_id'])) {
       $query->_select['mailing_campaign_id'] = 'civicrm_mailing.campaign_id as mailing_campaign_id';
       $query->_element['mailing_campaign_id'] = 1;
       $query->_tables['civicrm_campaign'] = 1;
@@ -122,7 +122,7 @@ class CRM_Mailing_BAO_Query {
    * rather than a static function.
    */
   public static function getSearchFieldMetadata() {
-    $fields = ['mailing_job_start_date'];
+    $fields = ['mailing_job_start_date', 'is_archived'];
     $metadata = civicrm_api3('Mailing', 'getfields', [])['values'];
     $metadata = array_merge($metadata, civicrm_api3('MailingJob', 'getfields', [])['values']);
     return array_intersect_key($metadata, array_flip($fields));

@@ -68,10 +68,10 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'check_permissions' => TRUE,
     ];
     CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviCRM', 'administer CiviCRM'];
-    $payment = $this->callAPIFailure('payment', 'get', $params, 'API permission check failed for Payment/get call; insufficient permission: require access CiviCRM and access CiviContribute');
+    $this->callAPIFailure('payment', 'get', $params, 'API permission check failed for Payment/get call; insufficient permission: require access CiviCRM and access CiviContribute');
 
     array_push(CRM_Core_Config::singleton()->userPermissionClass->permissions, 'access CiviContribute');
-    $payment = $this->callAPISuccess('payment', 'get', $params);
+    $this->callAPISuccess('payment', 'get', $params);
 
     $payment = $this->callAPIAndDocument('payment', 'get', $params, __FUNCTION__, __FILE__);
     $this->assertEquals(1, $payment['count']);
@@ -90,6 +90,51 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'id' => $contribution['id'],
     ]);
     $this->validateAllPayments();
+  }
+
+  /**
+   * Test multiple payments for contribution and assert if option
+   * and is_payment returns the correct list of payments.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testMultiplePaymentsForContribution() {
+    $params = [
+      'contact_id' => $this->_individualId,
+      'total_amount' => 100,
+      'contribution_status_id' => 'Pending',
+    ];
+    $contributionID = $this->contributionCreate($params);
+    $paymentParams = [
+      'contribution_id' => $contributionID,
+      'total_amount' => 20,
+      'trxn_date' => date('Y-m-d'),
+    ];
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+    $paymentParams['total_amount'] = 30;
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+
+    $paymentParams['total_amount'] = 50;
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+
+    //check if contribution status is set to "Completed".
+    $contribution = $this->callAPISuccessGetSingle('Contribution', [
+      'id' => $contributionID,
+    ]);
+    $this->assertEquals('Completed', $contribution['contribution_status']);
+
+    //Get Payment using options
+    $getParams = [
+      'sequential' => 1,
+      'contribution_id' => $contributionID,
+      'is_payment' => 1,
+      'options' => ['limit' => 0, 'sort' => 'total_amount DESC'],
+    ];
+    $payments = $this->callAPISuccess('Payment', 'get', $getParams);
+    $this->assertEquals(3, $payments['count']);
+    foreach ([50, 30, 20] as $key => $total_amount) {
+      $this->assertEquals($total_amount, $payments['values'][$key]['total_amount']);
+    }
   }
 
   /**
@@ -485,6 +530,45 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test negative payment using create API.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testRefundPayment() {
+    $result = $this->callAPISuccess('Contribution', 'create', [
+      'financial_type_id' => "Donation",
+      'total_amount' => 100,
+      'contact_id' => $this->_individualId,
+    ]);
+    $contributionID = $result['id'];
+
+    //Refund a part of the main amount.
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $contributionID,
+      'total_amount' => -10,
+    ]);
+
+    $contribution = $this->callAPISuccessGetSingle('Contribution', [
+      'return' => ["contribution_status_id"],
+      'id' => $contributionID,
+    ]);
+    //Still we've a status of Completed after refunding a partial amount.
+    $this->assertEquals($contribution['contribution_status'], 'Completed');
+
+    //Refund the complete amount.
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $contributionID,
+      'total_amount' => -90,
+    ]);
+    $contribution = $this->callAPISuccessGetSingle('Contribution', [
+      'return' => ['contribution_status_id'],
+      'id' => $contributionID,
+    ]);
+    //Assert if main contribution status is updated to "Refunded".
+    $this->assertEquals($contribution['contribution_status'], 'Refunded Label**');
+  }
+
+  /**
    * Test cancel payment api
    *
    * @throws \CRM_Core_Exception
@@ -504,7 +588,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'id' => $payment['id'],
       'check_permissions' => TRUE,
     ];
-    $payment = $this->callAPIFailure('payment', 'cancel', $cancelParams, 'API permission check failed for Payment/cancel call; insufficient permission: require access CiviCRM and access CiviContribute and edit contributions');
+    $this->callAPIFailure('payment', 'cancel', $cancelParams, 'API permission check failed for Payment/cancel call; insufficient permission: require access CiviCRM and access CiviContribute and edit contributions');
 
     array_push(CRM_Core_Config::singleton()->userPermissionClass->permissions, 'access CiviCRM', 'edit contributions');
 
@@ -536,24 +620,19 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'contribution_id' => $contribution['id'],
     ];
 
-    $payment = $this->callAPISuccess('payment', 'get', $params);
-    $this->assertEquals(1, $payment['count']);
+    $payment = $this->callAPISuccessGetSingle('payment', $params);
 
     $deleteParams = [
       'id' => $payment['id'],
       'check_permissions' => TRUE,
     ];
-    $payment = $this->callAPIFailure('payment', 'delete', $deleteParams, 'API permission check failed for Payment/delete call; insufficient permission: require access CiviCRM and access CiviContribute and delete in CiviContribute');
+    $this->callAPIFailure('payment', 'delete', $deleteParams, 'API permission check failed for Payment/delete call; insufficient permission: require access CiviCRM and access CiviContribute and delete in CiviContribute');
 
     array_push(CRM_Core_Config::singleton()->userPermissionClass->permissions, 'access CiviCRM', 'delete in CiviContribute');
     $this->callAPIAndDocument('payment', 'delete', $deleteParams, __FUNCTION__, __FILE__);
+    $this->callAPISuccessGetCount('payment', $params, 0);
 
-    $payment = $this->callAPISuccess('payment', 'get', $params);
-    $this->assertEquals(0, $payment['count']);
-
-    $this->callAPISuccess('Contribution', 'Delete', [
-      'id' => $contribution['id'],
-    ]);
+    $this->callAPISuccess('Contribution', 'Delete', ['id' => $contribution['id']]);
   }
 
   /**
@@ -806,14 +885,28 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'contribution_status_id' => 2,
     ];
     $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
+    $checkNumber1 = 'C111';
     $this->callAPISuccess('Payment', 'create', [
       'contribution_id' => $contribution['id'],
       'total_amount' => 50,
-      'payment_instrument_id' => 'Cash',
+      'payment_instrument_id' => 'Check',
+      'check_number' => $checkNumber1,
     ]);
     $payments = $this->callAPISuccess('Payment', 'get', ['contribution_id' => $contribution['id']])['values'];
     $this->assertCount(1, $payments);
     $this->validateAllPayments();
+
+    $checkNumber2 = 'C222';
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $contribution['id'],
+      'total_amount' => 20,
+      'payment_instrument_id' => 'Check',
+      'check_number' => $checkNumber2,
+    ]);
+    $expectedConcatanatedCheckNumbers = implode(',', [$checkNumber1, $checkNumber2]);
+    //Assert check number is concatenated on the main contribution.
+    $contributionValues = $this->callAPISuccess('Contribution', 'getsingle', ['id' => $contribution['id']]);
+    $this->assertEquals($expectedConcatanatedCheckNumbers, $contributionValues['check_number']);
   }
 
   /**
@@ -993,14 +1086,63 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   }
 
   /**
-   * Add participant with contribution
+   * This test was introduced in
+   * https://github.com/civicrm/civicrm-core/pull/17688 to ensure that a
+   * contribution's date is not set to today's date when a payment is received,
+   * and that the contribution's trxn_id is set to that of the payment.
    *
-   * @return array
+   * This tests the current behaviour, but there are questions about whether
+   * that's right.
    *
-   * @throws \CRM_Core_Exception
+   * The current behaviour is that when a payment is received that completes a
+   * contribution: the contribution's receive_date is set to that of the
+   * payment (passed to Payment.create as trxn_date).
+   *
+   * But why *should* we update the receive_date at all?
+   *
+   * If we decide that receive_date should not be touched, just change
+   * $trxnDate for $trxnID as detailed in the code comment below, which will
+   * still make sure we're not setting today's date, as well as confirming
+   * that the original date is not changed.
+   *
+   * @see https://github.com/civicrm/civicrm-core/pull/17688
+   * @see https://lab.civicrm.org/dev/financial/-/issues/139
+   *
    */
-  protected function createPendingParticipantOrder() {
-    return $this->callAPISuccess('Order', 'create', $this->getParticipantOrderParams());
+  public function testPaymentCreateTrxnIdAndDates() {
+
+    $trxnDate = '2010-01-01 09:00:00';
+    $trxnID = 'aabbccddeeffggh';
+    $originalReceiveDate = '2010-02-02 22:22:22';
+
+    $contributionID = $this->contributionCreate([
+      'contact_id'             => $this->individualCreate(),
+      'total_amount'           => 100,
+      'contribution_status_id' => 'Pending',
+      'receive_date'           => $originalReceiveDate,
+    ]);
+
+    $payment = $this->callAPISuccess('Payment', 'create', [
+      'total_amount' => 100,
+      'order_id'     => $contributionID,
+      'trxn_date'    => $trxnDate,
+      'trxn_id'      => $trxnID,
+    ]);
+
+    $contribution = $this->callAPISuccessGetSingle('Contribution', ['id' => $contributionID]);
+    $this->assertEquals('Completed', $contribution['contribution_status']);
+
+    $this->assertEquals($trxnID, $contribution['trxn_id'],
+      "Contribution trxn_id should have been set to that of the payment.");
+
+    // change $trxnDate for $receiveDate if we agree that transactions should NOT
+    // update contributions.
+    $this->assertEquals($trxnDate, $contribution['receive_date'],
+      "Contribution receive date was changed, but should not have been.");
+
+    $this->validateAllPayments();
+    $this->validateAllContributions();
+
   }
 
 }

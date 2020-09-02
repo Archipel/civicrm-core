@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -24,6 +22,7 @@ namespace Civi\Api4;
 /**
  * UFGroup entity - AKA profiles.
  *
+ * @see https://docs.civicrm.org/user/en/latest/organising-your-data/profiles/
  * @package Civi\Api4
  */
 class UFGroup extends Generic\DAOEntity {

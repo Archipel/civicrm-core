@@ -208,7 +208,7 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
 
     parent::__construct($name, $modal);
 
-    $snippet = CRM_Utils_Array::value('snippet', $_REQUEST);
+    $snippet = $_REQUEST['snippet'] ?? NULL;
     if ($snippet) {
       if ($snippet == 3) {
         $this->_print = CRM_Core_Smarty::PRINT_PDF;
@@ -284,11 +284,23 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
       return NULL;
     }
 
-    $key = CRM_Utils_Array::value('qfKey', $_REQUEST, NULL);
-    if (!$key && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    // We need a form key. Check _POST first, then _GET.
+    // @todo Note: we currently have to check $_REQUEST, too, since that
+    // is currently overwritten by civicrm_api3_contribution_page_validate.
+    // It's bad form to use $_REQUEST because it's ambiguous; and it's bad form
+    // to change superglobals anyway. If PR
+    // https://github.com/civicrm/civicrm-core/pull/17324
+    // and/or related get merged, then we should remove the REQUEST reference here.
+    $key = $_POST['qfKey'] ?? $_GET['qfKey'] ?? $_REQUEST['qfKey'] ?? NULL;
+    if (!$key && in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'])) {
+      // Generate a key if this is an initial request without one.
+      // We allow HEAD here because it is used by bots to validate URLs, so if
+      // we issue a 500 server error to them they may think the site is broken.
       $key = CRM_Core_Key::get($name, $addSequence);
     }
     else {
+      // Other requests that usually change data (POST, but feasibly DELETE,
+      // PUT, PATCH...) always require a valid key.
       $key = CRM_Core_Key::validate($key, $name, $addSequence);
     }
 
@@ -417,8 +429,8 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
     $pages = $stateMachine->getPages();
     foreach ($pages as $name => $value) {
       $className = CRM_Utils_Array::value('className', $value, $name);
-      $title = CRM_Utils_Array::value('title', $value);
-      $options = CRM_Utils_Array::value('options', $value);
+      $title = $value['title'] ?? NULL;
+      $options = $value['options'] ?? NULL;
       $stateName = CRM_Utils_String::getClassName($className);
       if (!empty($value['className'])) {
         $formName = $name;
@@ -442,7 +454,7 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
         $$stateName->setOptions($options);
       }
       if (property_exists($$stateName, 'urlPath')) {
-        $$stateName->urlPath = explode('/', (string) CRM_Utils_System::getUrlPath());
+        $$stateName->urlPath = explode('/', (string) CRM_Utils_System::currentPath());
       }
       $this->addPage($$stateName);
       $this->addAction($stateName, new HTML_QuickForm_Action_Direct());
@@ -464,7 +476,7 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
    */
   public function getButtonName() {
     $data = &$this->container();
-    return CRM_Utils_Array::value('_qf_button_name', $data);
+    return $data['_qf_button_name'] ?? NULL;
   }
 
   /**
@@ -556,8 +568,8 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
   public function addWizardStyle(&$wizard) {
     $wizard['style'] = [
       'barClass' => '',
-      'stepPrefixCurrent' => '&raquo;',
-      'stepPrefixPast' => '&#x2714;',
+      'stepPrefixCurrent' => '<i class="crm-i fa-chevron-right" aria-hidden="true"></i>&nbsp;',
+      'stepPrefixPast' => '<i class="crm-i fa-check" aria-hidden="true"></i>&nbsp;',
       'stepPrefixFuture' => ' ',
       'subStepPrefixCurrent' => '&nbsp;&nbsp;',
       'subStepPrefixPast' => '&nbsp;&nbsp;',
@@ -814,7 +826,7 @@ class CRM_Core_Controller extends HTML_QuickForm_Controller {
 
   public function invalidKeyCommon() {
     $msg = ts("We can't load the requested web page. This page requires cookies to be enabled in your browser settings. Please check this setting and enable cookies (if they are not enabled). Then try again. If this error persists, contact the site administrator for assistance.") . '<br /><br />' . ts('Site Administrators: This error may indicate that users are accessing this page using a domain or URL other than the configured Base URL. EXAMPLE: Base URL is http://example.org, but some users are accessing the page via http://www.example.org or a domain alias like http://myotherexample.org.') . '<br /><br />' . ts('Error type: Could not find a valid session key.');
-    CRM_Core_Error::fatal($msg);
+    throw new CRM_Core_Exception($msg);
   }
 
   /**

@@ -261,6 +261,9 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
     $address = CRM_Core_BAO_Address::getValues($entityBlock);
     $this->assertEquals($address[1]['id'], $addressId);
     $this->assertEquals($address[1]['contact_id'], $contactId);
+    $this->assertEquals($address[1]['state_province_abbreviation'], 'AL');
+    $this->assertEquals($address[1]['state_province'], 'Alabama');
+    $this->assertEquals($address[1]['country'], 'United States');
     $this->assertEquals($address[1]['street_address'], 'Oberoi Garden');
     $this->contactDelete($contactId);
   }
@@ -309,14 +312,14 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
 
     $result = civicrm_api3('Address', 'create', $params);
     $value = array_pop($result['values']);
-    $street_number = CRM_Utils_Array::value('street_number', $value);
+    $street_number = $value['street_number'] ?? NULL;
     $this->assertEquals($street_number, '54');
 
     // Ensure street parsing does not happen if disabled.
     $this->setStreetAddressParsing(FALSE);
     $result = civicrm_api3('Address', 'create', $params);
     $value = array_pop($result['values']);
-    $street_number = CRM_Utils_Array::value('street_number', $value);
+    $street_number = $value['street_number'] ?? NULL;
     $this->assertEmpty($street_number);
 
   }

@@ -73,6 +73,19 @@ class CRM_Utils_System_Drupal extends CRM_Utils_System_DrupalBase {
   }
 
   /**
+   * Appends a Drupal 7 Javascript file when the CRM Menubar Javascript file has
+   * been included. The file is added before the menu bar so we can properly listen
+   * for the menu bar ready event.
+   */
+  public function appendCoreResources(\Civi\Core\Event\GenericHookEvent $event) {
+    $menuBarFileIndex = array_search('js/crm.menubar.js', $event->list);
+
+    if ($menuBarFileIndex !== FALSE) {
+      array_splice($event->list, $menuBarFileIndex, 0, ['js/crm.drupal7.js']);
+    }
+  }
+
+  /**
    * @inheritDoc
    */
   public function updateCMSName($ufID, $ufName) {
@@ -511,7 +524,7 @@ AND    u.status = 1
       return TRUE;
     }
 
-    $uid = CRM_Utils_Array::value('uid', $params);
+    $uid = $params['uid'] ?? NULL;
     if (!$uid) {
       //load user, we need to check drupal permissions.
       $name = CRM_Utils_Array::value('name', $params, FALSE) ? $params['name'] : trim(CRM_Utils_Array::value('name', $_REQUEST));

@@ -72,7 +72,7 @@ function civicrm_api3_membership_status_update($params) {
 
   civicrm_api3_verify_mandatory($params, NULL, ['id']);
   //don't allow duplicate names.
-  $name = CRM_Utils_Array::value('name', $params);
+  $name = $params['name'] ?? NULL;
   if ($name) {
     $status = new CRM_Member_DAO_MembershipStatus();
     $status->name = $params['name'];
@@ -173,4 +173,7 @@ SELECT start_date, end_date, join_date, membership_type_id
 function _civicrm_api3_membership_status_calc_spec(&$params) {
   $params['membership_id']['api.required'] = 1;
   $params['membership_id']['title'] = 'Membership ID';
+  $params['ignore_admin_only']['title'] = 'Ignore admin only statuses';
+  $params['ignore_admin_only']['description'] = 'Ignore statuses that are for admin/manual assignment only';
+  $params['ignore_admin_only']['type'] = CRM_Utils_Type::T_BOOLEAN;
 }

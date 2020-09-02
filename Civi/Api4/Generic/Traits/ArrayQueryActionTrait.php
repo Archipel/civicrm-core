@@ -32,16 +32,18 @@ trait ArrayQueryActionTrait {
 
   /**
    * @param array $values
-   *   List of all rows
-   * @return array
-   *   Filtered list of rows
+   *   List of all rows to be filtered
+   * @param \Civi\Api4\Generic\Result $result
+   *   Object to store result
    */
-  protected function queryArray($values) {
+  protected function queryArray($values, $result) {
     $values = $this->filterArray($values);
     $values = $this->sortArray($values);
+    // Set total count before applying limit
+    $result->rowCount = count($values);
     $values = $this->limitArray($values);
     $values = $this->selectArray($values);
-    return $values;
+    $result->exchangeArray($values);
   }
 
   /**
@@ -108,9 +110,9 @@ trait ArrayQueryActionTrait {
     if (!is_array($condition)) {
       throw new NotImplementedException('Unexpected where syntax; expecting array.');
     }
-    $value = isset($row[$condition[0]]) ? $row[$condition[0]] : NULL;
+    $value = $row[$condition[0]] ?? NULL;
     $operator = $condition[1];
-    $expected = isset($condition[2]) ? $condition[2] : NULL;
+    $expected = $condition[2] ?? NULL;
     switch ($operator) {
       case '=':
       case '!=':
@@ -199,8 +201,17 @@ trait ArrayQueryActionTrait {
       $values = [['row_count' => count($values)]];
     }
     elseif ($this->getSelect()) {
+      // Return only fields specified by SELECT
       foreach ($values as &$value) {
         $value = array_intersect_key($value, array_flip($this->getSelect()));
+      }
+    }
+    else {
+      // With no SELECT specified, return all values that are keyed by plain field name; omit those with :pseudoconstant suffixes
+      foreach ($values as &$value) {
+        $value = array_filter($value, function($key) {
+          return strpos($key, ':') === FALSE;
+        }, ARRAY_FILTER_USE_KEY);
       }
     }
     return $values;

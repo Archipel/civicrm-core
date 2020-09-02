@@ -24,12 +24,12 @@ class CRM_Utils_MoneyTest extends CiviUnitTestCase {
   public function testEquals() {
     $testValue = 0.01;
 
-    for ($i = 0; $i <= 10; $i++) {
-      $equalValues = CRM_Utils_Money::equals($testValue, $testValue + ($i * 0.0001), 'USD');
-      $this->assertTrue($equalValues);
+    for ($i = 0; $i < 10; $i++) {
+      $equalValues = CRM_Utils_Money::equals($testValue, $testValue + ($i * 0.0005), 'USD');
+      $this->assertTrue($equalValues, 'Currency - USD' . $testValue . ' is equal to USD' . ($testValue + ($i * 0.0005)));
     }
 
-    $this->assertFalse(CRM_Utils_Money::equals($testValue, $testValue + 0.001000000001, 'USD'));
+    $this->assertFalse(CRM_Utils_Money::equals($testValue + 0.004, $testValue + 0.006, 'USD'), 'Currency - USD' . ($testValue + 0.004) . ' is different to USD' . ($testValue + 0.006));
   }
 
   /**
@@ -41,6 +41,7 @@ class CRM_Utils_MoneyTest extends CiviUnitTestCase {
       [2, 1, 'USD', 1],
       [0, 0, 'USD', 0],
       [1, 2, 'USD', -1],
+      [269.565217391, 1, 'USD', 268.57],
       [number_format(19.99, 2), number_format(20.00, 2), 'USD', number_format(-0.01, 2)],
       ['notanumber', 5.00, 'USD', NULL],
     ];

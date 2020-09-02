@@ -17,7 +17,7 @@
 /**
  * Temporarily change a global variable.
  *
- * @code
+ * ```
  * $globals = CRM_Utils_GlobalStack::singleton();
  * $globals->push(array(
  *   '_GET' => array(
@@ -26,7 +26,7 @@
  * ));
  * ...do stuff...
  * $globals->pop();
- * @endcode
+ * ```
  *
  * Note: for purposes of this class, we'll refer to the array passed into
  * push() as a frame.
@@ -76,11 +76,11 @@ class CRM_Utils_GlobalStack {
     foreach ($new as $globalKey => $values) {
       if (is_array($values)) {
         foreach ($values as $key => $value) {
-          $frame[$globalKey][$key] = CRM_Utils_Array::value($key, $GLOBALS[$globalKey]);
+          $frame[$globalKey][$key] = $GLOBALS[$globalKey][$key] ?? NULL;
         }
       }
       else {
-        $frame[$globalKey] = CRM_Utils_Array::value($globalKey, $GLOBALS);
+        $frame[$globalKey] = $GLOBALS[$globalKey] ?? NULL;
       }
     }
     return $frame;

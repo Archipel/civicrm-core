@@ -202,10 +202,10 @@ class CRM_Campaign_Page_DashBoard extends CRM_Core_Page {
       ];
       foreach ($campaigns as $cmpid => $campaign) {
         foreach ($properties as $prop) {
-          $campaignsData[$cmpid][$prop] = CRM_Utils_Array::value($prop, $campaign);
+          $campaignsData[$cmpid][$prop] = $campaign[$prop] ?? NULL;
         }
-        $statusId = CRM_Utils_Array::value('status_id', $campaign);
-        $campaignsData[$cmpid]['status'] = CRM_Utils_Array::value($statusId, $campaignStatus);
+        $statusId = $campaign['status_id'] ?? NULL;
+        $campaignsData[$cmpid]['status'] = $campaignStatus[$statusId] ?? NULL;
         $campaignsData[$cmpid]['campaign_id'] = $campaign['id'];
         $campaignsData[$cmpid]['campaign_type'] = $campaignType[$campaign['campaign_type_id']];
 
@@ -291,8 +291,8 @@ class CRM_Campaign_Page_DashBoard extends CRM_Core_Page {
       $surveyType = CRM_Campaign_BAO_Survey::getSurveyActivityType();
       foreach ($surveys as $sid => $survey) {
         $surveysData[$sid] = $survey;
-        $campaignId = CRM_Utils_Array::value('campaign_id', $survey);
-        $surveysData[$sid]['campaign'] = CRM_Utils_Array::value($campaignId, $campaigns);
+        $campaignId = $survey['campaign_id'] ?? NULL;
+        $surveysData[$sid]['campaign'] = $campaigns[$campaignId] ?? NULL;
         $surveysData[$sid]['activity_type'] = $surveyType[$survey['activity_type_id']];
         if (!empty($survey['release_frequency'])) {
           $surveysData[$sid]['release_frequency'] = ts('1 Day', ['plural' => '%count Days', 'count' => $survey['release_frequency']]);
@@ -312,11 +312,8 @@ class CRM_Campaign_Page_DashBoard extends CRM_Core_Page {
         }
         $surveysData[$sid]['isActive'] = $isActive;
 
-        $isDefault = NULL;
-        if ($surveysData[$sid]['is_default']) {
-          $isDefault = '<img src="' . $config->resourceBase . 'i/check.gif" alt="' . ts('Default') . '" />';
-        }
-        $surveysData[$sid]['is_default'] = $isDefault;
+        // For some reason, 'is_default' is coming as a string.
+        $surveysData[$sid]['is_default'] = boolval($surveysData[$sid]['is_default']);
 
         if ($surveysData[$sid]['result_id']) {
           $resultSet = '<a href= "javascript:displayResultSet( ' . $sid . ',' . "'" . $surveysData[$sid]['title'] . "'" . ', ' . $surveysData[$sid]['result_id'] . ' )" title="' . ts('view result set') . '">' . ts('Result Set') . '</a>';
@@ -397,8 +394,8 @@ class CRM_Campaign_Page_DashBoard extends CRM_Core_Page {
       $petitionType = CRM_Campaign_BAO_Survey::getSurveyActivityType('label', TRUE);
       foreach ($petitions as $pid => $petition) {
         $petitionsData[$pid] = $petition;
-        $camapignId = CRM_Utils_Array::value('campaign_id', $petition);
-        $petitionsData[$pid]['campaign'] = CRM_Utils_Array::value($camapignId, $campaigns);
+        $camapignId = $petition['campaign_id'] ?? NULL;
+        $petitionsData[$pid]['campaign'] = $campaigns[$camapignId] ?? NULL;
         $petitionsData[$pid]['activity_type'] = $petitionType[$petition['activity_type_id']];
 
         $action = array_sum(array_keys(self::petitionActionLinks()));
@@ -415,11 +412,9 @@ class CRM_Campaign_Page_DashBoard extends CRM_Core_Page {
           $isActive = ts('Yes');
         }
         $petitionsData[$pid]['isActive'] = $isActive;
-        $isDefault = NULL;
-        if ($petitionsData[$pid]['is_default']) {
-          $isDefault = '<img src="' . $config->resourceBase . 'i/check.gif" alt="' . ts('Default') . '" />';
-        }
-        $petitionsData[$pid]['is_default'] = $isDefault;
+
+        // For some reason, 'is_default' is coming as a string.
+        $petitionsData[$pid]['is_default'] = boolval($petitionsData[$pid]['is_default']);
 
         $petitionsData[$pid]['action'] = CRM_Core_Action::formLink(self::petitionActionLinks(),
           $action,

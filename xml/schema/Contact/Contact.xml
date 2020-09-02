@@ -7,6 +7,7 @@
   <comment>Contact objects are defined by a civicrm_contact record plus a related civicrm_contact_type record.</comment>
   <add>1.1</add>
   <log>true</log>
+  <icon>fa-address-book-o</icon>
   <field>
     <name>id</name>
     <type>int unsigned</type>
@@ -238,7 +239,7 @@
       <type>Text</type>
       <size>30</size>
     </html>
-
+    <contactType>Organization</contactType>
     <import>true</import>
     <headerPattern>/^legal|(l(egal\s)?name)$/i</headerPattern>
     <comment>Legal Name.</comment>
@@ -695,6 +696,7 @@
     <type>boolean</type>
     <default>0</default>
     <add>1.1</add>
+    <required>true</required>
     <html>
       <type>CheckBox</type>
     </html>
@@ -853,6 +855,7 @@
     <html>
       <type>CheckBox</type>
     </html>
+    <permission>access deleted contacts</permission>
   </field>
   <index>
     <name>index_is_deleted</name>

@@ -29,7 +29,7 @@ class CRM_Custom_Form_CustomData {
    *   $params['custom'] = CRM_Core_BAO_CustomField::postProcess($submitted, $this->_id, $this->getDefaultEntity());
    *
    * @param CRM_Core_Form $form
-   * @param null|string $subType values stored in civicrm_custom_group.extends_entity_column_value
+   * @param null|string $entitySubType values stored in civicrm_custom_group.extends_entity_column_value
    *   e.g Student for contact type
    * @param null|string $subName value in civicrm_custom_group.extends_entity_column_id
    * @param null|int $groupCount number of entities that could have custom data
@@ -37,15 +37,12 @@ class CRM_Custom_Form_CustomData {
    *
    * @throws \CRM_Core_Exception
    */
-  public static function addToForm(&$form, $subType = NULL, $subName = NULL, $groupCount = 1, $contact_id = NULL) {
+  public static function addToForm(&$form, $entitySubType = NULL, $subName = NULL, $groupCount = 1, $contact_id = NULL) {
     $entityName = $form->getDefaultEntity();
     $entityID = $form->getEntityId();
-    // FIXME: If the form has been converted to use entityFormTrait then getEntitySubTypeId() will exist.
-    // However, if it is only partially converted (ie. we've switched customdata to use CRM_Custom_Form_CustomData)
-    // it won't, so we check if we have a subtype before calling the function.
-    $entitySubType = NULL;
-    if ($subType) {
-      $entitySubType = $form->getEntitySubTypeId($subType);
+    // If the form has been converted to use entityFormTrait then getEntitySubTypeId() will exist.
+    if (method_exists($form, 'getEntitySubTypeId') && empty($entitySubType)) {
+      $entitySubType = $form->getEntitySubTypeId();
     }
 
     if ($form->getAction() == CRM_Core_Action::VIEW) {
@@ -143,7 +140,7 @@ class CRM_Custom_Form_CustomData {
     }
 
     $gid = (isset($form->_groupID)) ? $form->_groupID : NULL;
-    $getCachedTree = isset($form->_getCachedTree) ? $form->_getCachedTree : TRUE;
+    $getCachedTree = $form->_getCachedTree ?? TRUE;
 
     $subType = $form->_subType;
     if (!is_array($subType) && strstr($subType, CRM_Core_DAO::VALUE_SEPARATOR)) {

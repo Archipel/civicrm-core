@@ -7,13 +7,12 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
 *}
-{capture assign=expandIconURL}<img src="{$config->resourceBase}i/TreePlus.gif" alt="{ts}open section{/ts}"/>{/capture}
 {strip}
 <table class="case-selector-{$list} crm-ajax-table" data-page-length='10'>
 <thead>
   <tr>
     <th data-data="activity_list" data-orderable="false" class="crm-case-activity_list"></th>
-    <th data-data="contact_id" class="crm-case-contact">{ts}Contact{/ts}</th>
+    <th data-data="sort_name" class="crm-case-contact">{ts}Contact{/ts}</th>
     <th data-data="subject" cell-class="crmf-subject crm-editable" class="crm-case-subject">{ts}Subject{/ts}</th>
     <th data-data="case_status" class="crm-case-status">{ts}Status{/ts}</th>
     <th data-data="case_type" class="crm-case-type">{ts}Type{/ts}</th>

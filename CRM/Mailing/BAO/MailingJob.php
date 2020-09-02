@@ -54,7 +54,7 @@ class CRM_Mailing_BAO_MailingJob extends CRM_Mailing_DAO_MailingJob {
     CRM_Utils_Hook::pre($op, 'MailingJob', CRM_Utils_Array::value('id', $params), $params);
 
     $jobDAO = new CRM_Mailing_BAO_MailingJob();
-    $jobDAO->copyValues($params, TRUE);
+    $jobDAO->copyValues($params);
     $jobDAO->save();
     if (!empty($params['mailing_id']) && empty('is_calling_function_updated_to_reflect_deprecation')) {
       CRM_Mailing_BAO_Mailing::getRecipients($params['mailing_id']);
@@ -781,7 +781,7 @@ VALUES (%1, %2, %3, %4, %5, %6, %7)
     }
 
     // Register 5xx SMTP response code (permanent failure) as bounce.
-    if (isset($code{0}) && $code{0} === '5') {
+    if (isset($code[0]) && $code[0] === '5') {
       return FALSE;
     }
 

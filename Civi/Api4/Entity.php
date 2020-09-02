@@ -24,6 +24,8 @@ namespace Civi\Api4;
 /**
  * Retrieves information about all Api4 entities.
  *
+ * @see \Civi\Api4\Generic\AbstractEntity
+ *
  * @package Civi\Api4
  */
 class Entity extends Generic\AbstractEntity {
@@ -41,9 +43,35 @@ class Entity extends Generic\AbstractEntity {
   public static function getFields() {
     return new \Civi\Api4\Generic\BasicGetFieldsAction('Entity', __FUNCTION__, function() {
       return [
-        ['name' => 'name'],
-        ['name' => 'description'],
-        ['name' => 'comment'],
+        [
+          'name' => 'name',
+          'description' => 'Entity name',
+        ],
+        [
+          'name' => 'title',
+          'description' => 'Localized title',
+        ],
+        [
+          'name' => 'description',
+          'description' => 'Description from docblock',
+        ],
+        [
+          'name' => 'comment',
+          'description' => 'Comments from docblock',
+        ],
+        [
+          'name' => 'icon',
+          'description' => 'crm-i icon class associated with this entity',
+        ],
+        [
+          'name' => 'dao',
+          'description' => 'Class name for dao-based entities',
+        ],
+        [
+          'name' => 'see',
+          'data_type' => 'Array',
+          'description' => 'Any @see annotations from docblock',
+        ],
       ];
     });
   }

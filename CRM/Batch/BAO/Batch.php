@@ -42,20 +42,10 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
    *   $batch batch object
    */
   public static function create(&$params) {
-    $op = 'edit';
-    $batchId = CRM_Utils_Array::value('id', $params);
-    if (!$batchId) {
-      $op = 'create';
+    if (empty($params['id']) && empty($params['name'])) {
       $params['name'] = CRM_Utils_String::titleToVar($params['title']);
     }
-    CRM_Utils_Hook::pre($op, 'Batch', $batchId, $params);
-    $batch = new CRM_Batch_DAO_Batch();
-    $batch->copyValues($params);
-    $batch->save();
-
-    CRM_Utils_Hook::post($op, 'Batch', $batch->id, $batch);
-
-    return $batch;
+    return self::writeRecord($params);
   }
 
   /**
@@ -150,7 +140,7 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
     // format the params
     $params['offset'] = ($params['page'] - 1) * $params['rp'];
     $params['rowCount'] = $params['rp'];
-    $params['sort'] = CRM_Utils_Array::value('sortBy', $params);
+    $params['sort'] = $params['sortBy'] ?? NULL;
 
     // get batches
     $batches = self::getBatchList($params);
@@ -185,8 +175,8 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
       $batch['batch_name'] = $value['title'];
       $batch['total'] = '';
       $batch['payment_instrument'] = $value['payment_instrument'];
-      $batch['item_count'] = CRM_Utils_Array::value('item_count', $value);
-      $batch['type'] = CRM_Utils_Array::value('batch_type', $value);
+      $batch['item_count'] = $value['item_count'] ?? NULL;
+      $batch['type'] = $value['batch_type'] ?? NULL;
       if (!empty($value['total'])) {
         // CRM-21205
         $batch['total'] = CRM_Utils_Money::format($value['total'], $value['currency']);
@@ -589,12 +579,10 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
    */
   public static function exportFinancialBatch($batchIds, $exportFormat, $downloadFile) {
     if (empty($batchIds)) {
-      CRM_Core_Error::fatal(ts('No batches were selected.'));
-      return;
+      throw new CRM_Core_Exception(ts('No batches were selected.'));
     }
     if (empty($exportFormat)) {
-      CRM_Core_Error::fatal(ts('No export format selected.'));
-      return;
+      throw new CRM_Core_Exception(ts('No export format selected.'));
     }
     self::$_exportFormat = $exportFormat;
 
@@ -604,7 +592,7 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
       $exporter = new $exporterClass();
     }
     else {
-      CRM_Core_Error::fatal("Could not locate exporter: $exporterClass");
+      throw new CRM_Core_Exception("Could not locate exporter: $exporterClass");
     }
     $export = [];
     $exporter->_isDownloadFile = $downloadFile;

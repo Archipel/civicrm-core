@@ -130,7 +130,8 @@ class CRM_Event_Page_ManageEvent extends CRM_Core_Page {
    * @return array
    *   (reference) of tab links
    */
-  public static function &tabs($enableCart) {
+  public static function &tabs() {
+    $enableCart = Civi::settings()->get('enable_cart');
     $cacheKey = $enableCart ? 1 : 0;
     if (!(self::$_tabLinks)) {
       self::$_tabLinks = [];
@@ -224,6 +225,7 @@ class CRM_Event_Page_ManageEvent extends CRM_Core_Page {
 
     // assign vars to templates
     $this->assign('action', $action);
+    $this->assign('iCal', CRM_Event_BAO_Event::getICalLinks());
     $id = CRM_Utils_Request::retrieve('id', 'Positive',
       $this, FALSE, 0, 'REQUEST'
     );
@@ -416,10 +418,10 @@ ORDER BY start_date desc
         }
 
         //show campaigns on selector.
-        $manageEvent[$dao->id]['campaign'] = CRM_Utils_Array::value($dao->campaign_id, $allCampaigns);
+        $manageEvent[$dao->id]['campaign'] = $allCampaigns[$dao->campaign_id] ?? NULL;
         $manageEvent[$dao->id]['reminder'] = CRM_Core_BAO_ActionSchedule::isConfigured($dao->id, $mapping->getId());
-        $manageEvent[$dao->id]['is_pcp_enabled'] = CRM_Utils_Array::value($dao->id, $eventPCPS);
-        $manageEvent[$dao->id]['event_type'] = CRM_Utils_Array::value($manageEvent[$dao->id]['event_type_id'], $eventType);
+        $manageEvent[$dao->id]['is_pcp_enabled'] = $eventPCPS[$dao->id] ?? NULL;
+        $manageEvent[$dao->id]['event_type'] = $eventType[$manageEvent[$dao->id]['event_type_id']] ?? NULL;
         $manageEvent[$dao->id]['is_repeating_event'] = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_RecurringEntity', $dao->id, 'parent_id', 'entity_id');
         // allow hooks to set 'field' value which allows configuration pop-up to show a tab as enabled/disabled
         CRM_Utils_Hook::tabset('civicrm/event/manage/rows', $manageEvent, ['event_id' => $dao->id]);

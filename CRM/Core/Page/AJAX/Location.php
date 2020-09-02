@@ -28,6 +28,8 @@ class CRM_Core_Page_AJAX_Location {
    * obtain the location of given contact-id.
    * This method is used by on-behalf-of form to dynamically generate poulate the
    * location field values for selected permissioned contact.
+   *
+   * @throws \CRM_Core_Exception
    */
   public static function getPermissionedLocation() {
     $cid = CRM_Utils_Request::retrieve('cid', 'Integer', CRM_Core_DAO::$_nullObject, TRUE);
@@ -143,7 +145,7 @@ class CRM_Core_Page_AJAX_Location {
     if (!empty($defaults)) {
       foreach ($profileFields as $key => $val) {
         if (array_key_exists($key, $defaults)) {
-          $htmlType = CRM_Utils_Array::value('html_type', $val);
+          $htmlType = $val['html_type'] ?? NULL;
           if ($htmlType == 'Radio') {
             $elements["onbehalf_{$key}"]['type'] = $htmlType;
             $elements["onbehalf_{$key}"]['value'] = $defaults[$key];
@@ -224,7 +226,7 @@ class CRM_Core_Page_AJAX_Location {
           $element = 'name';
         }
         $fld = "address[1][{$element}]";
-        $value = CRM_Utils_Array::value($element, $location['address'][1]);
+        $value = $location['address'][1][$element] ?? NULL;
         $value = $value ? $value : "";
         $result[str_replace([
           '][',
@@ -242,7 +244,7 @@ class CRM_Core_Page_AJAX_Location {
       $block = ($element == 'phone_type_id') ? 'phone' : $element;
       for ($i = 1; $i < 3; $i++) {
         $fld = "{$block}[{$i}][{$element}]";
-        $value = CRM_Utils_Array::value($element, $location[$block][$i]);
+        $value = $location[$block][$i][$element] ?? NULL;
         $value = $value ? $value : "";
         $result[str_replace([
           '][',

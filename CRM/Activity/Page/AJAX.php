@@ -56,7 +56,7 @@ class CRM_Activity_Page_AJAX {
     // get the total row count
     CRM_Case_BAO_Case::getGlobalContacts($globalGroupInfo, NULL, FALSE, TRUE, NULL, NULL);
     // limit the rows
-    $relGlobal = CRM_Case_BAO_Case::getGlobalContacts($globalGroupInfo, $params['sortBy'], $showLinks = TRUE, FALSE, $params['offset'], $params['rp']);
+    $relGlobal = CRM_Case_BAO_Case::getGlobalContacts($globalGroupInfo, $params['sortBy'] ?? NULL, $showLinks = TRUE, FALSE, $params['offset'], $params['rp']);
 
     $relationships = [];
     // after sort we can update username fields to be a url
@@ -101,11 +101,14 @@ class CRM_Activity_Page_AJAX {
     }
 
     // sort clientRelationships array using jquery call params
-    foreach ($clientRelationships as $key => $row) {
-      $sortArray[$key] = $row[$params['_raw_values']['sort'][0]];
+    $sortArray = [];
+    if (!empty($params['_raw_values']['sort'])) {
+      foreach ($clientRelationships as $key => $row) {
+        $sortArray[$key] = $row[$params['_raw_values']['sort'][0]];
+      }
+      $sort_type = "SORT_" . strtoupper($params['_raw_values']['order'][0]);
+      array_multisort($sortArray, constant($sort_type), $clientRelationships);
     }
-    $sort_type = "SORT_" . strtoupper($params['_raw_values']['order'][0]);
-    array_multisort($sortArray, constant($sort_type), $clientRelationships);
 
     $relationships = [];
     // after sort we can update username fields to be a url
@@ -181,11 +184,14 @@ class CRM_Activity_Page_AJAX {
     }
 
     // sort clientRelationships array using jquery call params
-    foreach ($caseRelationships as $key => $row) {
-      $sortArray[$key] = $row[$params['_raw_values']['sort'][0]];
+    $sortArray = [];
+    if (!empty($params['_raw_values']['sort'])) {
+      foreach ($caseRelationships as $key => $row) {
+        $sortArray[$key] = $row[$params['_raw_values']['sort'][0]];
+      }
+      $sort_type = "SORT_" . strtoupper($params['_raw_values']['order'][0]);
+      array_multisort($sortArray, constant($sort_type), $caseRelationships);
     }
-    $sort_type = "SORT_" . strtoupper($params['_raw_values']['order'][0]);
-    array_multisort($sortArray, constant($sort_type), $caseRelationships);
 
     $relationships = [];
 
@@ -203,7 +209,7 @@ class CRM_Activity_Page_AJAX {
       }
       // email column links/icon
       if ($row['email']) {
-        $row['email'] = '<a class="crm-hover-button crm-popup" href="' . CRM_Utils_System::url('civicrm/activity/email/add', 'reset=1&action=add&atype=3&cid=' . $row['cid']) . '&caseid=' . $caseID . '" title="' . ts('Send an Email') . '"><i class="crm-i fa-envelope"></i></a>';
+        $row['email'] = '<a class="crm-hover-button crm-popup" href="' . CRM_Utils_System::url('civicrm/activity/email/add', 'reset=1&action=add&atype=3&cid=' . $row['cid']) . '&caseid=' . $caseID . '" title="' . ts('Send an Email') . '"><i class="crm-i fa-envelope" aria-hidden="true"></i></a>';
       }
       // edit links
       $row['actions'] = '';
@@ -213,7 +219,7 @@ class CRM_Activity_Page_AJAX {
         switch ($row['source']) {
           case 'caseRel':
             $row['actions'] = '<a href="#editCaseRoleDialog" title="' . ts('Reassign %1', [1 => $typeLabel]) . '" class="crm-hover-button case-miniform" data-contact_type="' . $contactType . '" data-rel_type="' . $row['relation_type'] . '_' . $row['relationship_direction'] . '" data-cid="' . $row['cid'] . '" data-rel_id="' . $row['rel_id'] . '"data-key="' . CRM_Core_Key::get('civicrm/ajax/relation') . '">' .
-              '<i class="crm-i fa-pencil"></i>' .
+              '<i class="crm-i fa-pencil" aria-hidden="true"></i>' .
               '</a>' .
               '<a href="#deleteCaseRoleDialog" title="' . ts('Remove %1', [1 => $typeLabel]) . '" class="crm-hover-button case-miniform" data-contact_type="' . $contactType . '" data-rel_type="' . $row['relation_type'] . '_' . $row['relationship_direction'] . '" data-cid="' . $row['cid'] . '" data-key="' . CRM_Core_Key::get('civicrm/ajax/delcaserole') . '">' .
               '<span class="icon delete-icon"></span>' .
@@ -222,7 +228,7 @@ class CRM_Activity_Page_AJAX {
 
           case 'caseRoles':
             $row['actions'] = '<a href="#editCaseRoleDialog" title="' . ts('Assign %1', [1 => $typeLabel]) . '" class="crm-hover-button case-miniform" data-contact_type="' . $contactType . '" data-rel_type="' . $row['relation_type'] . '_a_b" data-key="' . CRM_Core_Key::get('civicrm/ajax/relation') . '">' .
-              '<i class="crm-i fa-pencil"></i>' .
+              '<i class="crm-i fa-pencil" aria-hidden="true"></i>' .
               '</a>';
             break;
         }
@@ -249,7 +255,7 @@ class CRM_Activity_Page_AJAX {
     $params = ['caseID', 'activityID', 'contactID', 'newSubject', 'targetContactIds', 'mode'];
     $vals = [];
     foreach ($params as $param) {
-      $vals[$param] = CRM_Utils_Array::value($param, $_POST);
+      $vals[$param] = $_POST[$param] ?? NULL;
     }
 
     CRM_Utils_JSON::output(self::_convertToCaseActivity($vals));
@@ -347,7 +353,7 @@ class CRM_Activity_Page_AJAX {
     if (!empty($params['assigneeContactIds'])) {
       $assigneeContacts = array_unique(explode(',', $params['assigneeContactIds']));
     }
-    foreach ($assigneeContacts as $key => $value) {
+    foreach ($assigneeContacts as $value) {
       $assigneeParams = [
         'activity_id' => $mainActivityId,
         'contact_id' => $value,

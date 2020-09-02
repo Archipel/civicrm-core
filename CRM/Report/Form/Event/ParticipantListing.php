@@ -404,7 +404,7 @@ WHERE ce.entity_table = 'civicrm_event'
 ORDER BY  cv.label
 ";
     $dao = CRM_Core_DAO::executeQuery($query);
-    $elements = array();
+    $elements = [];
     while ($dao->fetch()) {
       $elements[$dao->id] = "$dao->label\n";
     }
@@ -417,8 +417,8 @@ ORDER BY  cv.label
   }
 
   public function select() {
-    $select = array();
-    $this->_columnHeaders = array();
+    $select = [];
+    $this->_columnHeaders = [];
 
     //add blank column at the Start
     if (array_key_exists('options', $this->_params) &&
@@ -446,16 +446,16 @@ ORDER BY  cv.label
             }
             $alias = "{$tableName}_{$fieldName}";
             $select[] = "{$field['dbAlias']} as $alias";
-            $this->_columnHeaders["{$tableName}_{$fieldName}"]['type'] = CRM_Utils_Array::value('type', $field);
-            $this->_columnHeaders["{$tableName}_{$fieldName}"]['no_display'] = CRM_Utils_Array::value('no_display', $field);
-            $this->_columnHeaders["{$tableName}_{$fieldName}"]['title'] = CRM_Utils_Array::value('title', $field);
+            $this->_columnHeaders["{$tableName}_{$fieldName}"]['type'] = $field['type'] ?? NULL;
+            $this->_columnHeaders["{$tableName}_{$fieldName}"]['no_display'] = $field['no_display'] ?? NULL;
+            $this->_columnHeaders["{$tableName}_{$fieldName}"]['title'] = $field['title'] ?? NULL;
             $this->_selectAliases[] = $alias;
           }
         }
       }
     }
     //add blank column at the end
-    $blankcols = CRM_Utils_Array::value('blank_column_end', $this->_params);
+    $blankcols = $this->_params['blank_column_end'] ?? NULL;
     if ($blankcols) {
       for ($i = 1; $i <= $blankcols; $i++) {
         $select[] = " '' as blankColumnEnd_{$i}";
@@ -475,7 +475,7 @@ ORDER BY  cv.label
    * @return array
    */
   public static function formRule($fields, $files, $self) {
-    $errors = $grouping = array();
+    $errors = $grouping = [];
     return $errors;
   }
 
@@ -530,26 +530,26 @@ ORDER BY  cv.label
   }
 
   public function where() {
-    $clauses = array();
+    $clauses = [];
     foreach ($this->_columns as $tableName => $table) {
       if (array_key_exists('filters', $table)) {
         foreach ($table['filters'] as $fieldName => $field) {
           $clause = NULL;
 
           if (CRM_Utils_Array::value('type', $field) & CRM_Utils_Type::T_DATE) {
-            $relative = CRM_Utils_Array::value("{$fieldName}_relative", $this->_params);
-            $from = CRM_Utils_Array::value("{$fieldName}_from", $this->_params);
-            $to = CRM_Utils_Array::value("{$fieldName}_to", $this->_params);
+            $relative = $this->_params["{$fieldName}_relative"] ?? NULL;
+            $from = $this->_params["{$fieldName}_from"] ?? NULL;
+            $to = $this->_params["{$fieldName}_to"] ?? NULL;
 
             if ($relative || $from || $to) {
               $clause = $this->dateClause($field['name'], $relative, $from, $to, $field['type']);
             }
           }
           else {
-            $op = CRM_Utils_Array::value("{$fieldName}_op", $this->_params);
+            $op = $this->_params["{$fieldName}_op"] ?? NULL;
 
             if ($fieldName == 'rid') {
-              $value = CRM_Utils_Array::value("{$fieldName}_value", $this->_params);
+              $value = $this->_params["{$fieldName}_value"] ?? NULL;
               if (!empty($value)) {
                 $operator = '';
                 if ($op == 'notin') {
@@ -673,7 +673,7 @@ ORDER BY  cv.label
         $roleId = $row['civicrm_participant_role_id'];
         if ($roleId) {
           $roles = explode(CRM_Core_DAO::VALUE_SEPARATOR, $roleId);
-          $roleId = array();
+          $roleId = [];
           foreach ($roles as $role) {
             $roleId[$role] = CRM_Event_PseudoConstant::participantRole($role, FALSE);
           }
@@ -704,9 +704,9 @@ ORDER BY  cv.label
       }
 
       // Convert display name to link
-      $displayName = CRM_Utils_Array::value('civicrm_contact_sort_name_linked', $row);
-      $cid = CRM_Utils_Array::value('civicrm_contact_id', $row);
-      $id = CRM_Utils_Array::value('civicrm_participant_participant_record', $row);
+      $displayName = $row['civicrm_contact_sort_name_linked'] ?? NULL;
+      $cid = $row['civicrm_contact_id'] ?? NULL;
+      $id = $row['civicrm_participant_participant_record'] ?? NULL;
 
       if ($displayName && $cid && $id) {
         $url = CRM_Report_Utils_Report::getNextUrl('contact/detail',

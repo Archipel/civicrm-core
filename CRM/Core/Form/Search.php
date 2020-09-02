@@ -22,13 +22,6 @@ class CRM_Core_Form_Search extends CRM_Core_Form {
   protected $_force;
 
   /**
-   * Name of search button
-   *
-   * @var string
-   */
-  protected $_searchButtonName;
-
-  /**
    * Name of action button
    *
    * @var string
@@ -208,6 +201,9 @@ class CRM_Core_Form_Search extends CRM_Core_Form {
           $props = ['entity' => $fieldSpec['entity'] ?? $entity];
           if (isset($fields[$fieldName]['unique_title'])) {
             $props['label'] = $fields[$fieldName]['unique_title'];
+          }
+          elseif (isset($fields[$fieldName]['html']['label'])) {
+            $props['label'] = $fields[$fieldName]['html']['label'];
           }
           elseif (isset($fields[$fieldName]['title'])) {
             $props['label'] = $fields[$fieldName]['title'];

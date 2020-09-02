@@ -57,6 +57,8 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
    *
    * The scenario is that a pending contribution exists and the IPN call will update it to completed.
    * And also if Tax and Invoicing is enabled, this unit test ensure that invoice pdf is attached with email recipet
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testInvoiceSentOnIPNPaymentSuccess() {
     $this->enableTaxAndInvoicing();
@@ -81,7 +83,7 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
     $_REQUEST = ['q' => CRM_Utils_System::url('civicrm/payment/ipn/' . $this->_paymentProcessorID)] + $this->getPaypalTransaction();
 
     $mut = new CiviMailUtils($this, TRUE);
-    $paymentProcesors = civicrm_api3('PaymentProcessor', 'getsingle', ['id' => $this->_paymentProcessorID]);
+    $paymentProcesors = $this->callAPISuccessGetSingle('PaymentProcessor', ['id' => $this->_paymentProcessorID]);
     $payment = Civi\Payment\System::singleton()->getByProcessor($paymentProcesors);
     $payment->handlePaymentNotification();
 
@@ -315,6 +317,40 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
     $this->assertEquals($_REQUEST['txn_id'], $contribution['values'][0]['trxn_id']);
     $this->assertEquals($completedStatusID, $contribution['values'][0]['contribution_status_id']);
     $this->assertEquals('test12345', $contribution['values'][0]['custom_' . $this->_customFieldID]);
+  }
+
+  /**
+   * Allow IPNs to validate when the supplied contact_id has been deleted from the database but there is a valid contact id in the contribution recur object or contribution object
+   */
+  public function testPayPalIPNSuccessDeletedContact() {
+    $contactTobeDeleted = $this->individualCreate();
+    $pendingStatusID = CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Pending');
+    $completedStatusID = CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Completed');
+    $params = [
+      'payment_processor_id' => $this->_paymentProcessorID,
+      'contact_id' => $this->_contactID,
+      'trxn_id' => NULL,
+      'invoice_id' => $this->_invoiceID,
+      'contribution_status_id' => $pendingStatusID,
+      'is_email_receipt' => TRUE,
+    ];
+    $this->_contributionID = $this->contributionCreate($params);
+    $contribution = $this->callAPISuccess('contribution', 'get', ['id' => $this->_contributionID, 'sequential' => 1]);
+    // assert that contribution created before handling payment via paypal standard has no transaction id set and pending status
+    $this->assertEquals(NULL, $contribution['values'][0]['trxn_id']);
+    $this->assertEquals($pendingStatusID, $contribution['values'][0]['contribution_status_id']);
+    $payPalIPNParams = $this->getPaypalTransaction();
+    $payPalIPNParams['contactID'] = $contactTobeDeleted;
+    $this->callAPISuccess('Contact', 'delete', ['id' => $contactTobeDeleted, 'skip_undelete' => 1]);
+    global $_REQUEST;
+    $_REQUEST = ['q' => CRM_Utils_System::url('civicrm/payment/ipn/' . $this->_paymentProcessorID)] + $payPalIPNParams;
+    // Now process the IPN noting that the contact id that was supplied with the IPN has been deleted but there is still a valid one on the contribution id
+    $payment = CRM_Core_Payment::handlePaymentMethod('PaymentNotification', ['processor_id' => $this->_paymentProcessorID]);
+
+    $contribution = $this->callAPISuccess('contribution', 'get', ['id' => $this->_contributionID, 'sequential' => 1]);
+    // assert that contribution is completed after getting response from paypal standard which has transaction id set and completed status
+    $this->assertEquals($_REQUEST['txn_id'], $contribution['values'][0]['trxn_id']);
+    $this->assertEquals($completedStatusID, $contribution['values'][0]['contribution_status_id']);
   }
 
   /**

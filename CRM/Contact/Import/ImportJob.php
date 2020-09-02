@@ -42,7 +42,7 @@ class CRM_Contact_Import_ImportJob {
   protected $_allTags;
 
   protected $_mapper;
-  protected $_mapperKeys = array();
+  protected $_mapperKeys = [];
   protected $_mapFields;
 
   protected $_parser;
@@ -52,7 +52,7 @@ class CRM_Contact_Import_ImportJob {
    * @param null $createSql
    * @param bool $createTable
    *
-   * @throws Exception
+   * @throws \CRM_Core_Exception
    */
   public function __construct($tableName = NULL, $createSql = NULL, $createTable = FALSE) {
     $dao = new CRM_Core_DAO();
@@ -60,7 +60,7 @@ class CRM_Contact_Import_ImportJob {
 
     if ($createTable) {
       if (!$createSql) {
-        CRM_Core_Error::fatal('Either an existing table name or an SQL query to build one are required');
+        throw new CRM_Core_Exception(ts('Either an existing table name or an SQL query to build one are required'));
       }
 
       // FIXME: we should regen this table's name if it exists rather than drop it
@@ -72,7 +72,7 @@ class CRM_Contact_Import_ImportJob {
     }
 
     if (!$tableName) {
-      CRM_Core_Error::fatal('Import Table is required.');
+      throw new CRM_Core_Exception(ts('Import Table is required.'));
     }
 
     $this->_tableName = $tableName;
@@ -93,7 +93,7 @@ class CRM_Contact_Import_ImportJob {
    */
   public function isComplete($dropIfComplete = TRUE) {
     if (!$this->_statusFieldName) {
-      CRM_Core_Error::fatal("Could not get name of the import status field");
+      throw new CRM_Core_Exception("Could not get name of the import status field");
     }
     $query = "SELECT * FROM $this->_tableName
                   WHERE  $this->_statusFieldName = 'NEW' LIMIT 1";
@@ -124,7 +124,7 @@ class CRM_Contact_Import_ImportJob {
    */
   public function runImport(&$form, $timeout = 55) {
     $mapper = $this->_mapper;
-    $mapperFields = array();
+    $mapperFields = [];
     $parserParameters = CRM_Contact_Import_Parser_Contact::getParameterForParser(count($mapper));
     $phoneTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Phone', 'phone_type_id');
     $imProviders = CRM_Core_PseudoConstant::get('CRM_Core_DAO_IM', 'provider_id');
@@ -133,11 +133,11 @@ class CRM_Contact_Import_ImportJob {
 
     foreach ($mapper as $key => $value) {
 
-      $fldName = CRM_Utils_Array::value(0, $mapper[$key]);
+      $fldName = $mapper[$key][0] ?? NULL;
       $header = array($this->_mapFields[$fldName]);
-      $selOne = CRM_Utils_Array::value(1, $mapper[$key]);
-      $selTwo = CRM_Utils_Array::value(2, $mapper[$key]);
-      $selThree = CRM_Utils_Array::value(3, $mapper[$key]);
+      $selOne = $mapper[$key][1] ?? NULL;
+      $selTwo = $mapper[$key][2] ?? NULL;
+      $selThree = $mapper[$key][3] ?? NULL;
       $this->_mapperKeys[$key] = $fldName;
 
       //need to differentiate non location elements.
@@ -165,8 +165,8 @@ class CRM_Contact_Import_ImportJob {
 
       $fldNameParts = explode('_', $fldName, 3);
       $id = $fldNameParts[0];
-      $first = isset($fldNameParts[1]) ? $fldNameParts[1] : NULL;
-      $second = isset($fldNameParts[2]) ? $fldNameParts[2] : NULL;
+      $first = $fldNameParts[1] ?? NULL;
+      $second = $fldNameParts[2] ?? NULL;
       if (($first == 'a' && $second == 'b') ||
         ($first == 'b' && $second == 'a')
       ) {
@@ -294,7 +294,7 @@ class CRM_Contact_Import_ImportJob {
 
     if ($newGroupName) {
       /* Create a new group */
-      $newGroupType = isset($newGroupType) ? $newGroupType : array();
+      $newGroupType = $newGroupType ?? [];
       $gParams = array(
         'title' => $newGroupName,
         'description' => $newGroupDesc,
@@ -306,7 +306,7 @@ class CRM_Contact_Import_ImportJob {
     }
 
     if (is_array($this->_groups)) {
-      $groupAdditions = array();
+      $groupAdditions = [];
       foreach ($this->_groups as $groupId) {
         $addCount = CRM_Contact_BAO_GroupContact::addContactsToGroup($contactIds, $groupId);
         $totalCount = $addCount[1];
@@ -355,14 +355,13 @@ class CRM_Contact_Import_ImportJob {
         'is_selectable' => TRUE,
         'used_for' => 'civicrm_contact',
       );
-      $id = array();
-      $addedTag = CRM_Core_BAO_Tag::add($tagParams, $id);
+      $addedTag = CRM_Core_BAO_Tag::add($tagParams);
       $this->_tag[$addedTag->id] = 1;
     }
     //add Tag to Import
 
     if (is_array($this->_tag)) {
-      $tagAdditions = array();
+      $tagAdditions = [];
       foreach ($this->_tag as $tagId => $val) {
         $addTagCount = CRM_Core_BAO_EntityTag::addEntitiesToTag($contactIds, $tagId, 'civicrm_contact', FALSE);
         $totalTagCount = $addTagCount[1];

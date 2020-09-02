@@ -1,7 +1,6 @@
 <?php
 namespace Civi\Core;
 
-use Civi\Core\Event\SystemInstallEvent;
 use Civi\Core\Lock\LockManager;
 use Symfony\Component\Config\ConfigCache;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -122,32 +121,32 @@ class Container {
       'Civi\Angular\Manager',
       []
     ))
-      ->setFactory([new Reference(self::SELF), 'createAngularManager']);
+      ->setFactory([new Reference(self::SELF), 'createAngularManager'])->setPublic(TRUE);
 
     $container->setDefinition('dispatcher', new Definition(
       'Civi\Core\CiviEventDispatcher',
       [new Reference('service_container')]
     ))
-      ->setFactory([new Reference(self::SELF), 'createEventDispatcher']);
+      ->setFactory([new Reference(self::SELF), 'createEventDispatcher'])->setPublic(TRUE);
 
     $container->setDefinition('magic_function_provider', new Definition(
       'Civi\API\Provider\MagicFunctionProvider',
       []
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('civi_api_kernel', new Definition(
       'Civi\API\Kernel',
       [new Reference('dispatcher'), new Reference('magic_function_provider')]
     ))
-      ->setFactory([new Reference(self::SELF), 'createApiKernel']);
+      ->setFactory([new Reference(self::SELF), 'createApiKernel'])->setPublic(TRUE);
 
     $container->setDefinition('cxn_reg_client', new Definition(
       'Civi\Cxn\Rpc\RegistrationClient',
       []
     ))
-      ->setFactory('CRM_Cxn_BAO_Cxn::createRegistrationClient');
+      ->setFactory('CRM_Cxn_BAO_Cxn::createRegistrationClient')->setPublic(TRUE);
 
-    $container->setDefinition('psr_log', new Definition('CRM_Core_Error_Log', []));
+    $container->setDefinition('psr_log', new Definition('CRM_Core_Error_Log', []))->setPublic(TRUE);
 
     $basicCaches = [
       'js_strings' => 'js_strings',
@@ -177,7 +176,7 @@ class Container {
       $container->setDefinition("cache.{$cacheSvc}", new Definition(
         'CRM_Utils_Cache_Interface',
         [$definitionParams]
-      ))->setFactory('CRM_Utils_Cache::create');
+      ))->setFactory('CRM_Utils_Cache::create')->setPublic(TRUE);
     }
 
     // PrevNextCache cannot use memory or array cache at the moment because the
@@ -190,22 +189,22 @@ class Container {
           'type' => ['SqlGroup'],
         ],
       ]
-    ))->setFactory('CRM_Utils_Cache::create');
+    ))->setFactory('CRM_Utils_Cache::create')->setPublic(TRUE);
 
     $container->setDefinition('sql_triggers', new Definition(
       'Civi\Core\SqlTriggers',
       []
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('asset_builder', new Definition(
       'Civi\Core\AssetBuilder',
       []
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('themes', new Definition(
       'Civi\Core\Themes',
       []
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('pear_mail', new Definition('Mail'))
       ->setFactory('CRM_Utils_Mail::createMailer');
@@ -229,47 +228,47 @@ class Container {
       $container->setDefinition($name, new Definition(
         $class
       ))
-        ->setFactory([$class, 'singleton']);
+        ->setFactory([$class, 'singleton'])->setPublic(TRUE);
     }
     $container->setAlias('cache.short', 'cache.default');
 
     $container->setDefinition('resources', new Definition(
       'CRM_Core_Resources',
       [new Reference('service_container')]
-    ))->setFactory([new Reference(self::SELF), 'createResources']);
+    ))->setFactory([new Reference(self::SELF), 'createResources'])->setPublic(TRUE);
 
     $container->setDefinition('prevnext', new Definition(
       'CRM_Core_PrevNextCache_Interface',
       [new Reference('service_container')]
-    ))->setFactory([new Reference(self::SELF), 'createPrevNextCache']);
+    ))->setFactory([new Reference(self::SELF), 'createPrevNextCache'])->setPublic(TRUE);
 
     $container->setDefinition('prevnext.driver.sql', new Definition(
       'CRM_Core_PrevNextCache_Sql',
       []
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('prevnext.driver.redis', new Definition(
       'CRM_Core_PrevNextCache_Redis',
       [new Reference('cache_config')]
-    ));
+    ))->setPublic(TRUE);
 
     $container->setDefinition('cache_config', new Definition('ArrayObject'))
-      ->setFactory([new Reference(self::SELF), 'createCacheConfig']);
+      ->setFactory([new Reference(self::SELF), 'createCacheConfig'])->setPublic(TRUE);
 
     $container->setDefinition('civi.mailing.triggers', new Definition(
       'Civi\Core\SqlTrigger\TimestampTriggers',
       ['civicrm_mailing', 'Mailing']
-    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo']);
+    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo'])->setPublic(TRUE);
 
     $container->setDefinition('civi.activity.triggers', new Definition(
       'Civi\Core\SqlTrigger\TimestampTriggers',
       ['civicrm_activity', 'Activity']
-    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo']);
+    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo'])->setPublic(TRUE);
 
     $container->setDefinition('civi.case.triggers', new Definition(
       'Civi\Core\SqlTrigger\TimestampTriggers',
       ['civicrm_case', 'Case']
-    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo']);
+    ))->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo'])->setPublic(TRUE);
 
     $container->setDefinition('civi.case.staticTriggers', new Definition(
       'Civi\Core\SqlTrigger\StaticTriggers',
@@ -292,27 +291,24 @@ class Container {
         ],
       ]
     ))
-      ->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo']);
+      ->addTag('kernel.event_listener', ['event' => 'hook_civicrm_triggerInfo', 'method' => 'onTriggerInfo'])->setPublic(TRUE);
 
     $container->setDefinition('civi_token_compat', new Definition(
       'Civi\Token\TokenCompatSubscriber',
       []
-    ))->addTag('kernel.event_subscriber');
+    ))->addTag('kernel.event_subscriber')->setPublic(TRUE);
     $container->setDefinition("crm_mailing_action_tokens", new Definition(
       "CRM_Mailing_ActionTokens",
       []
-    ))->addTag('kernel.event_subscriber');
+    ))->addTag('kernel.event_subscriber')->setPublic(TRUE);
 
     foreach (['Activity', 'Contribute', 'Event', 'Mailing', 'Member'] as $comp) {
       $container->setDefinition("crm_" . strtolower($comp) . "_tokens", new Definition(
         "CRM_{$comp}_Tokens",
         []
-      ))->addTag('kernel.event_subscriber');
+      ))->addTag('kernel.event_subscriber')->setPublic(TRUE);
     }
 
-    if (\CRM_Utils_Constant::value('CIVICRM_FLEXMAILER_HACK_SERVICES')) {
-      \Civi\Core\Resolver::singleton()->call(CIVICRM_FLEXMAILER_HACK_SERVICES, [$container]);
-    }
     \CRM_Api4_Services::hook_container($container);
 
     \CRM_Utils_Hook::container($container);
@@ -329,14 +325,20 @@ class Container {
 
   /**
    * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
-   * @return \Symfony\Component\EventDispatcher\ContainerAwareEventDispatcher
+   * @return \Symfony\Component\EventDispatcher\EventDispatcher
    */
   public function createEventDispatcher($container) {
-    $dispatcher = new CiviEventDispatcher($container);
-    $dispatcher->addListener(SystemInstallEvent::EVENT_NAME, ['\Civi\Core\InstallationCanary', 'check']);
-    $dispatcher->addListener(SystemInstallEvent::EVENT_NAME, ['\Civi\Core\DatabaseInitializer', 'initialize']);
-    $dispatcher->addListener(SystemInstallEvent::EVENT_NAME, ['\Civi\Core\LocalizationInitializer', 'initialize']);
+    $dispatcher = new CiviEventDispatcher();
+    if (\CRM_Core_Config::isUpgradeMode()) {
+      $dispatcher->setDispatchPolicy(\CRM_Upgrade_DispatchPolicy::get('upgrade.main'));
+    }
+
+    $dispatcher->addListener('civi.core.install', ['\Civi\Core\InstallationCanary', 'check']);
+    $dispatcher->addListener('civi.core.install', ['\Civi\Core\DatabaseInitializer', 'initialize']);
+    $dispatcher->addListener('civi.core.install', ['\Civi\Core\LocalizationInitializer', 'initialize']);
+    $dispatcher->addListener('hook_civicrm_post', ['\CRM_Core_Transaction', 'addPostCommit'], -1000);
     $dispatcher->addListener('hook_civicrm_pre', ['\Civi\Core\Event\PreEvent', 'dispatchSubevent'], 100);
+    $dispatcher->addListener('civi.dao.preDelete', ['\CRM_Core_BAO_EntityTag', 'preDeleteOtherEntity']);
     $dispatcher->addListener('hook_civicrm_post', ['\Civi\Core\Event\PostEvent', 'dispatchSubevent'], 100);
     $dispatcher->addListener('hook_civicrm_post::Activity', ['\Civi\CCase\Events', 'fireCaseChange']);
     $dispatcher->addListener('hook_civicrm_post::Case', ['\Civi\CCase\Events', 'fireCaseChange']);
@@ -352,6 +354,7 @@ class Container {
     $dispatcher->addListener('hook_civicrm_buildAsset', ['\CRM_Core_Resources', 'renderMenubarStylesheet']);
     $dispatcher->addListener('hook_civicrm_coreResourceList', ['\CRM_Utils_System', 'appendCoreResources']);
     $dispatcher->addListener('hook_civicrm_getAssetUrl', ['\CRM_Utils_System', 'alterAssetUrl']);
+    $dispatcher->addListener('hook_civicrm_alterExternUrl', ['\CRM_Utils_System', 'migrateExternUrl'], 1000);
     $dispatcher->addListener('civi.dao.postInsert', ['\CRM_Core_BAO_RecurringEntity', 'triggerInsert']);
     $dispatcher->addListener('civi.dao.postUpdate', ['\CRM_Core_BAO_RecurringEntity', 'triggerUpdate']);
     $dispatcher->addListener('civi.dao.postDelete', ['\CRM_Core_BAO_RecurringEntity', 'triggerDelete']);
@@ -359,16 +362,12 @@ class Container {
       'CRM_Core_LegacyErrorHandler',
       'handleException',
     ], -200);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Activity_ActionMapping', 'onRegisterActionMappings']);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Contact_ActionMapping', 'onRegisterActionMappings']);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Contribute_ActionMapping_ByPage', 'onRegisterActionMappings']);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Contribute_ActionMapping_ByType', 'onRegisterActionMappings']);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Event_ActionMapping', 'onRegisterActionMappings']);
-    $dispatcher->addListener(\Civi\ActionSchedule\Events::MAPPINGS, ['CRM_Member_ActionMapping', 'onRegisterActionMappings']);
-
-    if (\CRM_Utils_Constant::value('CIVICRM_FLEXMAILER_HACK_LISTENERS')) {
-      \Civi\Core\Resolver::singleton()->call(CIVICRM_FLEXMAILER_HACK_LISTENERS, [$dispatcher]);
-    }
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Activity_ActionMapping', 'onRegisterActionMappings']);
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Contact_ActionMapping', 'onRegisterActionMappings']);
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Contribute_ActionMapping_ByPage', 'onRegisterActionMappings']);
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Contribute_ActionMapping_ByType', 'onRegisterActionMappings']);
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Event_ActionMapping', 'onRegisterActionMappings']);
+    $dispatcher->addListener('civi.actionSchedule.getMappings', ['CRM_Member_ActionMapping', 'onRegisterActionMappings']);
 
     return $dispatcher;
   }
@@ -411,7 +410,7 @@ class Container {
       \CRM_Utils_API_ReloadOption::singleton(),
       \CRM_Utils_API_MatchOption::singleton(),
     ]));
-    $dispatcher->addSubscriber(new \Civi\API\Subscriber\XDebugSubscriber());
+    $dispatcher->addSubscriber(new \Civi\API\Subscriber\DebugSubscriber());
     $kernel = new \Civi\API\Kernel($dispatcher);
 
     $reflectionProvider = new \Civi\API\Provider\ReflectionProvider($kernel);

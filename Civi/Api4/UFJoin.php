@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -24,6 +22,7 @@ namespace Civi\Api4;
 /**
  * UFJoin entity - links profiles to the components/extensions they are used for.
  *
+ * @see \Civi\Api4\UFGroup
  * @package Civi\Api4
  */
 class UFJoin extends Generic\DAOEntity {

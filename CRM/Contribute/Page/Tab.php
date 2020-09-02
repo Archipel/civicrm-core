@@ -86,7 +86,11 @@ class CRM_Contribute_Page_Tab extends CRM_Core_Page {
           ];
         }
 
-        if (!$paymentProcessorObj->supports('ChangeSubscriptionAmount') && !$paymentProcessorObj->supports('EditRecurringContribution')) {
+        if (
+        (!CRM_Core_Permission::check('edit contributions') && $context === 'contribution') ||
+        (!$paymentProcessorObj->supports('ChangeSubscriptionAmount')
+          && !$paymentProcessorObj->supports('EditRecurringContribution')
+        )) {
           unset($links[CRM_Core_Action::UPDATE]);
         }
       }
@@ -194,7 +198,7 @@ class CRM_Contribute_Page_Tab extends CRM_Core_Page {
         'contribution_status_id' => ['NOT IN' => CRM_Contribute_BAO_ContributionRecur::getInactiveStatuses()],
         'options' => ['limit' => 0, 'sort' => 'is_test, start_date DESC'],
       ]);
-      $recurContributions = CRM_Utils_Array::value('values', $contributionRecurResult);
+      $recurContributions = $contributionRecurResult['values'] ?? NULL;
     }
     catch (Exception $e) {
       $recurContributions = [];
@@ -216,7 +220,7 @@ class CRM_Contribute_Page_Tab extends CRM_Core_Page {
         'contribution_status_id' => ['IN' => CRM_Contribute_BAO_ContributionRecur::getInactiveStatuses()],
         'options' => ['limit' => 0, 'sort' => 'is_test, start_date DESC'],
       ]);
-      $recurContributions = CRM_Utils_Array::value('values', $contributionRecurResult);
+      $recurContributions = $contributionRecurResult['values'] ?? NULL;
     }
     catch (Exception $e) {
       $recurContributions = NULL;

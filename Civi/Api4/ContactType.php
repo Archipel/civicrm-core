@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -30,6 +28,8 @@ namespace Civi\Api4;
  *
  * Creating a new contact type requires at minimum a label and parent_id.
  *
+ * @see https://docs.civicrm.org/user/en/latest/organising-your-data/contacts/#contact-subtypes
+ * @see \Civi\Api4\Contact
  * @package Civi\Api4
  */
 class ContactType extends Generic\DAOEntity {

@@ -57,7 +57,7 @@ trait CustomValueActionTrait {
     $result = [];
     $fields = $this->entityFields();
     foreach ($items as $item) {
-      FormattingUtil::formatWriteParams($item, $this->getEntityName(), $fields);
+      FormattingUtil::formatWriteParams($item, $fields);
 
       // Convert field names to custom_xx format
       foreach ($fields as $name => $field) {
@@ -76,7 +76,7 @@ trait CustomValueActionTrait {
    * @inheritDoc
    */
   protected function deleteObjects($items) {
-    $customTable = CoreUtil::getCustomTableByName($this->getCustomGroup());
+    $customTable = CoreUtil::getTableName($this->getEntityName());
     $ids = [];
     foreach ($items as $item) {
       \CRM_Utils_Hook::pre('delete', $this->getEntityName(), $item['id'], \CRM_Core_DAO::$_nullArray);

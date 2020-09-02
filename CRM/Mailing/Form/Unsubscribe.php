@@ -16,6 +16,14 @@
  */
 class CRM_Mailing_Form_Unsubscribe extends CRM_Core_Form {
 
+  /**
+   * Prevent people double-submitting the form (e.g. by double-clicking).
+   * https://lab.civicrm.org/dev/core/-/issues/1773
+   *
+   * @var bool
+   */
+  public $submitOnce = TRUE;
+
   public function preProcess() {
 
     $this->_type = 'unsubscribe';
@@ -121,7 +129,6 @@ class CRM_Mailing_Form_Unsubscribe extends CRM_Core_Form {
       CRM_Core_Session::setStatus($statusMsg, '', 'error');
 
     }
-
   }
 
 }

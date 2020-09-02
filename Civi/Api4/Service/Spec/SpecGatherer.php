@@ -14,7 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
  *
  */
 
@@ -33,16 +32,9 @@ class SpecGatherer {
   protected $specProviders = [];
 
   /**
-   * A cache of DAOs based on entity
-   *
-   * @var \CRM_Core_DAO[]
-   */
-  protected $DAONames;
-
-  /**
    * Returns a RequestSpec with all the fields available. Uses spec providers
    * to add or modify field specifications.
-   * For an example @see CustomFieldSpecProvider.
+   * @see \Civi\Api4\Service\Spec\Provider\CustomFieldCreationSpecProvider
    *
    * @param string $entity
    * @param string $action
@@ -117,21 +109,30 @@ class SpecGatherer {
   }
 
   /**
+   * Get custom fields that extend this entity
+   *
+   * @see \CRM_Core_SelectValues::customGroupExtends
+   *
    * @param string $entity
    * @param \Civi\Api4\Service\Spec\RequestSpec $specification
    * @param array $values
    * @throws \API_Exception
    */
   private function addCustomFields($entity, RequestSpec $specification, $values = []) {
+    // Custom_group.extends pretty much maps 1-1 with entity names, except for a couple oddballs (Contact, Participant).
     $extends = [$entity];
     if ($entity === 'Contact') {
-      $extends = !empty($values['contact_type']) ? [$values['contact_type'], 'Contact'] : ['Contact', 'Individual', 'Organization', 'Household'];
+      $contactType = !empty($values['contact_type']) ? [$values['contact_type']] : \CRM_Contact_BAO_ContactType::basicTypes();
+      $extends = array_merge(['Contact'], $contactType);
+    }
+    if ($entity === 'Participant') {
+      $extends = ['Participant', 'ParticipantRole', 'ParticipantEventName', 'ParticipantEventType'];
     }
     $customFields = CustomField::get()
       ->setCheckPermissions(FALSE)
       ->addWhere('custom_group.extends', 'IN', $extends)
       ->addWhere('custom_group.is_multiple', '=', '0')
-      ->setSelect(['custom_group.name', 'custom_group_id', 'name', 'label', 'data_type', 'html_type', 'is_searchable', 'is_search_range', 'weight', 'is_active', 'is_view', 'option_group_id', 'default_value', 'date_format', 'time_format', 'start_date_years', 'end_date_years', 'help_pre', 'help_post'])
+      ->setSelect(['custom_group.name', '*'])
       ->execute();
 
     foreach ($customFields as $fieldArray) {
@@ -146,8 +147,9 @@ class SpecGatherer {
    */
   private function getCustomGroupFields($customGroup, RequestSpec $specification) {
     $customFields = CustomField::get()
+      ->setCheckPermissions(FALSE)
       ->addWhere('custom_group.name', '=', $customGroup)
-      ->setSelect(['custom_group.name', 'custom_group_id', 'name', 'label', 'data_type', 'html_type', 'is_searchable', 'is_search_range', 'weight', 'is_active', 'is_view', 'option_group_id', 'default_value', 'custom_group.table_name', 'column_name', 'date_format', 'time_format', 'start_date_years', 'end_date_years', 'help_pre', 'help_post'])
+      ->setSelect(['custom_group.name', 'custom_group.table_name', '*'])
       ->execute();
 
     foreach ($customFields as $fieldArray) {
@@ -164,7 +166,7 @@ class SpecGatherer {
   private function getDAOFields($entityName) {
     $bao = CoreUtil::getBAOFromApiName($entityName);
 
-    return $bao::fields();
+    return $bao::getSupportedFields();
   }
 
 }

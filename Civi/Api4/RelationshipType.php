@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -23,6 +21,8 @@ namespace Civi\Api4;
 
 /**
  * RelationshipType entity.
+ *
+ * @see \Civi\Api4\Relationship
  *
  * @package Civi\Api4
  */

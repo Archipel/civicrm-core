@@ -24,10 +24,12 @@ class CRM_Contact_Page_Inline_CommunicationPreferences extends CRM_Core_Page {
    * Run the page.
    *
    * This method is called after the page is created.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function run() {
     // get the emails for this contact
-    $contactId = CRM_Utils_Request::retrieve('cid', 'Positive', CRM_Core_DAO::$_nullObject, TRUE, NULL, $_REQUEST);
+    $contactId = CRM_Utils_Request::retrieve('cid', 'Positive', CRM_Core_DAO::$_nullObject, TRUE);
 
     $params = ['id' => $contactId];
 
@@ -38,7 +40,7 @@ class CRM_Contact_Page_Inline_CommunicationPreferences extends CRM_Core_Page {
     $communicationStyle = CRM_Core_PseudoConstant::get('CRM_Contact_DAO_Contact', 'communication_style_id');
     if (!empty($communicationStyle)) {
       if (!empty($defaults['communication_style_id'])) {
-        $defaults['communication_style_display'] = $communicationStyle[CRM_Utils_Array::value('communication_style_id', $defaults)];
+        $defaults['communication_style_display'] = $communicationStyle[$defaults['communication_style_id']];
       }
       else {
         // Make sure the field is displayed as long as it is active, even if it is unset for this contact.

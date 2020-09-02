@@ -131,7 +131,7 @@ class CRM_Core_Form_Task_PDFLetterCommon {
 
     $form->assign('useThisPageFormat', ts('Always use this Page Format with the new template?'));
     $form->assign('useSelectedPageFormat', ts('Should the new template always use the selected Page Format?'));
-    $form->assign('totalSelectedContacts', count($form->_contactIds));
+    $form->assign('totalSelectedContacts', !is_null($form->_contactIds) ? count($form->_contactIds) : 0);
 
     $form->add('select', 'document_type', ts('Document Type'), CRM_Core_SelectValues::documentFormat());
 
@@ -219,9 +219,16 @@ class CRM_Core_Form_Task_PDFLetterCommon {
 
   /**
    * Handle the template processing part of the form
+   *
+   * @param array $formValues
+   *
+   * @return string $html_message
+   *
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
   public static function processTemplate(&$formValues) {
-    $html_message = CRM_Utils_Array::value('html_message', $formValues);
+    $html_message = $formValues['html_message'] ?? NULL;
 
     // process message template
     if (!empty($formValues['saveTemplate']) || !empty($formValues['updateTemplate'])) {
@@ -318,6 +325,59 @@ class CRM_Core_Form_Task_PDFLetterCommon {
       $m = implode($newLineOperators['br']['oper'], $messages);
     }
     $message = implode($newLineOperators['p']['oper'], $htmlMsg);
+  }
+
+  /**
+   * Render html from rows
+   *
+   * @param $rows
+   * @param string $msgPart
+   *   The name registered with the TokenProcessor
+   * @param array $formValues
+   *   The values submitted through the form
+   *
+   * @return array
+   *   If formValues['is_unit_test'] is true, otherwise outputs document to browser
+   */
+  public static function renderFromRows($rows, $msgPart, $formValues) {
+    $html = [];
+    foreach ($rows as $row) {
+      $html[] = $row->render($msgPart);
+    }
+
+    if (!empty($formValues['is_unit_test'])) {
+      return $html;
+    }
+
+    if (!empty($html)) {
+      self::outputFromHtml($formValues, $html);
+    }
+  }
+
+  /**
+   * List the available tokens
+   * @return array of token name => label
+   */
+  public static function listTokens() {
+    $class = get_called_class();
+    if (method_exists($class, 'createTokenProcessor')) {
+      return $class::createTokenProcessor()->listTokens();
+    }
+  }
+
+  /**
+   * Output the pdf or word document from the generated html.
+   *
+   * @param array $formValues
+   * @param array $html
+   */
+  protected static function outputFromHtml($formValues, array $html) {
+    if ($formValues['document_type'] === 'pdf') {
+      CRM_Utils_PDF_Utils::html2pdf($html, 'CiviLetter.pdf', FALSE, $formValues);
+    }
+    else {
+      CRM_Utils_PDF_Document::html2doc($html, 'CiviLetter.' . $formValues['document_type'], $formValues);
+    }
   }
 
 }

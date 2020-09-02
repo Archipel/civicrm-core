@@ -536,6 +536,7 @@ class CRM_Member_Form_MembershipTest extends CiviUnitTestCase {
    *  Check if the related contribuion is also updated if the minimum_fee didn't match
    *
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function testContributionUpdateOnMembershipTypeChange() {
     // Step 1: Create a Membership via backoffice whose with 50.00 payment
@@ -1304,28 +1305,21 @@ Expires: ',
    * @throws \CiviCRM_API3_Exception
    */
   public function testContributionFormStatusUpdate() {
-    $form = new CRM_Contribute_Form_Contribution();
 
-    //Create a membership with status = 'New'.
     $this->_individualId = $this->createLoggedInUser();
-    $memParams = [
+    $membershipId = $this->contactMembershipCreate([
       'contact_id' => $this->_individualId,
       'membership_type_id' => $this->membershipTypeAnnualFixedID,
-      'status_id' => array_search('New', CRM_Member_PseudoConstant::membershipStatus()),
-    ];
-    $cancelledStatusId = $this->callAPISuccessGetValue('OptionValue', [
-      'return' => 'value',
-      'option_group_id' => 'contribution_status',
-      'name' => 'Cancelled',
+      'status_id' => 'New',
     ]);
+
     $params = [
       'total_amount' => 50,
       'financial_type_id' => 2,
       'contact_id' => $this->_individualId,
-      'payment_instrument_id' => array_search('Check', $this->paymentInstruments),
-      'contribution_status_id' => $cancelledStatusId,
+      'payment_instrument_id' => CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'payment_instrument_id', 'Check'),
+      'contribution_status_id' => CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Cancelled'),
     ];
-    $membershipId = $this->contactMembershipCreate($memParams);
 
     $contriParams = [
       'membership_id' => $membershipId,
@@ -1336,6 +1330,7 @@ Expires: ',
     $contribution = CRM_Member_BAO_Membership::recordMembershipContribution($contriParams);
 
     //Update Contribution to Cancelled.
+    $form = new CRM_Contribute_Form_Contribution();
     $form->_id = $params['id'] = $contribution->id;
     $form->_mode = NULL;
     $form->_contactID = $this->_individualId;
@@ -1345,8 +1340,8 @@ Expires: ',
     //Assert membership status overrides when the contribution cancelled.
     $this->assertEquals($membership['is_override'], TRUE);
     $this->assertEquals($membership['status_id'], $this->callAPISuccessGetValue('MembershipStatus', [
-      'return' => "id",
-      'name' => "Cancelled",
+      'return' => 'id',
+      'name' => 'Cancelled',
     ]));
   }
 
@@ -1436,10 +1431,6 @@ Expires: ',
       $financialItems_sum += $financialItem['amount'];
     }
     $this->assertEquals($contribution['total_amount'], $financialItems_sum);
-
-    // reset the price options static variable so not leave any dummy data, that might hamper other unit tests
-    \Civi::$statics['CRM_Price_BAO_PriceField']['priceOptions'] = NULL;
-    $this->disableTaxAndInvoicing();
   }
 
   /**
@@ -1457,7 +1448,7 @@ Expires: ',
     $this->createLoggedInUser();
     $membershipTypeAnnualRolling = $this->callAPISuccess('membership_type', 'create', [
       'domain_id' => 1,
-      'name' => "AnnualRollingNew",
+      'name' => 'AnnualRollingNew',
       'member_of_contact_id' => 23,
       'duration_unit' => "year",
       'minimum_fee' => 50,

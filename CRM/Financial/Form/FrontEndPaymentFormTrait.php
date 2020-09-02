@@ -21,11 +21,70 @@
 trait CRM_Financial_Form_FrontEndPaymentFormTrait {
 
   /**
+   * Is pay later enabled on this form?
+   *
+   * @var bool
+   */
+  protected $isPayLater = FALSE;
+
+  /**
    * The label for the pay later pseudoprocessor option.
    *
    * @var string
    */
   protected $payLaterLabel;
+
+  /**
+   * Is this a back office form
+   *
+   * @var bool
+   */
+  public $isBackOffice = FALSE;
+
+  /**
+   * The payment mode that we are in ("live" or "test")
+   * This should be protected and retrieved via getPaymentMode() but it's accessed all over the place so we have to leave it public for now.
+   *
+   * @var string
+   */
+  public $_mode;
+
+  /**
+   * @return bool
+   */
+  public function isPayLater() {
+    return $this->isPayLater;
+  }
+
+  /**
+   * @param bool $isPayLater
+   */
+  public function setIsPayLater($isPayLater) {
+    $this->isPayLater = $isPayLater;
+  }
+
+  /**
+   * @return bool
+   */
+  public function getIsBackOffice() {
+    return $this->isBackOffice;
+  }
+
+  /**
+   * Get the payment mode ('live' or 'test')
+   *
+   * @return string
+   */
+  public function getPaymentMode() {
+    return $this->_mode;
+  }
+
+  /**
+   * Set the payment mode ('live' or 'test')
+   */
+  public function setPaymentMode() {
+    $this->_mode = ($this->_action === CRM_Core_Action::PREVIEW) ? 'test' : 'live';
+  }
 
   /**
    * @return string
@@ -97,13 +156,51 @@ trait CRM_Financial_Form_FrontEndPaymentFormTrait {
     $pps = [];
     if (!empty($this->_paymentProcessors)) {
       foreach ($this->_paymentProcessors as $key => $processor) {
-        $pps[$key] = $processor['title'] ?? $processor['name'];
+        $pps[$key] = $this->getPaymentProcessorTitle($processor);
       }
     }
     if ($this->getPayLaterLabel()) {
       $pps[0] = $this->getPayLaterLabel();
     }
     return $pps;
+  }
+
+  /**
+   * Get the title of the payment processor to display to the user
+   * Note: There is an identical function in CRM_Core_Payment
+   *
+   * @param array $processor
+   *
+   * @return string
+   */
+  protected function getPaymentProcessorTitle($processor) {
+    return $processor['title'] ?? $processor['name'];
+  }
+
+  /**
+   * Adds in either a set of radio buttons or hidden fields to contain the payment processors on a front end form
+   */
+  protected function addPaymentProcessorFieldsToForm() {
+    $paymentProcessors = $this->getProcessors();
+    $optAttributes = [];
+    foreach ($paymentProcessors as $ppKey => $ppval) {
+      if ($ppKey > 0) {
+        $optAttributes[$ppKey]['class'] = 'payment_processor_' . strtolower($this->_paymentProcessors[$ppKey]['payment_processor_type']);
+      }
+      else {
+        $optAttributes[$ppKey]['class'] = 'payment_processor_paylater';
+      }
+    }
+    if (count($paymentProcessors) > 1) {
+      $this->addRadio('payment_processor_id', ts('Payment Method'), $paymentProcessors,
+        NULL, "&nbsp;", FALSE, $optAttributes
+      );
+    }
+    elseif (!empty($paymentProcessors)) {
+      $ppKeys = array_keys($paymentProcessors);
+      $currentPP = array_pop($ppKeys);
+      $this->addElement('hidden', 'payment_processor_id', $currentPP);
+    }
   }
 
 }

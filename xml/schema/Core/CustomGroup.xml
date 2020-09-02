@@ -94,7 +94,7 @@
   </field>
   <field>
     <name>collapse_display</name>
-    <type>int unsigned</type>
+    <type>boolean</type>
     <title>Collapse Custom Group?</title>
     <default>0</default>
     <comment>Will this group be in collapsed or expanded mode on initial display ?</comment>
@@ -174,7 +174,7 @@
   </field>
   <field>
     <name>collapse_adv_display</name>
-    <type>int unsigned</type>
+    <type>boolean</type>
     <title>Collapse Group Display</title>
     <default>0</default>
     <comment>Will this group be in collapsed or expanded mode on advanced search display ?</comment>
@@ -230,5 +230,14 @@
     <default>1</default>
     <comment>Is this property public?</comment>
     <add>4.7</add>
+  </field>
+  <field>
+    <name>icon</name>
+    <title>Icon</title>
+    <type>varchar</type>
+    <length>255</length>
+    <default>NULL</default>
+    <comment>crm-i icon class</comment>
+    <add>5.28</add>
   </field>
 </table>

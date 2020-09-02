@@ -74,6 +74,9 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
    *
    * @return array
    *   the values of the posted saved search used as default values in various Search Form
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public static function getFormValues($id) {
     $specialDateFields = [
@@ -82,7 +85,7 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
     ];
 
     $fv = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_SavedSearch', $id, 'form_values');
-    $result = NULL;
+    $result = [];
     if ($fv) {
       // make sure u CRM_Utils_String::unserialize - since it's stored in serialized form
       $result = CRM_Utils_String::unserialize($fv);
@@ -91,11 +94,11 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
     $specialFields = ['contact_type', 'group', 'contact_tags', 'member_membership_type_id', 'member_status_id'];
     foreach ($result as $element => $value) {
       if (CRM_Contact_BAO_Query::isAlreadyProcessedForQueryFormat($value)) {
-        $id = CRM_Utils_Array::value(0, $value);
-        $value = CRM_Utils_Array::value(2, $value);
+        $id = $value[0] ?? NULL;
+        $value = $value[2] ?? NULL;
         if (is_array($value) && in_array(key($value), CRM_Core_DAO::acceptedSQLOperators(), TRUE)) {
           $op = key($value);
-          $value = CRM_Utils_Array::value($op, $value);
+          $value = $value[$op] ?? NULL;
           if (in_array($op, ['BETWEEN', '>=', '<='])) {
             self::decodeRelativeFields($result, $id, $op, $value);
             unset($result[$element]);
@@ -147,7 +150,7 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
         // As per the OK (Operator as Key) value format, value array may contain key
         // as an operator so to ensure the default is always set actual value
         elseif (in_array(key($value), CRM_Core_DAO::acceptedSQLOperators(), TRUE)) {
-          $result[$element] = CRM_Utils_Array::value(key($value), $value);
+          $result[$element] = $value[key($value)] ?? NULL;
           if (is_string($result[$element])) {
             $result[$element] = str_replace("%", '', $result[$element]);
           }
@@ -200,11 +203,22 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
    * @param int $id
    *
    * @return array
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public static function getSearchParams($id) {
+    $savedSearch = \Civi\Api4\SavedSearch::get()
+      ->setCheckPermissions(FALSE)
+      ->addWhere('id', '=', $id)
+      ->execute()
+      ->first();
+    if ($savedSearch['api_entity']) {
+      return $savedSearch;
+    }
     $fv = self::getFormValues($id);
     //check if the saved search has mapping id
-    if (CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_SavedSearch', $id, 'mapping_id')) {
+    if ($savedSearch['mapping_id']) {
       return CRM_Core_BAO_Mapping::formattedFields($fv);
     }
     elseif (!empty($fv['customSearchID'])) {
@@ -330,20 +344,7 @@ LEFT JOIN civicrm_email ON (contact_a.id = civicrm_email.contact_id AND civicrm_
    */
   public static function create(&$params) {
     $savedSearch = new CRM_Contact_DAO_SavedSearch();
-    if (isset($params['formValues']) &&
-      !empty($params['formValues'])
-    ) {
-      $savedSearch->form_values = serialize($params['formValues']);
-    }
-    else {
-      $savedSearch->form_values = NULL;
-    }
-
-    $savedSearch->is_active = CRM_Utils_Array::value('is_active', $params, 1);
-    $savedSearch->mapping_id = CRM_Utils_Array::value('mapping_id', $params, 'null');
-    $savedSearch->custom_search_id = CRM_Utils_Array::value('custom_search_id', $params, 'null');
-    $savedSearch->id = CRM_Utils_Array::value('id', $params, NULL);
-
+    $savedSearch->copyValues($params);
     $savedSearch->save();
 
     return $savedSearch;

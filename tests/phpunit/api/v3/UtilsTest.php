@@ -82,6 +82,51 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
     $this->assertTrue($this->runPermissionCheck('contact', 'create', $params), 'permission check should be skippable');
   }
 
+  public function getCamelCaseFuncs() {
+    // There have been two slightly different functions for normalizing names;
+    // _civicrm_api_get_camel_name() and \Civi\API\Request::normalizeEntityName().
+    return [
+      // These are the typical cases - where the two have always agreed.
+      ['Foo', 'Foo'],
+      ['foo', 'Foo'],
+      ['FooBar', 'FooBar'],
+      ['foo_bar', 'FooBar'],
+      ['fooBar', 'FooBar'],
+      ['Im', 'Im'],
+      ['ACL', 'Acl'],
+      ['HTTP', 'HTTP'],
+
+      // These are some atypical cases - where the two have always agreed.
+      ['foo__bar', 'FooBar'],
+      ['Foo_Bar', 'FooBar'],
+      ['one_two_three', 'OneTwoThree'],
+      ['oneTwo_three', 'OneTwoThree'],
+      ['Got2B', 'Got2B'],
+      ['got2_BGood', 'Got2BGood'],
+
+      // These are some atypical cases - where they have traditionally disagreed.
+      // _civicrm_api_get_camel_name() has now changed to match normalizeEntityName()
+      // because the latter is more defensive.
+      ['Foo-Bar', 'FooBar'],
+      ['Foo+Bar', 'FooBar'],
+      ['Foo.Bar', 'FooBar'],
+      ['Foo/../Bar/', 'FooBar'],
+      ['./Foo', 'Foo'],
+    ];
+  }
+
+  /**
+   * @param string $inputValue
+   *   The user-supplied/untrusted entity name.
+   * @param string $expectValue
+   *   The normalized/UpperCamelCase entity name.
+   * @dataProvider getCamelCaseFuncs
+   */
+  public function testCamelName($inputValue, $expectValue) {
+    $actualValue = _civicrm_api_get_camel_name($inputValue);
+    $this->assertEquals($expectValue, $actualValue);
+  }
+
   /**
    * @param string $entity
    * @param string $action
@@ -95,10 +140,11 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
    *   TRUE or FALSE depending on the outcome of the authorization check
    */
   public function runPermissionCheck($entity, $action, $params, $throws = FALSE) {
+    $params['version'] = 3;
     $dispatcher = new \Symfony\Component\EventDispatcher\EventDispatcher();
     $dispatcher->addSubscriber(new \Civi\API\Subscriber\PermissionCheck());
     $kernel = new \Civi\API\Kernel($dispatcher);
-    $apiRequest = \Civi\API\Request::create($entity, $action, $params, NULL);
+    $apiRequest = \Civi\API\Request::create($entity, $action, $params);
     try {
       $kernel->authorize(NULL, $apiRequest);
       return TRUE;
@@ -366,18 +412,18 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
     });
     $kernel->registerApiProvider($provider);
 
-    $r1 = $kernel->run('Widget', 'get', $params);
+    $r1 = $kernel->runSafe('Widget', 'get', $params);
     $this->assertEquals(count($resultIds), $r1['count']);
     $this->assertEquals($resultIds, array_keys($r1['values']));
     $this->assertEquals($resultIds, array_values(CRM_Utils_Array::collect('snack_id', $r1['values'])));
     $this->assertEquals($resultIds, array_values(CRM_Utils_Array::collect('id', $r1['values'])));
 
-    $r2 = $kernel->run('Widget', 'get', $params + ['sequential' => 1]);
+    $r2 = $kernel->runSafe('Widget', 'get', $params + ['sequential' => 1]);
     $this->assertEquals(count($resultIds), $r2['count']);
     $this->assertEquals($resultIds, array_values(CRM_Utils_Array::collect('snack_id', $r2['values'])));
     $this->assertEquals($resultIds, array_values(CRM_Utils_Array::collect('id', $r2['values'])));
 
-    $r3 = $kernel->run('Widget', 'get', $params + ['options' => ['offset' => 1, 'limit' => 2]]);
+    $r3 = $kernel->runSafe('Widget', 'get', $params + ['options' => ['offset' => 1, 'limit' => 2]]);
     $slice = array_slice($resultIds, 1, 2);
     $this->assertEquals(count($slice), $r3['count']);
     $this->assertEquals($slice, array_values(CRM_Utils_Array::collect('snack_id', $r3['values'])));
@@ -398,7 +444,7 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
     });
     $kernel->registerApiProvider($provider);
 
-    $r1 = $kernel->run('Widget', 'get', [
+    $r1 = $kernel->runSafe('Widget', 'get', [
       'version' => 3,
       'snack_id' => 'b',
       'return' => 'fruit',
@@ -406,7 +452,7 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
     $this->assertAPISuccess($r1);
     $this->assertEquals(['b' => ['id' => 'b', 'fruit' => 'grape']], $r1['values']);
 
-    $r2 = $kernel->run('Widget', 'get', [
+    $r2 = $kernel->runSafe('Widget', 'get', [
       'version' => 3,
       'snack_id' => 'b',
       'return' => ['fruit', 'cheese'],
@@ -414,7 +460,7 @@ class api_v3_UtilsTest extends CiviUnitTestCase {
     $this->assertAPISuccess($r2);
     $this->assertEquals(['b' => ['id' => 'b', 'fruit' => 'grape', 'cheese' => 'cheddar']], $r2['values']);
 
-    $r3 = $kernel->run('Widget', 'get', [
+    $r3 = $kernel->runSafe('Widget', 'get', [
       'version' => 3,
       'cheese' => 'cheddar',
       'return' => ['fruit'],

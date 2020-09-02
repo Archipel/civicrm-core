@@ -23,6 +23,7 @@ namespace api\v4\Action;
 
 use api\v4\UnitTestCase;
 use Civi\Api4\Activity;
+use Civi\Api4\Contact;
 
 /**
  * @group headless
@@ -50,16 +51,34 @@ class ComplexQueryTest extends UnitTestCase {
   public function testGetAllHousingSupportActivities() {
     $results = Activity::get()
       ->setCheckPermissions(FALSE)
-      ->addWhere('activity_type.name', '=', 'Phone Call')
+      ->addWhere('activity_type_id:name', '=', 'Phone Call')
       ->execute();
 
     $this->assertGreaterThan(0, count($results));
   }
 
   /**
-   * Fetch all activities with a blue tag; and return all tags on the activities
+   *
    */
-  public function testGetAllTagsForBlueTaggedActivities() {
+  public function testGetWithCount() {
+    $myName = uniqid('count');
+    for ($i = 1; $i <= 20; ++$i) {
+      Contact::create()
+        ->addValue('first_name', "Contact $i")
+        ->addValue('last_name', $myName)
+        ->setCheckPermissions(FALSE)->execute();
+    }
+
+    $get1 = Contact::get()
+      ->addWhere('last_name', '=', $myName)
+      ->selectRowCount()
+      ->addSelect('first_name')
+      ->setLimit(10)
+      ->setDebug(TRUE)
+      ->setCheckPermissions(FALSE)->execute();
+
+    $this->assertEquals(20, $get1->count());
+    $this->assertCount(10, (array) $get1);
 
   }
 

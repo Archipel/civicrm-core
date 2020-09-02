@@ -38,7 +38,7 @@ class CRM_Contact_Form_Search_Advanced extends CRM_Contact_Form_Search {
   public function buildQuickForm() {
     $this->set('context', 'advanced');
 
-    $this->_searchPane = CRM_Utils_Array::value('searchPane', $_GET);
+    $this->_searchPane = $_GET['searchPane'] ?? NULL;
 
     $this->_searchOptions = CRM_Core_BAO_Setting::valueOptions(CRM_Core_BAO_Setting::SYSTEM_PREFERENCES_NAME,
       'advanced_search_options'
@@ -116,7 +116,7 @@ class CRM_Contact_Form_Search_Advanced extends CRM_Contact_Form_Search {
 
       // see if we need to include this paneName in the current form
       if ($this->_searchPane == $type || !empty($_POST["hidden_{$type}"]) ||
-        CRM_Utils_Array::value("hidden_{$type}", $this->_formValues)
+        !empty($this->_formValues["hidden_{$type}"])
       ) {
         $allPanes[$name]['open'] = 'true';
 
@@ -190,6 +190,14 @@ class CRM_Contact_Form_Search_Advanced extends CRM_Contact_Form_Search {
       'operator' => 'AND',
     ], $defaults);
     $this->normalizeDefaultValues($defaults);
+
+    //991/Subtypes not respected when editing smart group criteria
+    if (!empty($defaults['contact_type']) && !empty($this->_formValues['contact_sub_type'])) {
+      foreach ($this->_formValues['contact_sub_type'] as $subtype) {
+        $basicType = CRM_Contact_BAO_ContactType::getBasicType($subtype);
+        $defaults['contact_type'][$subtype] = $basicType . '__' . $subtype;
+      }
+    }
 
     if ($this->_context === 'amtg') {
       $defaults['task'] = CRM_Contact_Task::GROUP_ADD;
@@ -303,7 +311,7 @@ class CRM_Contact_Form_Search_Advanced extends CRM_Contact_Form_Search {
    * multiple purposes (queries, save/edit etc)
    */
   public function normalizeFormValues() {
-    $contactType = CRM_Utils_Array::value('contact_type', $this->_formValues);
+    $contactType = $this->_formValues['contact_type'] ?? NULL;
 
     if ($contactType && is_array($contactType)) {
       unset($this->_formValues['contact_type']);
@@ -334,7 +342,7 @@ class CRM_Contact_Form_Search_Advanced extends CRM_Contact_Form_Search {
     ];
     CRM_Contact_BAO_Query::processSpecialFormValue($this->_formValues, $specialParams, $changeNames);
 
-    $taglist = CRM_Utils_Array::value('contact_taglist', $this->_formValues);
+    $taglist = $this->_formValues['contact_taglist'] ?? NULL;
 
     if ($taglist && is_array($taglist)) {
       unset($this->_formValues['contact_taglist']);

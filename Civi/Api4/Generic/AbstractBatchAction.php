@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -31,7 +29,7 @@ namespace Civi\Api4\Generic;
 abstract class AbstractBatchAction extends AbstractQueryAction {
 
   /**
-   * Criteria for selecting items to process.
+   * Criteria for selecting $ENTITIES to process.
    *
    * @var array
    * @required

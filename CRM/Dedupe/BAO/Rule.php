@@ -41,6 +41,9 @@ class CRM_Dedupe_BAO_Rule extends CRM_Dedupe_DAO_Rule {
    *
    * @return string
    *   SQL query performing the search
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function sql() {
     if ($this->params &&
@@ -124,7 +127,7 @@ class CRM_Dedupe_BAO_Rule extends CRM_Dedupe_DAO_Rule {
           $id = 'entity_id';
         }
         else {
-          CRM_Core_Error::fatal("Unsupported rule_table for civicrm_dedupe_rule.id of {$this->id}");
+          throw new CRM_Core_Exception("Unsupported rule_table for civicrm_dedupe_rule.id of {$this->id}");
         }
         break;
     }
@@ -209,7 +212,11 @@ class CRM_Dedupe_BAO_Rule extends CRM_Dedupe_DAO_Rule {
     $ruleBao->find();
     $ruleFields = [];
     while ($ruleBao->fetch()) {
-      $ruleFields[] = $ruleBao->rule_field;
+      $field_name = $ruleBao->rule_field;
+      if ($field_name == 'phone_numeric') {
+        $field_name = 'phone';
+      }
+      $ruleFields[] = $field_name;
     }
     return $ruleFields;
   }
@@ -233,7 +240,29 @@ class CRM_Dedupe_BAO_Rule extends CRM_Dedupe_DAO_Rule {
       $exception->contact_id2 = $cid;
     }
 
-    return $exception->find(TRUE) ? FALSE : TRUE;
+    return !$exception->find(TRUE);
+  }
+
+  /**
+   * Get the specification for the given field.
+   *
+   * @param string $fieldName
+   *
+   * @return array
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function getFieldType($fieldName) {
+    $entity = CRM_Core_DAO_AllCoreTables::getBriefName(CRM_Core_DAO_AllCoreTables::getClassForTable($this->rule_table));
+    if (!$entity) {
+      // This means we have stored a custom field rather than an entity name in rule_table, figure out the entity.
+      $entity = civicrm_api3('CustomGroup', 'getvalue', ['table_name' => $this->rule_table, 'return' => 'extends']);
+      if (in_array($entity, ['Individual', 'Household', 'Organization'])) {
+        $entity = 'Contact';
+      }
+      $fieldName = 'custom_' . civicrm_api3('CustomField', 'getvalue', ['column_name' => $fieldName, 'return' => 'id']);
+    }
+    $fields = civicrm_api3($entity, 'getfields', ['action' => 'create'])['values'];
+    return $fields[$fieldName]['type'];
   }
 
   /**

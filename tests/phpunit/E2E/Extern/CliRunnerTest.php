@@ -3,7 +3,7 @@
  +--------------------------------------------------------------------+
  | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2019                                |
+ | Copyright CiviCRM LLC (c) 2004-2020                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -101,7 +101,7 @@ class E2E_Extern_CliRunnerTest extends CiviEndToEndTestCase {
 
     $ufrUrl = $this->callRunnerJson($r, 'CRM_Core_Config::singleton()->userFrameworkResourceURL');
     $crmUrl = $this->callRunnerJson($r, 'Civi::paths()->getUrl("[civicrm.root]/.")');
-    $this->assertEquals($crmUrl, $ufrUrl);
+    $this->assertEquals(rtrim($crmUrl, '/'), rtrim($ufrUrl, '/'));
   }
 
   /**

@@ -14,14 +14,14 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
 namespace Civi\Api4;
 
 /**
+ * StatusPreference entity.
+ *
  * For setting "hush" preferences for system check alerts.
  *
  * @package Civi\Api4

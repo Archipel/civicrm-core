@@ -334,7 +334,7 @@ class CRM_Utils_File {
     if (CRM_Utils_Constant::value('CIVICRM_MYSQL_STRICT', CRM_Utils_System::isDevelopment())) {
       $db->query('SET SESSION sql_mode = STRICT_TRANS_TABLES');
     }
-    $db->query('SET NAMES utf8');
+    $db->query('SET NAMES utf8mb4');
     $transactionId = CRM_Utils_Type::escape(CRM_Utils_Request::id(), 'String');
     $db->query('SET @uniqueID = ' . "'$transactionId'");
 
@@ -399,7 +399,7 @@ class CRM_Utils_File {
       }
     }
     // support lower and uppercase file extensions
-    return isset($extensions[strtolower($ext)]) ? TRUE : FALSE;
+    return (bool) isset($extensions[strtolower($ext)]);
   }
 
   /**
@@ -1066,7 +1066,7 @@ HTACCESS;
    */
   public static function isValidFileName($fileName = NULL) {
     if ($fileName) {
-      $check = $fileName !== basename($fileName) ? FALSE : TRUE;
+      $check = ($fileName === basename($fileName));
       if ($check) {
         if (substr($fileName, 0, 1) == '/' || substr($fileName, 0, 1) == '.' || substr($fileName, 0, 1) == DIRECTORY_SEPARATOR) {
           $check = FALSE;
@@ -1082,15 +1082,9 @@ HTACCESS;
    * @param string $mimeType the mime-type we want extensions for
    * @return array
    */
-  public static function getAcceptableExtensionsForMimeType($mimeType = NULL) {
-    $mapping = \MimeType\Mapping::$types;
-    $extensions = [];
-    foreach ($mapping as $extension => $type) {
-      if ($mimeType == $type) {
-        $extensions[] = $extension;
-      }
-    }
-    return $extensions;
+  public static function getAcceptableExtensionsForMimeType($mimeType = []) {
+    $mimeRepostory = new \MimeTyper\Repository\ExtendedRepository();
+    return $mimeRepostory->findExtensions($mimeType);
   }
 
   /**

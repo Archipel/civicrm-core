@@ -22,7 +22,7 @@
  *   Expected keys are in format custom_fieldID:recordID or custom_groupName:fieldName:recordID.
  *
  * @example:
- * @code
+ * ```
  *   // entity ID. You do not need to specify entity type, we figure it out based on the fields you're using
  *   'entity_id' => 123,
  *   // (omitting :id) inserts or updates a field in a single-valued group
@@ -39,7 +39,7 @@
  *   'custom_some_group:my_field' => 'myinfo',
  *   // updates record ID 8 in my_other_field in multi-valued some_big_group
  *   'custom_some_big_group:my_other_field:8' => 'myinfo',
- * @endcode
+ * ```
  *
  * @throws Exception
  * @return array
@@ -347,14 +347,14 @@ function civicrm_api3_custom_value_gettree($params) {
     $result[$group['name']] = [];
     $groupToReturn = $toReturn['custom_group'] ? $toReturn['custom_group'] : array_keys($group);
     foreach ($groupToReturn as $item) {
-      $result[$group['name']][$item] = CRM_Utils_Array::value($item, $group);
+      $result[$group['name']][$item] = $group[$item] ?? NULL;
     }
     $result[$group['name']]['fields'] = [];
     foreach ($group['fields'] as $fieldInfo) {
       $field = ['value' => NULL];
       $fieldToReturn = $toReturn['custom_field'] ? $toReturn['custom_field'] : array_keys($fieldInfo);
       foreach ($fieldToReturn as $item) {
-        $field[$item] = CRM_Utils_Array::value($item, $fieldInfo);
+        $field[$item] = $fieldInfo[$item] ?? NULL;
       }
       unset($field['customValue']);
       if (!empty($fieldInfo['customValue'])) {

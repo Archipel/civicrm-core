@@ -28,7 +28,7 @@
  *
  * Examples:
  *
- * @code
+ * ```
  * // Some business logic using the helper functions
  * function my_business_logic() {
  *   CRM_Core_Transaction::create()->run(function($tx) {
@@ -60,7 +60,7 @@
  *   }
  * }
  *
- * @endcode
+ * ```
  *
  * Note: As of 4.6, the transaction manager supports both reference-counting and nested
  * transactions (SAVEPOINTs). In the past, it only supported reference-counting. The two cases
@@ -234,6 +234,26 @@ class CRM_Core_Transaction {
   public static function addCallback($phase, $callback, $params = NULL, $id = NULL) {
     $frame = \Civi\Core\Transaction\Manager::singleton()->getBaseFrame();
     $frame->addCallback($phase, $callback, $params, $id);
+  }
+
+  /**
+   * Whenever hook_civicrm_post fires, schedule an equivalent
+   * call to hook_civicrm_postCommit.
+   *
+   * @param \Civi\Core\Event\PostEvent $e
+   * @see CRM_Utils_Hook::post
+   */
+  public static function addPostCommit($e) {
+    // Do we want to dedupe post-commit hooks for the same txn? Setting an ID
+    // would allow this.
+    // $id = $e->entity . chr(0) . $e->action . chr(0) . $e->id;
+    $frame = \Civi\Core\Transaction\Manager::singleton()->getBaseFrame();
+    if ($frame) {
+      $frame->addCallback(self::PHASE_POST_COMMIT, ['CRM_Utils_Hook', 'postCommit'], [$e->action, $e->entity, $e->id, $e->object]);
+    }
+    else {
+      \CRM_Utils_Hook::postCommit($e->action, $e->entity, $e->id, $e->object);
+    }
   }
 
 }

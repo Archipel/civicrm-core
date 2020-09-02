@@ -124,6 +124,17 @@ class CRM_Utils_Mail {
     else {
       $mailer = Mail::factory($driver, $params);
     }
+
+    // Previously, CiviCRM bundled patches to change the behavior of 3 specific drivers. Use wrapper/filters to avoid patching.
+    $mailer = new CRM_Utils_Mail_FilteredPearMailer($driver, $params, $mailer);
+    if (in_array($driver, ['smtp', 'mail', 'sendmail'])) {
+      $mailer->addFilter('2000_log', ['CRM_Utils_Mail_Logger', 'filter']);
+      $mailer->addFilter('2100_validate', function ($mailer, &$recipients, &$headers, &$body) {
+        if (!is_array($headers)) {
+          return PEAR::raiseError('$headers must be an array');
+        }
+      });
+    }
     CRM_Utils_Hook::alterMailer($mailer, $driver, $params);
     return $mailer;
   }
@@ -156,7 +167,7 @@ class CRM_Utils_Mail {
     $defaultReturnPath = CRM_Core_BAO_MailSettings::defaultReturnPath();
     $includeMessageId = CRM_Core_BAO_MailSettings::includeMessageId();
     $emailDomain = CRM_Core_BAO_MailSettings::defaultDomain();
-    $from = CRM_Utils_Array::value('from', $params);
+    $from = $params['from'] ?? NULL;
     if (!$defaultReturnPath) {
       $defaultReturnPath = self::pluckEmailFromHeader($from);
     }
@@ -169,9 +180,9 @@ class CRM_Utils_Mail {
       return FALSE;
     }
 
-    $textMessage = CRM_Utils_Array::value('text', $params);
-    $htmlMessage = CRM_Utils_Array::value('html', $params);
-    $attachments = CRM_Utils_Array::value('attachments', $params);
+    $textMessage = $params['text'] ?? NULL;
+    $htmlMessage = $params['html'] ?? NULL;
+    $attachments = $params['attachments'] ?? NULL;
 
     // CRM-6224
     if (trim(CRM_Utils_String::htmlToText($htmlMessage)) == '') {
@@ -192,13 +203,13 @@ class CRM_Utils_Mail {
 
     // On some servers mail() fails when 'Cc' or 'Bcc' headers are defined but empty.
     foreach (['Cc', 'Bcc'] as $optionalHeader) {
-      $headers[$optionalHeader] = CRM_Utils_Array::value(strtolower($optionalHeader), $params);
+      $headers[$optionalHeader] = $params[strtolower($optionalHeader)] ?? NULL;
       if (empty($headers[$optionalHeader])) {
         unset($headers[$optionalHeader]);
       }
     }
 
-    $headers['Subject'] = CRM_Utils_Array::value('subject', $params);
+    $headers['Subject'] = $params['subject'] ?? NULL;
     $headers['Content-Type'] = $htmlMessage ? 'multipart/mixed; charset=utf-8' : 'text/plain; charset=utf-8';
     $headers['Content-Disposition'] = 'inline';
     $headers['Content-Transfer-Encoding'] = '8bit';
@@ -268,14 +279,17 @@ class CRM_Utils_Mail {
     // * All other mailers require that all be recipients be listed in the $to array AND that
     //   the Bcc must not be present in $header as otherwise it will be shown to all recipients
     // ref: https://pear.php.net/bugs/bug.php?id=8047, full thread and answer [2011-04-19 20:48 UTC]
-    if (get_class($mailer) != "Mail_mail") {
+    // TODO: Refactor this quirk-handler as another filter in FilteredPearMailer. But that would merit review of impact on universe.
+    $driver = ($mailer instanceof CRM_Utils_Mail_FilteredPearMailer) ? $mailer->getDriver() : NULL;
+    $isPhpMail = (get_class($mailer) === "Mail_mail" || $driver === 'mail');
+    if (!$isPhpMail) {
       // get emails from headers, since these are
       // combination of name and email addresses.
       if (!empty($headers['Cc'])) {
-        $to[] = CRM_Utils_Array::value('Cc', $headers);
+        $to[] = $headers['Cc'] ?? NULL;
       }
       if (!empty($headers['Bcc'])) {
-        $to[] = CRM_Utils_Array::value('Bcc', $headers);
+        $to[] = $headers['Bcc'] ?? NULL;
         unset($headers['Bcc']);
       }
     }
@@ -326,34 +340,10 @@ class CRM_Utils_Mail {
    * @param $to
    * @param $headers
    * @param $message
+   * @deprecated
    */
   public static function logger(&$to, &$headers, &$message) {
-    if (is_array($to)) {
-      $toString = implode(', ', $to);
-      $fileName = $to[0];
-    }
-    else {
-      $toString = $fileName = $to;
-    }
-    $content = "To: " . $toString . "\n";
-    foreach ($headers as $key => $val) {
-      $content .= "$key: $val\n";
-    }
-    $content .= "\n" . $message . "\n";
-
-    if (is_numeric(CIVICRM_MAIL_LOG)) {
-      $config = CRM_Core_Config::singleton();
-      // create the directory if not there
-      $dirName = $config->configAndLogDir . 'mail' . DIRECTORY_SEPARATOR;
-      CRM_Utils_File::createDir($dirName);
-      $fileName = md5(uniqid(CRM_Utils_String::munge($fileName))) . '.txt';
-      file_put_contents($dirName . $fileName,
-        $content
-      );
-    }
-    else {
-      file_put_contents(CIVICRM_MAIL_LOG, $content, FILE_APPEND);
-    }
+    CRM_Utils_Mail_Logger::log($to, $headers, $message);
   }
 
   /**

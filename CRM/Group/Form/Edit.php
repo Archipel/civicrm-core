@@ -23,13 +23,6 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
   use CRM_Core_Form_EntityFormTrait;
 
   /**
-   * The group id, used when editing a group
-   *
-   * @var int
-   */
-  protected $_id;
-
-  /**
    * The group object, if an id is present
    *
    * @var object
@@ -109,7 +102,7 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
       );
       CRM_Utils_System::appendBreadCrumb($breadCrumb);
 
-      $this->_groupValues = array();
+      $this->_groupValues = [];
       $params = array('id' => $this->_id);
       $this->_group = CRM_Contact_BAO_Group::retrieve($params, $this->_groupValues);
       $this->_title = $this->_groupValues['title'];
@@ -134,14 +127,14 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
       }
     }
     else {
-      if ($this->_groupValues['is_reserved'] == 1 && !CRM_Core_Permission::check('administer reserved groups')) {
+      if ($this->_id && $this->_groupValues['is_reserved'] == 1 && !CRM_Core_Permission::check('administer reserved groups')) {
         CRM_Core_Error::statusBounce(ts("You do not have sufficient permission to change settings for this reserved group."));
       }
       if (isset($this->_id)) {
         $groupValues = array(
           'id' => $this->_id,
           'title' => $this->_title,
-          'saved_search_id' => isset($this->_groupValues['saved_search_id']) ? $this->_groupValues['saved_search_id'] : '',
+          'saved_search_id' => $this->_groupValues['saved_search_id'] ?? '',
         );
         if (isset($this->_groupValues['saved_search_id'])) {
           $groupValues['mapping_id'] = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_SavedSearch',
@@ -179,14 +172,14 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
    * @return array
    */
   public function setDefaultValues() {
-    $defaults = array();
+    $defaults = [];
     if (isset($this->_id)) {
       $defaults = $this->_groupValues;
       if (!empty($defaults['group_type'])) {
         $types = explode(CRM_Core_DAO::VALUE_SEPARATOR,
           substr($defaults['group_type'], 1, -1)
         );
-        $defaults['group_type'] = array();
+        $defaults['group_type'] = [];
         foreach ($types as $type) {
           $defaults['group_type'][$type] = 1;
         }
@@ -270,7 +263,7 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
 
     $doParentCheck = FALSE;
     if (CRM_Core_Permission::isMultisiteEnabled()) {
-      $doParentCheck = ($this->_id && CRM_Core_BAO_Domain::isDomainGroup($this->_id)) ? FALSE : TRUE;
+      $doParentCheck = !($this->_id && CRM_Core_BAO_Domain::isDomainGroup($this->_id));
     }
 
     $options = array(
@@ -293,7 +286,7 @@ class CRM_Group_Form_Edit extends CRM_Core_Form {
    *   list of errors to be posted back to the form
    */
   public static function formRule($fields, $fileParams, $options) {
-    $errors = array();
+    $errors = [];
 
     $doParentCheck = $options['doParentCheck'];
     $self = &$options['selfObj'];
@@ -367,7 +360,7 @@ WHERE  title = %1
 
       // CRM-21431 If all group_type are unchecked, the change will not be saved otherwise.
       if (!isset($params['group_type'])) {
-        $params['group_type'] = array();
+        $params['group_type'] = [];
       }
 
       $params['is_reserved'] = CRM_Utils_Array::value('is_reserved', $params, FALSE);
@@ -418,7 +411,7 @@ WHERE  title = %1
    */
   public static function buildParentGroups(&$form) {
     $groupNames = CRM_Core_PseudoConstant::group();
-    $parentGroups = $parentGroupElements = array();
+    $parentGroups = $parentGroupElements = [];
     if (isset($form->_id) && !empty($form->_groupValues['parents'])) {
       $parentGroupIds = explode(',', $form->_groupValues['parents']);
       foreach ($parentGroupIds as $parentGroupId) {
@@ -440,7 +433,7 @@ WHERE  title = %1
       $potentialParentGroupIds = array_keys($groupNames);
     }
 
-    $parentGroupSelectValues = array();
+    $parentGroupSelectValues = [];
     foreach ($potentialParentGroupIds as $potentialParentGroupId) {
       if (array_key_exists($potentialParentGroupId, $groupNames)) {
         $parentGroupSelectValues[$potentialParentGroupId] = $groupNames[$potentialParentGroupId];

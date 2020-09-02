@@ -17,10 +17,10 @@
         {assign var='urlParams' value="reset=1&id=$id&cid=$contact_id&action=update&context=$context&key=$searchKey"}
       {/if}
       <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}" accesskey="e"><span>
-          <i class="crm-i fa-pencil"></i> {ts}Edit{/ts}</span>
+          <i class="crm-i fa-pencil" aria-hidden="true"></i> {ts}Edit{/ts}</span>
       </a>
       {if $paymentButtonName}
-        <a class="button" href='{crmURL p="civicrm/payment" q="action=add&reset=1&component=`$component`&id=`$id`&cid=`$contact_id`"}'><i class="crm-i fa-plus-circle"></i> {ts}{$paymentButtonName}{/ts}</a>
+        <a class="button" href='{crmURL p="civicrm/payment" q="action=add&reset=1&component=`$component`&id=`$id`&cid=`$contact_id`"}'><i class="crm-i fa-plus-circle" aria-hidden="true"></i> {ts}{$paymentButtonName}{/ts}</a>
       {/if}
     {/if}
     {if (call_user_func(array('CRM_Core_Permission','check'), 'delete in CiviContribute') && call_user_func(array('CRM_Core_Permission', 'check'), "delete contributions of type $financial_type") && $canDelete)     || (call_user_func(array('CRM_Core_Permission','check'), 'delete in CiviContribute') && $noACL)}
@@ -29,7 +29,7 @@
         {assign var='urlParams' value="reset=1&id=$id&cid=$contact_id&action=delete&context=$context&key=$searchKey"}
       {/if}
       <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}"><span>
-          <i class="crm-i fa-trash"></i> {ts}Delete{/ts}</span>
+          <i class="crm-i fa-trash" aria-hidden="true"></i> {ts}Delete{/ts}</span>
       </a>
     {/if}
     {include file="CRM/common/formButtons.tpl" location="top"}
@@ -38,14 +38,14 @@
     {if $invoicing}
       <div class="css_right">
         <a class="button no-popup" href="{crmURL p='civicrm/contribute/invoice' q=$pdfUrlParams}">
-          <i class="crm-i fa-print"></i>
+          <i class="crm-i fa-print" aria-hidden="true"></i>
         {if $contribution_status != 'Refunded' && $contribution_status != 'Cancelled' }
           {ts}Print Invoice{/ts}</a>
         {else}
           {ts}Print Invoice and Credit Note{/ts}</a>
         {/if}
         <a class="button" href="{crmURL p='civicrm/contribute/invoice/email' q=$emailUrlParams}">
-          <i class="crm-i fa-paper-plane"></i>
+          <i class="crm-i fa-paper-plane" aria-hidden="true"></i>
           {ts}Email Invoice{/ts}</a>
       </div>
     {/if}
@@ -64,6 +64,14 @@
   <tr>
     <td class="label">{ts}Financial Type{/ts}</td>
     <td>{$financial_type}{if $is_test} {ts}(test){/ts} {/if}</td>
+  </tr>
+  <tr>
+    <td class="label">{ts}Source{/ts}</td>
+    <td>{$source}</td>
+  </tr>
+  <tr>
+    <td class="label">{ts}Received{/ts}</td>
+    <td>{if $receive_date}{$receive_date|crmDate}{else}({ts}not available{/ts}){/if}</td>
   </tr>
   {if $displayLineItems}
     <tr>
@@ -120,10 +128,6 @@
       <td>{$revenue_recognition_date|crmDate:"%B, %Y"}</td>
     </tr>
   {/if}
-  <tr>
-    <td class="label">{ts}Received{/ts}</td>
-    <td>{if $receive_date}{$receive_date|crmDate}{else}({ts}not available{/ts}){/if}</td>
-  </tr>
   {if $to_financial_account }
     <tr>
       <td class="label">{ts}Received Into{/ts}</td>
@@ -165,10 +169,6 @@
       <td>{$check_number}</td>
     </tr>
   {/if}
-  <tr>
-    <td class="label">{ts}Source{/ts}</td>
-    <td>{$source}</td>
-  </tr>
 
   {if $campaign}
     <tr>
@@ -341,9 +341,9 @@
     {if ( $context eq 'fulltext' || $context eq 'search' ) && $searchKey}
       {assign var='urlParams' value="reset=1&id=$id&cid=$contact_id&action=update&context=$context&key=$searchKey"}
     {/if}
-    <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}" accesskey="e"><span><i class="crm-i fa-pencil"></i> {ts}Edit{/ts}</span></a>
+    <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}" accesskey="e"><span><i class="crm-i fa-pencil" aria-hidden="true"></i> {ts}Edit{/ts}</span></a>
     {if $paymentButtonName}
-      <a class="button" href='{crmURL p="civicrm/payment" q="action=add&reset=1&component=`$component`&id=`$id`&cid=`$contact_id`"}'><i class="crm-i fa-plus-circle"></i> {ts}{$paymentButtonName}{/ts}</a>
+      <a class="button" href='{crmURL p="civicrm/payment" q="action=add&reset=1&component=`$component`&id=`$id`&cid=`$contact_id`"}'><i class="crm-i fa-plus-circle" aria-hidden="true"></i> {ts}{$paymentButtonName}{/ts}</a>
     {/if}
   {/if}
   {if (call_user_func(array('CRM_Core_Permission','check'), 'delete in CiviContribute') && call_user_func(array('CRM_Core_Permission', 'check'), "delete contributions of type $financial_type") && $canDelete)     || (call_user_func(array('CRM_Core_Permission','check'), 'delete in CiviContribute') && $noACL)}
@@ -351,7 +351,7 @@
     {if ( $context eq 'fulltext' || $context eq 'search' ) && $searchKey}
       {assign var='urlParams' value="reset=1&id=$id&cid=$contact_id&action=delete&context=$context&key=$searchKey"}
     {/if}
-    <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}"><span><i class="crm-i fa-trash"></i> {ts}Delete{/ts}</span></a>
+    <a class="button" href="{crmURL p='civicrm/contact/view/contribution' q=$urlParams}"><span><i class="crm-i fa-trash" aria-hidden="true"></i> {ts}Delete{/ts}</span></a>
   {/if}
   {include file="CRM/common/formButtons.tpl" location="bottom"}
 </div>

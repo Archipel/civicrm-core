@@ -183,7 +183,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
    */
   public static function isSearchContext($context) {
     $searchContext = CRM_Utils_Array::value($context, self::validContext());
-    return $searchContext ? TRUE : FALSE;
+    return (bool) $searchContext;
   }
 
   public static function setModeValues() {
@@ -364,10 +364,10 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
     if ($this->_context !== 'amtg') {
       $taskParams['deletedContacts'] = FALSE;
       if ($this->_componentMode == CRM_Contact_BAO_Query::MODE_CONTACTS || $this->_componentMode == CRM_Contact_BAO_Query::MODE_CONTACTSRELATED) {
-        $taskParams['deletedContacts'] = CRM_Utils_Array::value('deleted_contacts', $this->_formValues);
+        $taskParams['deletedContacts'] = $this->_formValues['deleted_contacts'] ?? NULL;
       }
       $className = $this->_modeValue['taskClassName'];
-      $taskParams['ssID'] = isset($this->_ssID) ? $this->_ssID : NULL;
+      $taskParams['ssID'] = $this->_ssID ?? NULL;
       $this->_taskList += $className::permissionedTaskTitles(CRM_Core_Permission::getPermission(), $taskParams);
     }
 
@@ -398,9 +398,9 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
 
     if ($this->_context === 'smog') {
       // CRM-11788, we might want to do this for all of search where force=1
-      $formQFKey = CRM_Utils_Array::value('qfKey', $this->_formValues);
-      $getQFKey = CRM_Utils_Array::value('qfKey', $_GET);
-      $postQFKey = CRM_Utils_Array::value('qfKey', $_POST);
+      $formQFKey = $this->_formValues['qfKey'] ?? NULL;
+      $getQFKey = $_GET['qfKey'] ?? NULL;
+      $postQFKey = $_POST['qfKey'] ?? NULL;
       if ($formQFKey && empty($getQFKey) && empty($postQFKey)) {
         $url = CRM_Utils_System::makeURL('qfKey') . $formQFKey;
         CRM_Utils_System::redirect($url);
@@ -450,6 +450,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
         'group_contact_status', ts('Group Status')
       );
 
+      $this->assign('permissionEditSmartGroup', CRM_Core_Permission::check('edit groups'));
       $this->assign('permissionedForGroup', $permissionForGroup);
     }
 
@@ -481,7 +482,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
     }
 
     $selectedContactIds = [];
-    $qfKeyParam = CRM_Utils_Array::value('qfKey', $this->_formValues);
+    $qfKeyParam = $this->_formValues['qfKey'] ?? NULL;
     // We use ajax to handle selections only if the search results component_mode is set to "contacts"
     if ($qfKeyParam && ($this->get('component_mode') <= CRM_Contact_BAO_Query::MODE_CONTACTS || $this->get('component_mode') == CRM_Contact_BAO_Query::MODE_CONTACTSRELATED)) {
       $this->addClass('crm-ajax-selection-form');
@@ -502,6 +503,8 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
 
   /**
    * Processing needed for buildForm and later.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function preProcess() {
     // set the various class variables
@@ -527,10 +530,13 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
     $this->_componentMode = CRM_Utils_Request::retrieve('component_mode', 'Positive', $this, FALSE, CRM_Contact_BAO_Query::MODE_CONTACTS, $_REQUEST);
     $this->_operator = CRM_Utils_Request::retrieve('operator', 'String', $this, FALSE, CRM_Contact_BAO_Query::SEARCH_OPERATOR_AND, 'REQUEST');
 
+    if (!empty($this->_ssID) && !CRM_Core_Permission::check('edit groups')) {
+      CRM_Core_Error::statusBounce(ts('You do not have permission to modify smart groups'));
+    }
+
     /**
      * set the button names
      */
-    $this->_searchButtonName = $this->getButtonName('refresh');
     $this->_actionButtonName = $this->getButtonName('next', 'action');
 
     $this->assign('actionButtonName', $this->_actionButtonName);
@@ -545,7 +551,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
 
     // assign context to drive the template display, make sure context is valid
     $this->_context = CRM_Utils_Request::retrieve('context', 'Alphanumeric', $this, FALSE, 'search');
-    if (!CRM_Utils_Array::value($this->_context, self::validContext())) {
+    if (!array_key_exists($this->_context, self::validContext())) {
       $this->_context = 'search';
     }
     $this->set('context', $this->_context);
@@ -599,7 +605,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
       }
 
       // fix for CRM-1907
-      if (isset($this->_ssID) && $this->_context != 'smog') {
+      if (isset($this->_ssID) && $this->_context !== 'smog') {
         // we only retrieve the saved search values if out current values are null
         $this->_formValues = CRM_Contact_BAO_SavedSearch::getFormValues($this->_ssID);
 
@@ -793,7 +799,7 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
       return;
     }
     else {
-      if (array_key_exists($this->_searchButtonName, $_POST) ||
+      if (array_key_exists($this->getButtonName('refresh'), $_POST) ||
         ($this->_force && !$crmPID)
       ) {
         //reset the cache table for new search

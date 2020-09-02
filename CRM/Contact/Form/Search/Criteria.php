@@ -244,7 +244,13 @@ class CRM_Contact_Form_Search_Criteria {
    */
   public static function getSearchFieldMetadata() {
     $fields = [
-      'sort_name' => ['title' => ts('Complete OR Partial Name'), 'template_grouping' => 'basic'],
+      'sort_name' => [
+        'title' => ts('Complete OR Partial Name'),
+        'template_grouping' => 'basic',
+        'template' => 'CRM/Contact/Form/Search/Criteria/Fields/sort_name.tpl',
+      ],
+      'first_name' => ['template_grouping' => 'basic'],
+      'last_name' => ['template_grouping' => 'basic'],
       'email' => ['title' => ts('Complete OR Partial Email'), 'entity' => 'Email', 'template_grouping' => 'basic'],
       'contact_tags' => ['name' => 'contact_tags', 'type' => CRM_Utils_Type::T_INT, 'is_pseudofield' => TRUE, 'template_grouping' => 'basic'],
       'created_date' => ['name' => 'created_date', 'template_grouping' => 'changeLog'],
@@ -412,7 +418,7 @@ class CRM_Contact_Form_Search_Criteria {
       'street_unit' => [ts('Apt/Unit/Suite'), $attributes['street_unit'], NULL, NULL],
     ];
 
-    $parseStreetAddress = CRM_Utils_Array::value('street_address_parsing', $addressOptions, 0);
+    $parseStreetAddress = $addressOptions['street_address_parsing'] ?? 0;
     $form->assign('parseStreetAddress', $parseStreetAddress);
     foreach ($elements as $name => $v) {
       list($title, $attributes, $select, $multiSelect) = $v;
@@ -605,7 +611,6 @@ class CRM_Contact_Form_Search_Criteria {
 
     foreach ($groupDetails as $key => $group) {
       $_groupTitle[$key] = $group['name'];
-      CRM_Core_ShowHideBlocks::links($form, $group['name'], '', '');
 
       foreach ($group['fields'] as $field) {
         $fieldId = $field['id'];

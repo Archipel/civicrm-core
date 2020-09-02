@@ -33,6 +33,7 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
       'class_name' => 'CRM_Core_Payment_APITest',
       'billing_mode' => 'form',
       'is_recur' => 0,
+      'payment_instrument_id' => 2,
     ];
     $result = $this->callAPISuccess('payment_processor_type', 'create', $params);
     $this->_paymentProcessorType = $result['id'];
@@ -47,17 +48,21 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Check create with no name specified.
+   * @dataProvider versionThreeAndFour
    */
-  public function testPaymentProcessorCreateWithoutName() {
+  public function testPaymentProcessorCreateWithoutName($version) {
+    $this->_apiversion = $version;
     $this->callAPIFailure('payment_processor', 'create', ['is_active' => 1]);
   }
 
   /**
    * Create payment processor.
+   * @dataProvider versionThreeAndFour
    *
    * @throws \CRM_Core_Exception
    */
-  public function testPaymentProcessorCreate() {
+  public function testPaymentProcessorCreate($version) {
+    $this->_apiversion = $version;
     $params = $this->_params;
     $result = $this->callAPIAndDocument('payment_processor', 'create', $params, __FUNCTION__, __FILE__);
     $this->callAPISuccessGetSingle('EntityFinancialAccount', ['entity_table' => 'civicrm_payment_processor', 'entity_id' => $result['id']]);
@@ -71,15 +76,19 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
       'frequency_interval' => 1,
     ]);
     $this->getAndCheck($params, $result['id'], 'PaymentProcessor');
+    $this->assertEquals(2, $result['values'][$result['id']]['payment_instrument_id']);
   }
 
   /**
    * Update payment processor.
+   * @dataProvider versionThreeAndFour
    *
    * @throws \CRM_Core_Exception
    */
-  public function testPaymentProcessorUpdate() {
+  public function testPaymentProcessorUpdate($version) {
+    $this->_apiversion = $version;
     $params = $this->_params;
+    $params['payment_instrument_id'] = 1;
     $result = $this->callAPISuccess('payment_processor', 'create', $params);
     $this->assertNotNull($result['id']);
 
@@ -105,6 +114,14 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
       'payment_instrument_id' => 1,
       'is_active' => 1,
     ];
+    if ($version === 4) {
+      // In APIv3 If a field is default NULL it is not returned.
+      foreach ($result['values'][$result['id']] as $field => $value) {
+        if (is_null($value)) {
+          unset($result['values'][$result['id']][$field]);
+        }
+      }
+    }
     $this->checkArrayEquals($expectedResult, $result['values'][$result['id']]);
   }
 
@@ -120,10 +137,12 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Check payment processor delete.
+   * @dataProvider versionThreeAndFour
    *
    * @throws \CRM_Core_Exception
    */
-  public function testPaymentProcessorDelete() {
+  public function testPaymentProcessorDelete($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPISuccess('payment_processor', 'create', $this->_params);
     $params = [
       'id' => $result['id'],
@@ -134,10 +153,12 @@ class api_v3_PaymentProcessorTest extends CiviUnitTestCase {
 
   /**
    * Check with valid params array.
+   * @dataProvider versionThreeAndFour
    *
    * @throws \CRM_Core_Exception
    */
-  public function testPaymentProcessorsGet() {
+  public function testPaymentProcessorsGet($version) {
+    $this->_apiversion = $version;
     $params = $this->_params;
     $params['user_name'] = 'test@test.com';
     $this->callAPISuccess('payment_processor', 'create', $params);

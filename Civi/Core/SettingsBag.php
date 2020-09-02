@@ -166,6 +166,10 @@ class SettingsBag {
       $this->combined = $this->combine(
         [$this->defaults, $this->values, $this->mandatory]
       );
+      // computeVirtual() depends on completion of preceding pass.
+      $this->combined = $this->combine(
+        [$this->combined, $this->computeVirtual()]
+      );
     }
     return $this->combined;
   }
@@ -178,7 +182,7 @@ class SettingsBag {
    */
   public function get($key) {
     $all = $this->all();
-    return isset($all[$key]) ? $all[$key] : NULL;
+    return $all[$key] ?? NULL;
   }
 
   /**
@@ -189,7 +193,7 @@ class SettingsBag {
    * @return mixed|NULL
    */
   public function getDefault($key) {
-    return isset($this->defaults[$key]) ? $this->defaults[$key] : NULL;
+    return $this->defaults[$key] ?? NULL;
   }
 
   /**
@@ -201,7 +205,7 @@ class SettingsBag {
    * @return mixed|NULL
    */
   public function getExplicit($key) {
-    return (isset($this->values[$key]) ? $this->values[$key] : NULL);
+    return ($this->values[$key] ?? NULL);
   }
 
   /**
@@ -212,7 +216,7 @@ class SettingsBag {
    * @return mixed|NULL
    */
   public function getMandatory($key) {
-    return isset($this->mandatory[$key]) ? $this->mandatory[$key] : NULL;
+    return $this->mandatory[$key] ?? NULL;
   }
 
   /**
@@ -253,10 +257,65 @@ class SettingsBag {
    * @return SettingsBag
    */
   public function set($key, $value) {
+    if ($this->updateVirtual($key, $value)) {
+      return $this;
+    }
     $this->setDb($key, $value);
     $this->values[$key] = $value;
     $this->combined = NULL;
     return $this;
+  }
+
+  /**
+   * Update a virtualized/deprecated setting.
+   *
+   * Temporary handling for phasing out contribution_invoice_settings.
+   *
+   * Until we have transitioned we need to handle setting & retrieving
+   * contribution_invoice_settings.
+   *
+   * Once removed from core we will add deprecation notices & then remove this.
+   *
+   * https://lab.civicrm.org/dev/core/issues/1558
+   *
+   * @param string $key
+   * @param array $value
+   * @return bool
+   *   TRUE if $key is a virtualized setting. FALSE if it is a normal setting.
+   */
+  public function updateVirtual($key, $value) {
+    if ($key === 'contribution_invoice_settings') {
+      foreach (SettingsBag::getContributionInvoiceSettingKeys() as $possibleKeyName => $settingName) {
+        $keyValue = $value[$possibleKeyName] ?? '';
+        if ($possibleKeyName === 'invoicing' && is_array($keyValue)) {
+          $keyValue = $keyValue['invoicing'];
+        }
+        $this->set($settingName, $keyValue);
+      }
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * Determine the values of any virtual/computed settings.
+   *
+   * @return array
+   */
+  public function computeVirtual() {
+    $contributionSettings = [];
+    foreach (SettingsBag::getContributionInvoiceSettingKeys() as $keyName => $settingName) {
+      switch ($keyName) {
+        case 'invoicing':
+          $contributionSettings[$keyName] = $this->get($settingName) ? [$keyName => 1] : 0;
+          break;
+
+        default:
+          $contributionSettings[$keyName] = $this->get($settingName);
+          break;
+      }
+    }
+    return ['contribution_invoice_settings' => $contributionSettings];
   }
 
   /**
@@ -376,6 +435,24 @@ class SettingsBag {
       // to save the field `group_name`, which is required in older schema.
       \CRM_Core_DAO::executeQuery(\CRM_Utils_SQL_Insert::dao($dao)->toSQL());
     }
+  }
+
+  /**
+   * @return array
+   */
+  public static function getContributionInvoiceSettingKeys(): array {
+    $convertedKeys = [
+      'credit_notes_prefix' => 'credit_notes_prefix',
+      'invoice_prefix' => 'invoice_prefix',
+      'due_date' => 'invoice_due_date',
+      'due_date_period' => 'invoice_due_date_period',
+      'notes' => 'invoice_notes',
+      'is_email_pdf'  => 'invoice_is_email_pdf',
+      'tax_term' => 'tax_term',
+      'tax_display_settings' => 'tax_display_settings',
+      'invoicing' => 'invoicing',
+    ];
+    return $convertedKeys;
   }
 
 }
