@@ -58,6 +58,13 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
     $this->assign('isShare', CRM_Utils_Array::value('is_share', $this->_values));
     $this->assign('isConfirmEnabled', CRM_Utils_Array::value('is_confirm_enabled', $this->_values));
 
+    // Required for currency formatting in the JS layer
+    // this is a temporary fix intended to resolve a regression quickly
+    // And assigning moneyFormat for js layer formatting
+    // will only work until that is done.
+    // https://github.com/civicrm/civicrm-core/pull/19151
+    $this->assign('moneyFormat', CRM_Utils_Money::format(1234.56));
+
     $this->assign('reset', CRM_Utils_Request::retrieve('reset', 'Boolean'));
     $this->assign('mainDisplay', CRM_Utils_Request::retrieve('_qf_Main_display', 'Boolean',
       CRM_Core_DAO::$_nullObject));
@@ -330,8 +337,7 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
       }
     }
 
-    $contactID = $this->getContactID();
-    if ($this->getContactID() === 0) {
+    if ($contactID === 0) {
       $this->addCidZeroOptions();
     }
 
@@ -444,10 +450,7 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
           ['onclick' => "showHideByValue('pcp_display_in_roll','','nameID|nickID|personalNoteID','block','radio',false); pcpAnonymous( );"]
         );
         $extraOption = ['onclick' => "return pcpAnonymous( );"];
-        $elements = [];
-        $elements[] = &$this->createElement('radio', NULL, '', ts('Include my name and message'), 0, $extraOption);
-        $elements[] = &$this->createElement('radio', NULL, '', ts('List my contribution anonymously'), 1, $extraOption);
-        $this->addGroup($elements, 'pcp_is_anonymous', NULL, '&nbsp;&nbsp;&nbsp;');
+        $this->addRadio('pcp_is_anonymous', NULL, [ts('Include my name and message'), ts('List my contribution anonymously')], [], '&nbsp;&nbsp;&nbsp;', FALSE, [$extraOption, $extraOption]);
 
         $this->add('text', 'pcp_roll_nickname', ts('Name'), ['maxlength' => 30]);
         $this->addField('pcp_personal_note', ['entity' => 'ContributionSoft', 'context' => 'create', 'style' => 'height: 3em; width: 40em;']);
@@ -609,11 +612,10 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
       $isTest = $self->_action & CRM_Core_Action::PREVIEW;
       $lifeMember = CRM_Member_BAO_Membership::getAllContactMembership($self->_membershipContactID, $isTest, TRUE);
 
-      $membershipOrgDetails = CRM_Member_BAO_MembershipType::getMembershipTypeOrganization();
-
+      $membershipOrgDetails = CRM_Member_BAO_MembershipType::getAllMembershipTypes();
       $unallowedOrgs = [];
       foreach (array_keys($lifeMember) as $memTypeId) {
-        $unallowedOrgs[] = $membershipOrgDetails[$memTypeId];
+        $unallowedOrgs[] = $membershipOrgDetails[$memTypeId]['member_of_contact_id'];
       }
     }
 
@@ -778,7 +780,7 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
         if (!empty($lifeMember)) {
           foreach ($priceFieldIDS as $priceFieldId) {
             if (($id = CRM_Core_DAO::getFieldValue('CRM_Price_DAO_PriceFieldValue', $priceFieldId, 'membership_type_id')) &&
-              in_array($membershipOrgDetails[$id], $unallowedOrgs)
+              in_array($membershipOrgDetails[$id]['member_of_contact_id'], $unallowedOrgs)
             ) {
               $errors['_qf_default'] = ts('You already have a lifetime membership and cannot select a membership with a shorter term.');
               break;
@@ -795,6 +797,7 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
           foreach ($count as $id => $occurrence) {
             if ($occurrence > 1) {
               $errors['_qf_default'] = ts('You have selected multiple memberships for the same organization or entity. Please review your selections and choose only one membership per entity. Contact the site administrator if you need assistance.');
+              break;
             }
           }
         }

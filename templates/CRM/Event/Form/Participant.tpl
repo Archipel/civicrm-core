@@ -196,7 +196,7 @@
       {if $action eq 8} {* If action is Delete *}
         <div class="crm-participant-form-block-delete messages status no-popup">
           <div class="crm-content">
-            <div class="icon inform-icon"></div> &nbsp;
+            {icon icon="fa-info-circle"}{/icon}
             {ts}WARNING: Deleting this registration will result in the loss of related payment records (if any).{/ts} {ts}Do you want to continue?{/ts}
           </div>
           {if $additionalParticipant}
@@ -437,7 +437,7 @@
     notificationStatusIds = notificationStatusIds.split(',');
     if (cj.inArray(cj('select#status_id option:selected').val(), notificationStatusIds) > -1) {
       cj("#notify").show();
-      cj("#is_notify").prop('checked', true);
+      cj("#is_notify").prop('checked', false);
     }
     else {
       cj("#notify").hide();

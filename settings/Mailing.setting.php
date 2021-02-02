@@ -13,8 +13,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 /*
  * Settings metadata file
@@ -367,6 +365,27 @@ return [
     'is_domain' => 1,
     'is_contact' => 0,
     'description' => ts('If checked, mailings will have open tracking enabled by default.'),
+    'help_text' => NULL,
+  ],
+  // dev/cor#1768 Allow mailer sync interval to be configured by the
+  // adminstrator.
+  'civimail_sync_interval' => [
+    'group_name' => 'Mailing Preferences',
+    'group' => 'mailing',
+    'name' => 'civimail_sync_interval',
+    'type' => 'Integer',
+    'quick_form_type' => 'Element',
+    'html_type' => 'text',
+    'html_attributes' => [
+      'size' => 4,
+      'maxlength' => 8,
+    ],
+    'default' => 10,
+    'title' => ts('Database Update Frequency'),
+    'add' => '5.28',
+    'is_domain' => 1,
+    'is_contact' => 0,
+    'description' => ts('The frequency that CiviMail updates its sent mail database.'),
     'help_text' => NULL,
   ],
 ];

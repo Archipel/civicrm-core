@@ -15,6 +15,8 @@
  */
 class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
 
+  use CRMTraits_Custom_CustomDataTrait;
+
   public function setUp() {
     parent::setUp();
 
@@ -48,7 +50,7 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
 
     $fixAddress = TRUE;
 
-    CRM_Core_BAO_Address::create($params, $fixAddress, $entity = NULL);
+    CRM_Core_BAO_Address::legacyCreate($params, $fixAddress);
     $addressId = $this->assertDBNotNull('CRM_Core_DAO_Address', 'Oberoi Garden', 'id', 'street_address',
       'Database check for created address.'
     );
@@ -74,7 +76,7 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
     ];
     $params['contact_id'] = $contactId;
 
-    $block = CRM_Core_BAO_Address::create($params, $fixAddress, $entity = NULL);
+    $block = CRM_Core_BAO_Address::legacyCreate($params, $fixAddress);
 
     $this->assertDBNotNull('CRM_Core_DAO_Address', $contactId, 'id', 'contact_id',
       'Database check for updated address by contactId.'
@@ -251,7 +253,7 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
 
     $fixAddress = TRUE;
 
-    CRM_Core_BAO_Address::create($params, $fixAddress, $entity = NULL);
+    CRM_Core_BAO_Address::legacyCreate($params, $fixAddress);
 
     $addressId = $this->assertDBNotNull('CRM_Core_DAO_Address', $contactId, 'id', 'contact_id',
       'Database check for created address.'
@@ -592,6 +594,103 @@ class CRM_Core_BAO_AddressTest extends CiviUnitTestCase {
 
     // CRM-21214 - AdressA shouldn't be master of itself.
     $this->assertEmpty($updatedAddressA->master_id);
+  }
+
+  /**
+   * dev/core#1670 - Ensure that the custom fields on adresses are copied
+   * to inherited address
+   * 1. test the creation of the shared address with custom field
+   * 2. test the update of the custom field in the master
+   */
+  public function testSharedAddressCustomField() {
+
+    $this->createCustomGroupWithFieldOfType(['extends' => 'Address'], 'text');
+    $customField = $this->getCustomFieldName('text');
+
+    $contactIdA = $this->individualCreate([], 0);
+    $contactIdB = $this->individualCreate([], 1);
+
+    $addressParamsA = [
+      'street_address' => '123 Fake St.',
+      'location_type_id' => '1',
+      'is_primary' => '1',
+      'contact_id' => $contactIdA,
+      $customField => 'this is a custom text field',
+    ];
+
+    $addAddressA = CRM_Core_BAO_Address::add($addressParamsA, FALSE);
+
+    // without having the custom field, we should still copy the values from master
+    $addressParamsB = [
+      'street_address' => '123 Fake St.',
+      'location_type_id' => '1',
+      'is_primary' => '1',
+      'master_id' => $addAddressA->id,
+      'contact_id' => $contactIdB,
+    ];
+    $addAddressB = CRM_Core_BAO_Address::add($addressParamsB, FALSE);
+
+    // 1. check if the custom fields values have been copied from master to shared address
+    $address = $this->callAPISuccessGetSingle('Address', ['id' => $addAddressB->id, 'return' => $this->getCustomFieldName('text')]);
+    $this->assertEquals($addressParamsA[$customField], $address[$customField]);
+
+    // 2. now, we update addressA custom field to see if it goes into addressB
+    $addressParamsA['id'] = $addAddressA->id;
+    $addressParamsA[$customField] = 'updated custom text field';
+    $addAddressA = CRM_Core_BAO_Address::add($addressParamsA, FALSE);
+
+    $address = $this->callAPISuccessGetSingle('Address', ['id' => $addAddressB->id, 'return' => $this->getCustomFieldName('text')]);
+    $this->assertEquals($addressParamsA[$customField], $address[$customField]);
+
+  }
+
+  /**
+   * Pinned countries with Default country
+   */
+  public function testPinnedCountriesWithDefaultCountry() {
+    // Guyana, Netherlands, United States
+    $pinnedCountries = ['1093', '1152', '1228'];
+
+    // set default country to Netherlands
+    $this->callAPISuccess('Setting', 'create', ['defaultContactCountry' => 1152, 'pinnedContactCountries' => $pinnedCountries]);
+    // get the list of country
+    $availableCountries = CRM_Core_PseudoConstant::country(FALSE, FALSE);
+    // get the order of country id using their keys
+    $availableCountries = array_keys($availableCountries);
+
+    // default country is set, so first country should be Netherlands, then rest from pinned countries.
+
+    // Netherlands
+    $this->assertEquals(1152, $availableCountries[0]);
+    // Guyana
+    $this->assertEquals(1093, $availableCountries[1]);
+    // United States
+    $this->assertEquals(1228, $availableCountries[2]);
+  }
+
+  /**
+   * Pinned countries with out Default country
+   */
+  public function testPinnedCountriesWithOutDefaultCountry() {
+    // Guyana, Netherlands, United States
+    $pinnedCountries = ['1093', '1152', '1228'];
+
+    // unset default country
+    $this->callAPISuccess('Setting', 'create', ['defaultContactCountry' => NULL, 'pinnedContactCountries' => $pinnedCountries]);
+
+    // get the list of country
+    $availableCountries = CRM_Core_PseudoConstant::country(FALSE, FALSE);
+    // get the order of country id using their keys
+    $availableCountries = array_keys($availableCountries);
+
+    // no default country, so sequnece should be present as per pinned countries.
+
+    // Guyana
+    $this->assertEquals(1093, $availableCountries[0]);
+    // Netherlands
+    $this->assertEquals(1152, $availableCountries[1]);
+    // United States
+    $this->assertEquals(1228, $availableCountries[2]);
   }
 
 }

@@ -25,7 +25,7 @@ class CRM_Upgrade_Form extends CRM_Core_Form {
   /**
    * Minimum previous CiviCRM version we can directly upgrade from
    */
-  const MINIMUM_UPGRADABLE_VERSION = '4.2.9';
+  const MINIMUM_UPGRADABLE_VERSION = '4.4.7';
 
   /**
    * @var \CRM_Core_Config
@@ -68,11 +68,10 @@ class CRM_Upgrade_Form extends CRM_Core_Form {
   ) {
     $this->_config = CRM_Core_Config::singleton();
 
-    $domain = new CRM_Core_DAO_Domain();
-    $domain->find(TRUE);
+    $locales = CRM_Core_I18n::getMultilingual();
 
-    $this->multilingual = (bool) $domain->locales;
-    $this->locales = explode(CRM_Core_DAO::VALUE_SEPARATOR, $domain->locales);
+    $this->multilingual = (bool) $locales;
+    $this->locales = $locales;
 
     $smarty = CRM_Core_Smarty::singleton();
     //$smarty->compile_dir = $this->_config->templateCompileDir;
@@ -285,19 +284,6 @@ SET    version = '$version'
     }
 
     return FALSE;
-  }
-
-  /**
-   * @param $version
-   *
-   * @return bool
-   */
-  public function checkVersion($version) {
-    $domainID = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_Domain',
-      $version, 'id',
-      'version'
-    );
-    return (bool) $domainID;
   }
 
   /**
@@ -769,8 +755,6 @@ SET    version = '$version'
     $upgrade->setVersion($rev);
     CRM_Utils_System::flushCache();
 
-    $config = CRM_Core_Config::singleton();
-    $config->userSystem->flush();
     return TRUE;
   }
 
@@ -785,6 +769,9 @@ SET    version = '$version'
     // Seems extraneous in context, but we'll preserve old behavior
     $upgrade->setVersion($latestVer);
 
+    $config = CRM_Core_Config::singleton();
+    $config->userSystem->flush();
+
     CRM_Core_Invoke::rebuildMenuAndCaches(FALSE, TRUE);
     // NOTE: triggerRebuild is FALSE becaues it will run again in a moment (via fixSchemaDifferences).
 
@@ -794,6 +781,8 @@ SET    version = '$version'
     // Rebuild all triggers and re-enable logging if needed
     $logging = new CRM_Logging_Schema();
     $logging->fixSchemaDifferences();
+    // Force a rebuild of CiviCRM asset cache in case things have changed.
+    \Civi::service('asset_builder')->clear(FALSE);
   }
 
   /**

@@ -10,6 +10,8 @@
  */
 
 use Civi\Api4\CustomGroup;
+use Civi\Api4\CustomField;
+use Civi\Api4\OptionValue;
 
 /**
  * Trait Custom Data trait.
@@ -50,7 +52,7 @@ trait CRMTraits_Custom_CustomDataTrait {
       'max_multiple' => 0,
     ], $params);
     $identifier = $params['name'] ?? $params['title'];
-    $this->ids['CustomGroup'][$identifier] = CustomGroup::create()->setCheckPermissions(FALSE)->setValues($params)->execute()->first()['id'];
+    $this->ids['CustomGroup'][$identifier] = CustomGroup::create(FALSE)->setValues($params)->execute()->first()['id'];
     return $this->ids['CustomGroup'][$identifier];
   }
 
@@ -84,14 +86,16 @@ trait CRMTraits_Custom_CustomDataTrait {
    *   Params for the group to be created.
    * @param string $customFieldType
    *
-   * @param string $identifier
+   * @param string|null $identifier
+   *
+   * @param array $fieldParams
    *
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function createCustomGroupWithFieldOfType($groupParams = [], $customFieldType = 'text', $identifier = NULL) {
-    $supported = ['text', 'select', 'date', 'int', 'contact_reference', 'radio'];
+  public function createCustomGroupWithFieldOfType($groupParams = [], $customFieldType = 'text', $identifier = NULL, $fieldParams = []) {
+    $supported = ['text', 'select', 'date', 'int', 'contact_reference', 'radio', 'multi_country'];
     if (!in_array($customFieldType, $supported, TRUE)) {
       throw new CRM_Core_Exception('we have not yet extracted other custom field types from createCustomFieldsOfAllTypes, Use consistent syntax when you do');
     }
@@ -99,7 +103,7 @@ trait CRMTraits_Custom_CustomDataTrait {
     $groupParams['name'] = $identifier ?? 'Custom Group';
     $this->createCustomGroup($groupParams);
     $reference = &$this->ids['CustomField'][$identifier . $customFieldType];
-    $fieldParams = ['custom_group_id' => $this->ids['CustomGroup'][$groupParams['name']]];
+    $fieldParams = array_merge($fieldParams, ['custom_group_id' => $this->ids['CustomGroup'][$groupParams['name']]]);
     switch ($customFieldType) {
       case 'text':
         $reference = $this->createTextCustomField($fieldParams)['id'];
@@ -123,6 +127,10 @@ trait CRMTraits_Custom_CustomDataTrait {
 
       case 'radio':
         $reference = $this->createIntegerRadioCustomField($fieldParams)['id'];
+        return;
+
+      case 'multi_country':
+        $reference = $this->createMultiCountryCustomField($fieldParams)['id'];
         return;
 
     }
@@ -162,6 +170,25 @@ trait CRMTraits_Custom_CustomDataTrait {
    */
   protected function getCustomFieldName($key) {
     return 'custom_' . $this->getCustomFieldID($key);
+  }
+
+  /**
+   * Add another option to the custom field.
+   *
+   * @param string $key
+   * @param array $values
+   *
+   * @return int
+   * @throws \API_Exception
+   */
+  protected function addOptionToCustomField($key, $values) {
+    $optionGroupID = CustomField::get(FALSE)
+      ->addWhere('id', '=', $this->getCustomFieldID($key))
+      ->addSelect('option_group_id')
+      ->execute()->first()['option_group_id'];
+    return (int) OptionValue::create(FALSE)
+      ->setValues(array_merge(['option_group_id' => $optionGroupID], $values))
+      ->execute()->first()['value'];
   }
 
   /**
@@ -319,6 +346,19 @@ trait CRMTraits_Custom_CustomDataTrait {
    */
   protected function createSelectCustomField(array $params): array {
     $params = array_merge($this->getFieldsValuesByType('String', 'Select'), $params);
+    return $this->callAPISuccess('custom_field', 'create', $params)['values'][0];
+  }
+
+  /**
+   * Create custom select field.
+   *
+   * @param array $params
+   *   Parameter overrides, must include custom_group_id.
+   *
+   * @return array
+   */
+  protected function createAutoCompleteCustomField(array $params): array {
+    $params = array_merge($this->getFieldsValuesByType('String', 'Autocomplete-Select'), $params);
     return $this->callAPISuccess('custom_field', 'create', $params)['values'][0];
   }
 

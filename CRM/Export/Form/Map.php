@@ -13,8 +13,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 /**
@@ -28,6 +26,15 @@ class CRM_Export_Form_Map extends CRM_Core_Form {
    * @var int
    */
   protected $_mappingId;
+
+  /**
+   * Use the form name to create the tpl file name.
+   *
+   * @return string
+   */
+  public function getTemplateFileName() {
+    return 'CRM/Export/Form/Map.tpl';
+  }
 
   /**
    * Build the form object.

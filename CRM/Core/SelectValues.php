@@ -16,8 +16,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 class CRM_Core_SelectValues {
 
@@ -176,12 +174,9 @@ class CRM_Core_SelectValues {
       'CheckBox' => ts('Checkbox(es)'),
       'Select Date' => ts('Select Date'),
       'File' => ts('File'),
-      'Select State/Province' => ts('Select State/Province'),
-      'Select Country' => ts('Select Country'),
       'RichTextEditor' => ts('Rich Text Editor'),
       'Autocomplete-Select' => ts('Autocomplete-Select'),
       'Link' => ts('Link'),
-      'ContactReference' => ts('Autocomplete-Select'),
     ];
   }
 
@@ -1193,6 +1188,16 @@ class CRM_Core_SelectValues {
       ts('None'),
       ts('After menu element'),
       ts('Before menu element'),
+    ];
+  }
+
+  /**
+   * @return array
+   */
+  public static function relationshipOrientation() {
+    return [
+      'a_b' => ts('A to B'),
+      'b_a' => ts('B to A'),
     ];
   }
 

@@ -117,10 +117,8 @@ class CRM_Core_DAO_AllCoreTables {
    *   index definitions after localization
    */
   public static function multilingualize($class, $originalIndices) {
-    $domain = new CRM_Core_DAO_Domain();
-    $domain->find(TRUE);
-    $locales = explode(CRM_Core_DAO::VALUE_SEPARATOR, $domain->locales);
-    if (CRM_Utils_System::isNull($locales)) {
+    $locales = CRM_Core_I18n::getMultilingual();
+    if (!$locales) {
       return $originalIndices;
     }
     $classFields = $class::fields();
@@ -282,7 +280,7 @@ class CRM_Core_DAO_AllCoreTables {
    * Get the classname for the table.
    *
    * @param string $tableName
-   * @return string
+   * @return string|CRM_Core_DAO|NULL
    */
   public static function getClassForTable($tableName) {
     //CRM-19677: on multilingual setup, trim locale from $tableName to fetch class name
@@ -298,7 +296,7 @@ class CRM_Core_DAO_AllCoreTables {
    *
    * @param string $daoName
    *   Ex: 'Contact'.
-   * @return CRM_Core_DAO|NULL
+   * @return string|CRM_Core_DAO|NULL
    *   Ex: 'CRM_Contact_DAO_Contact'.
    */
   public static function getFullName($daoName) {
@@ -336,6 +334,17 @@ class CRM_Core_DAO_AllCoreTables {
    */
   public static function getTableForEntityName($entityBriefName) {
     return self::getTableForClass(self::getFullName($entityBriefName));
+  }
+
+  /**
+   * Convert table name to brief entity name.
+   *
+   * @param string $tableName
+   *
+   * @return FALSE|string
+   */
+  public static function getEntityNameForTable(string $tableName) {
+    return self::getBriefName(self::getClassForTable($tableName));
   }
 
   /**

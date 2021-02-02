@@ -1528,6 +1528,12 @@ ORDER BY   civicrm_email.is_bulkmail DESC
       \Civi::log('Parameter $ids is no longer used by Mailing::create. Use the api or just pass $params', ['civi.tag' => 'deprecated']);
     }
 
+    // CRM-#1843
+    // If it is a mass sms, set url_tracking to false
+    if (!empty($params['sms_provider_id'])) {
+      $params['url_tracking'] = 0;
+    }
+
     // CRM-12430
     // Do the below only for an insert
     // for an update, we should not set the defaults
@@ -2457,7 +2463,7 @@ LEFT JOIN civicrm_mailing_group g ON g.mailing_id   = m.id
       throw new CRM_Core_Exception(ts('No id passed to mailing del function'));
     }
 
-    CRM_Utils_Hook::pre('delete', 'Mailing', $id, CRM_Core_DAO::$_nullArray);
+    CRM_Utils_Hook::pre('delete', 'Mailing', $id);
 
     // delete all file attachments
     CRM_Core_BAO_File::deleteEntityFile('civicrm_mailing',

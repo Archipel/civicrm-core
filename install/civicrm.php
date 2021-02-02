@@ -12,8 +12,7 @@
 /**
  *
  * @package CRM
- * @copyright CiviCRM LLC (c) 2004-2020
- * $Id$
+ * @copyright CiviCRM LLC https://civicrm.org/licensing
  * @param $filesDirectory
  */
 function civicrm_setup($filesDirectory) {
@@ -131,8 +130,6 @@ function civicrm_main(&$config) {
  */
 function civicrm_source($dsn, $fileName, $lineMode = FALSE) {
   global $crmPath;
-
-  require_once "$crmPath/packages/DB.php";
 
   // CRM-19699 See also CRM_Core_DAO for PHP7 mysqli compatiblity.
   // Duplicated here because this is not using CRM_Core_DAO directly

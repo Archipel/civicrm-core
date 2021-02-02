@@ -15,6 +15,8 @@
  */
 class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
 
+  use CRMTraits_ACL_PermissionTrait;
+
   public function setUp() {
     parent::setUp();
     $this->_contactId = $this->createLoggedInUser();
@@ -54,7 +56,7 @@ class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
   }
 
   public function testViewOwnEvent() {
-    self::setViewOwnEventPermissions();
+    $this->setViewOwnEventPermissions();
     unset(\Civi::$statics['CRM_Event_BAO_Event']['permissions']);
     $permissions = CRM_Event_BAO_Event::checkPermission($this->_ownEventId, CRM_Core_Permission::VIEW);
     $this->assertTrue($permissions);
@@ -65,7 +67,7 @@ class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
   }
 
   public function testEditOwnEvent() {
-    self::setViewOwnEventPermissions();
+    $this->setViewOwnEventPermissions();
     unset(\Civi::$statics['CRM_Event_BAO_Event']['permissions']);
     $this->_loggedInUser = CRM_Core_Session::singleton()->get('userID');
     $permissions = CRM_Event_BAO_Event::checkPermission($this->_ownEventId, CRM_Core_Permission::EDIT);
@@ -77,7 +79,7 @@ class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
    */
   public function testDeleteOwnEvent() {
     // Check that you can't delete your own event without "Delete in CiviEvent" permission
-    self::setViewOwnEventPermissions();
+    $this->setViewOwnEventPermissions();
     unset(\Civi::$statics['CRM_Event_BAO_Event']['permissions']);
     $permissions = CRM_Event_BAO_Event::checkPermission($this->_ownEventId, CRM_Core_Permission::DELETE);
     $this->assertFalse($permissions);
@@ -99,9 +101,18 @@ class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
     $this->assertTrue($permissions);
   }
 
+  /**
+   * Test that the contact can view an event with an ACL permitting everyone to view it.
+   */
+  public function testViewAclEventAllowed() {
+    $this->setupScenarioCoreACLEveryonePermittedToEvent();
+    $permittedEventID = CRM_Core_Permission::event(CRM_Core_Permission::VIEW, $this->scenarioIDs['Event']['permitted_event']);
+    $this->assertEquals($this->scenarioIDs['Event']['permitted_event'], $permittedEventID);
+  }
+
   public function testEditOtherEventDenied() {
     $this->_loggedInUser = CRM_Core_Session::singleton()->get('userID');
-    self::setViewAllEventPermissions();
+    $this->setViewAllEventPermissions();
     unset(\Civi::$statics['CRM_Event_BAO_Event']['permissions']);
     $permissions = CRM_Event_BAO_Event::checkPermission($this->_otherEventId, CRM_Core_Permission::EDIT);
     $this->assertFalse($permissions);
@@ -124,10 +135,20 @@ class CRM_Event_BAO_EventPermissionsTest extends CiviUnitTestCase {
 
   public function testDeleteOtherEventDenied() {
     // FIXME: This test could be improved, but for now it checks that we can't delete if we don't have "Delete in CiviEvent"
-    self::setEditAllEventPermissions();
+    $this->setEditAllEventPermissions();
     unset(\Civi::$statics['CRM_Event_BAO_Event']['permissions']);
     $permissions = CRM_Event_BAO_Event::checkPermission($this->_otherEventId, CRM_Core_Permission::DELETE);
     $this->assertFalse($permissions);
+  }
+
+  /**
+   * Test get complete info function returns all info for contacts with view all info.
+   */
+  public function testGetCompleteInfo() {
+    $this->setupScenarioCoreACLEveryonePermittedToEvent();
+    $info = CRM_Event_BAO_Event::getCompleteInfo('20000101');
+    $this->assertEquals('Annual CiviCRM meet', $info[0]['title']);
+    $this->assertEquals('Annual CiviCRM meet', $info[1]['title']);
   }
 
 }

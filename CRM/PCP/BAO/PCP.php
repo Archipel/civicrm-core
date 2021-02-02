@@ -88,8 +88,6 @@ WHERE  civicrm_pcp.contact_id = civicrm_contact.id
    *   array of Pcp if found
    */
   public static function getPcpDashboardInfo($contactId) {
-    $links = self::pcpLinks();
-
     $query = '
 SELECT pcp.*, block.is_tellfriend_enabled FROM civicrm_pcp pcp
 LEFT JOIN civicrm_pcp_block block ON block.id = pcp.pcp_block_id
@@ -98,13 +96,13 @@ WHERE pcp.is_active = 1
 ORDER BY page_type, page_id';
 
     $params = [1 => [$contactId, 'Integer']];
-
     $pcpInfoDao = CRM_Core_DAO::executeQuery($query, $params);
-    $pcpInfo = [];
-    $hide = $mask = array_sum(array_keys($links['all']));
-    $contactPCPPages = [];
 
+    $links = self::pcpLinks();
+    $hide = $mask = array_sum(array_keys($links['all']));
     $approved = CRM_Core_PseudoConstant::getKey('CRM_PCP_BAO_PCP', 'status_id', 'Approved');
+    $contactPCPPages = [];
+    $pcpInfo = [];
 
     while ($pcpInfoDao->fetch()) {
       $mask = $hide;
@@ -264,10 +262,13 @@ WHERE pcp.id = %1 AND cc.contribution_status_id = %2 AND cc.is_test = 0";
   /**
    * Get action links.
    *
+   * @param int $pcpId
+   *   Contains the pcp ID. Defaults to NULL for backwards compatibility.
+   *
    * @return array
    *   (reference) of action links
    */
-  public static function &pcpLinks() {
+  public static function &pcpLinks($pcpId = NULL) {
     if (!(self::$_pcpLinks)) {
       $deleteExtra = ts('Are you sure you want to delete this Personal Campaign Page?') . '\n' . ts('This action cannot be undone.');
 
@@ -326,6 +327,8 @@ WHERE pcp.id = %1 AND cc.contribution_status_id = %2 AND cc.is_test = 0";
           'title' => ts('Delete'),
         ],
       ];
+
+      CRM_Utils_Hook::links('pcp.user.actions', 'Pcp', $pcpId, self::$_pcpLinks);
     }
     return self::$_pcpLinks;
   }
@@ -337,7 +340,7 @@ WHERE pcp.id = %1 AND cc.contribution_status_id = %2 AND cc.is_test = 0";
    *   Campaign page id.
    */
   public static function deleteById($id) {
-    CRM_Utils_Hook::pre('delete', 'Campaign', $id, CRM_Core_DAO::$_nullArray);
+    CRM_Utils_Hook::pre('delete', 'Campaign', $id);
 
     $transaction = new CRM_Core_Transaction();
 
@@ -464,10 +467,7 @@ WHERE pcp.id = %1 AND cc.contribution_status_id = %2 AND cc.is_test = 0";
         ['onclick' => "showHideByValue('pcp_display_in_roll','','nameID|nickID|personalNoteID','block','radio',false); pcpAnonymous( );"]
       );
       $extraOption = ['onclick' => "return pcpAnonymous( );"];
-      $elements = [];
-      $elements[] = &$page->createElement('radio', NULL, '', ts('Include my name and message'), 0, $extraOption);
-      $elements[] = &$page->createElement('radio', NULL, '', ts('List my support anonymously'), 1, $extraOption);
-      $page->addGroup($elements, 'pcp_is_anonymous', NULL, '&nbsp;&nbsp;&nbsp;');
+      $page->addRadio('pcp_is_anonymous', '', [ts('Include my name and message'), ts('List my support anonymously')], [], '&nbsp;&nbsp;&nbsp;', FALSE, [$extraOption, $extraOption]);
       $page->_defaults['pcp_is_anonymous'] = 0;
 
       $page->add('text', 'pcp_roll_nickname', ts('Name'), ['maxlength' => 30]);
@@ -664,7 +664,7 @@ WHERE pcp.id = %1 AND cc.contribution_status_id = %2 AND cc.is_test = 0";
     list($domainEmailName, $domainEmailAddress) = CRM_Core_BAO_Domain::getNameAndEmail();
 
     if (!$domainEmailAddress || $domainEmailAddress == 'info@EXAMPLE.ORG') {
-      $fixUrl = CRM_Utils_System::url("civicrm/admin/domain", 'action=update&reset=1');
+      $fixUrl = CRM_Utils_System::url('civicrm/admin/options/from_email_address', 'reset=1');
       throw new CRM_Core_Exception(ts('The site administrator needs to enter a valid \'FROM Email Address\' in <a href="%1">Administer CiviCRM &raquo; Communications &raquo; FROM Email Addresses</a>. The email address used may need to be a valid mail account with your email service provider.', [1 => $fixUrl]));
     }
 

@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 namespace Civi\Api4;
@@ -24,7 +22,7 @@ namespace Civi\Api4;
  * GroupNesting entity.
  *
  * @see \Civi\Api4\Group
- *
+ * @searchable false
  * @package Civi\Api4
  */
 class GroupNesting extends Generic\DAOEntity {

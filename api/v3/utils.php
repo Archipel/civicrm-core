@@ -1221,7 +1221,7 @@ function formatCheckBoxField(&$checkboxFieldValue, $customFieldLabel, $entity) {
 /**
  * Function to do a 'standard' api get - when the api is only doing a $bao->find then use this.
  *
- * @param string $bao_name
+ * @param string|CRM_Core_DAO $bao_name
  *   Name of BAO.
  * @param array $params
  *   Params from api.
@@ -1240,20 +1240,27 @@ function _civicrm_api3_basic_get($bao_name, $params, $returnAsSuccess = TRUE, $e
   $entity = $entity ?: CRM_Core_DAO_AllCoreTables::getBriefName($bao_name);
   $options = _civicrm_api3_get_options_from_params($params);
 
-  $query = new \Civi\API\Api3SelectQuery($entity, CRM_Utils_Array::value('check_permissions', $params, FALSE));
-  $query->where = $params;
-  if ($options['is_count']) {
-    $query->select = ['count_rows'];
+  // Skip query if table doesn't exist yet due to pending upgrade
+  if (!$bao_name::tableHasBeenAdded()) {
+    \Civi::log()->warning("Could not read from {$entity} before table has been added. Upgrade required.", ['civi.tag' => 'upgrade_needed']);
+    $result = [];
   }
   else {
-    $query->select = array_keys(array_filter($options['return']));
-    $query->orderBy = $options['sort'];
-    $query->isFillUniqueFields = $uniqueFields;
+    $query = new \Civi\API\Api3SelectQuery($entity, $params['check_permissions'] ?? FALSE);
+    $query->where = $params;
+    if ($options['is_count']) {
+      $query->select = ['count_rows'];
+    }
+    else {
+      $query->select = array_keys(array_filter($options['return']));
+      $query->orderBy = $options['sort'];
+      $query->isFillUniqueFields = $uniqueFields;
+    }
+    $query->limit = $options['limit'];
+    $query->offset = $options['offset'];
+    $query->merge($sql);
+    $result = $query->run();
   }
-  $query->limit = $options['limit'];
-  $query->offset = $options['offset'];
-  $query->merge($sql);
-  $result = $query->run();
 
   if ($returnAsSuccess) {
     return civicrm_api3_create_success($result, $params, $entity, 'get');
@@ -2179,11 +2186,6 @@ function _civicrm_api3_validate_html(&$params, &$fieldName, $fieldInfo) {
   if (strpos($op, 'NULL') || strpos($op, 'EMPTY')) {
     return;
   }
-  if ($fieldValue) {
-    if (!CRM_Utils_Rule::xssString($fieldValue)) {
-      throw new API_Exception('Input contains illegal SCRIPT tag.', ["field" => $fieldName, "error_code" => "xss"]);
-    }
-  }
 }
 
 /**
@@ -2212,11 +2214,6 @@ function _civicrm_api3_validate_string(&$params, &$fieldName, &$fieldInfo, $enti
 
   if ($fieldValue) {
     foreach ((array) $fieldValue as $key => $value) {
-      foreach ([$fieldValue, $key, $value] as $input) {
-        if (!CRM_Utils_Rule::xssString($input)) {
-          throw new Exception('Input contains illegal SCRIPT tag.');
-        }
-      }
       if ($fieldName == 'currency') {
         //When using IN operator $fieldValue is a array of currency codes
         if (!CRM_Utils_Rule::currencyCode($value)) {

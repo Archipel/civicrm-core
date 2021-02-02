@@ -132,7 +132,7 @@ abstract class CRM_Utils_Hook {
    * but also accepts enough information to support Symfony Event
    * dispatching.
    *
-   * @param array|int $names
+   * @param array $names
    *   (Recommended) Array of parameter names, in order.
    *   Using an array is recommended because it enables full
    *   event-broadcasting behaviors.
@@ -152,32 +152,17 @@ abstract class CRM_Utils_Hook {
     &$arg1, &$arg2, &$arg3, &$arg4, &$arg5, &$arg6,
     $fnSuffix
   ) {
-    if (!\Civi\Core\Container::isContainerBooted()) {
-      $prebootHooks = ['civicrm_container', 'civicrm_entityTypes'];
-      // 'civicrm_config' ?
-      if (in_array($fnSuffix, $prebootHooks)) {
-        $count = is_array($names) ? count($names) : $names;
-        return $this->invokeViaUF($count, $arg1, $arg2, $arg3, $arg4, $arg5, $arg6, $fnSuffix);
-      }
-      else {
-        // TODO: Emit a warning, eg
-        // error_log("Warning: hook_$fnSuffix fired prematurely. Dropped.");
-        return;
-      }
-    }
-
     if (!is_array($names)) {
       // We were called with the old contract wherein $names is actually an int.
       // Symfony dispatcher requires some kind of name.
-      // TODO: Emit a warning, eg
-      // error_log("Warning: hook_$fnSuffix does not give names for its parameters. It will present odd names to any Symfony event listeners.");
+      Civi::log()->warning("hook_$fnSuffix should be updated to pass an array of parameter names to CRM_Utils_Hook::invoke().", ['civi.tag' => 'deprecated']);
       $compatNames = ['arg1', 'arg2', 'arg3', 'arg4', 'arg5', 'arg6'];
       $names = array_slice($compatNames, 0, (int) $names);
     }
 
     $event = \Civi\Core\Event\GenericHookEvent::createOrdered(
       $names,
-      array(&$arg1, &$arg2, &$arg3, &$arg4, &$arg5, &$arg6)
+      [&$arg1, &$arg2, &$arg3, &$arg4, &$arg5, &$arg6]
     );
     \Civi::dispatcher()->dispatch('hook_' . $fnSuffix, $event);
     return $event->getReturnValues();
@@ -354,7 +339,7 @@ abstract class CRM_Utils_Hook {
    * @return null
    *   the return value is ignored
    */
-  public static function pre($op, $objectName, $id, &$params) {
+  public static function pre($op, $objectName, $id, &$params = []) {
     $event = new \Civi\Core\Event\PreEvent($op, $objectName, $id, $params);
     \Civi::dispatcher()->dispatch('hook_civicrm_pre', $event);
     return $event->getReturnValues();
@@ -434,6 +419,22 @@ abstract class CRM_Utils_Hook {
    */
   public static function links($op, $objectName, &$objectId, &$links, &$mask = NULL, &$values = []) {
     return self::singleton()->invoke(['op', 'objectName', 'objectId', 'links', 'mask', 'values'], $op, $objectName, $objectId, $links, $mask, $values, 'civicrm_links');
+  }
+
+  /**
+   * Alter the contents of a resource bundle (ie a collection of JS/CSS/etc).
+   *
+   * TIP: $bundle->add*() and $bundle->filter() should be useful for
+   * adding/removing/updating items.
+   *
+   * @param CRM_Core_Resources_Bundle $bundle
+   * @return null
+   * @see CRM_Core_Resources_CollectionInterface::add()
+   * @see CRM_Core_Resources_CollectionInterface::filter()
+   */
+  public static function alterBundle($bundle) {
+    return self::singleton()
+      ->invoke(['bundle'], $bundle, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, 'civicrm_alterBundle');
   }
 
   /**
@@ -692,7 +693,7 @@ abstract class CRM_Utils_Hook {
    *   the return value is ignored
    */
   public static function activeTheme(&$theme, $context) {
-    return self::singleton()->invoke(array('theme', 'context'), $theme, $context,
+    return self::singleton()->invoke(['theme', 'context'], $theme, $context,
       self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject,
       'civicrm_activeTheme'
     );
@@ -825,23 +826,6 @@ abstract class CRM_Utils_Hook {
   }
 
   /**
-   * This hook is called when rendering the tabs for a contact (q=civicrm/contact/view)c
-   *
-   * @param array $tabs
-   *   The array of tabs that will be displayed.
-   * @param int $contactID
-   *   The contactID for whom the dashboard is being rendered.
-   *
-   * @return null
-   * @deprecated Use tabset() instead.
-   */
-  public static function tabs(&$tabs, $contactID) {
-    return self::singleton()->invoke(['tabs', 'contactID'], $tabs, $contactID,
-      self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, 'civicrm_tabs'
-    );
-  }
-
-  /**
    * This hook is called when rendering the tabs used for events and potentially
    * contribution pages, etc.
    *
@@ -883,7 +867,7 @@ abstract class CRM_Utils_Hook {
    * @return mixed
    */
   public static function alterAdminPanel(&$panels) {
-    return self::singleton()->invoke(array('panels'), $panels,
+    return self::singleton()->invoke(['panels'], $panels,
       self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject,
       'civicrm_alterAdminPanel'
     );
@@ -1059,6 +1043,24 @@ abstract class CRM_Utils_Hook {
   }
 
   /**
+   * When adding a new "Mail Account" (`MailSettings`), present a menu of setup
+   * options.
+   *
+   * @param array $setupActions
+   *   Each item has a symbolic-key, and it has the properties:
+   *     - title: string
+   *     - callback: string|array, the function which starts the setup process.
+   *        The function is expected to return a 'url' for the config screen.
+   * @return mixed
+   */
+  public static function mailSetupActions(&$setupActions) {
+    return self::singleton()->invoke(['setupActions'], $setupActions, self::$_nullObject, self::$_nullObject,
+      self::$_nullObject, self::$_nullObject, self::$_nullObject,
+      'civicrm_mailSetupActions'
+    );
+  }
+
+  /**
    * This hook is called when composing a mailing. You can include / exclude other groups as needed.
    *
    * @param mixed $form
@@ -1218,6 +1220,33 @@ abstract class CRM_Utils_Hook {
   }
 
   /**
+   * This hook is called when loading a mail-store (e.g. IMAP, POP3, or Maildir).
+   *
+   * @param array $params
+   *   Most fields correspond to data in the MailSettings entity:
+   *   - id: int
+   *   - server: string
+   *   - username: string
+   *   - password: string
+   *   - is_ssl: bool
+   *   - source: string
+   *   - local_part: string
+   *
+   *   With a few supplements
+   *   - protocol: string, symbolic protocol name (e.g. "IMAP")
+   *   - factory: callable, the function which instantiates the driver class
+   *   - auth: string, (for some drivers) specify the authentication method (eg "Password" or "XOAuth2")
+   *
+   * @return mixed
+   */
+  public static function alterMailStore(&$params) {
+    return self::singleton()->invoke(['params'], $params, $context,
+      self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject,
+      'civicrm_alterMailStore'
+    );
+  }
+
+  /**
    * This hook is called when membership status is being calculated.
    *
    * @param array $membershipStatus
@@ -1284,6 +1313,28 @@ abstract class CRM_Utils_Hook {
   public static function caseTypes(&$caseTypes) {
     return self::singleton()
       ->invoke(['caseTypes'], $caseTypes, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, 'civicrm_caseTypes');
+  }
+
+  /**
+   * This hook is called when getting case email subject patterns.
+   *
+   * All emails related to cases have case hash/id in the subject, e.g:
+   * [case #ab12efg] Magic moment
+   * [case #1234] Magic is here
+   *
+   * Using this hook you can replace/enrich default list with some other
+   * patterns, e.g. include case type categories (see CiviCase extension) like:
+   * [(case|project|policy initiative) #hash]
+   * [(case|project|policy initiative) #id]
+   *
+   * @param array $subjectPatterns
+   *   Cases related email subject regexp patterns.
+   *
+   * @return mixed
+   */
+  public static function caseEmailSubjectPatterns(&$subjectPatterns) {
+    return self::singleton()
+      ->invoke(['caseEmailSubjectPatterns'], $subjectPatterns, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, 'civicrm_caseEmailSubjectPatterns');
   }
 
   /**
@@ -2157,7 +2208,7 @@ abstract class CRM_Utils_Hook {
   }
 
   /**
-   * This hook is called while viewing contact dashboard.
+   * This hook is called while initializing the default dashlets for a contact dashboard.
    *
    * @param array $availableDashlets
    *   List of dashlets; each is formatted per api/v3/Dashboard
@@ -2359,31 +2410,6 @@ abstract class CRM_Utils_Hook {
   }
 
   /**
-   * Generate a default CRUD URL for an entity.
-   *
-   * @param array $spec
-   *   With keys:.
-   *   - action: int, eg CRM_Core_Action::VIEW or CRM_Core_Action::UPDATE
-   *   - entity_table: string
-   *   - entity_id: int
-   * @param CRM_Core_DAO $bao
-   * @param array $link
-   *   To define the link, add these keys to $link:.
-   *   - title: string
-   *   - path: string
-   *   - query: array
-   *   - url: string (used in lieu of "path"/"query")
-   *      Note: if making "url" CRM_Utils_System::url(), set $htmlize=false
-   * @return mixed
-   */
-  public static function crudLink($spec, $bao, &$link) {
-    return self::singleton()->invoke(['spec', 'bao', 'link'], $spec, $bao, $link,
-      self::$_nullObject, self::$_nullObject, self::$_nullObject,
-      'civicrm_crudLink'
-    );
-  }
-
-  /**
    * Modify the CiviCRM container - add new services, parameters, extensions, etc.
    *
    * ```
@@ -2425,13 +2451,20 @@ abstract class CRM_Utils_Hook {
   /**
    * Check system status.
    *
-   * @param array $messages
-   *   Array<CRM_Utils_Check_Message>. A list of messages regarding system status.
+   * @param CRM_Utils_Check_Message[] $messages
+   *   A list of messages regarding system status
+   * @param array $statusNames
+   *   If specified, only these checks are being requested and others should be skipped
+   * @param bool $includeDisabled
+   *   Run checks that have been explicitly disabled (default false)
    * @return mixed
    */
-  public static function check(&$messages) {
-    return self::singleton()
-      ->invoke(['messages'], $messages, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, self::$_nullObject, 'civicrm_check');
+  public static function check(&$messages, $statusNames = [], $includeDisabled = FALSE) {
+    return self::singleton()->invoke(['messages'],
+      $messages, $statusNames, $includeDisabled,
+      self::$_nullObject, self::$_nullObject, self::$_nullObject,
+      'civicrm_check'
+    );
   }
 
   /**

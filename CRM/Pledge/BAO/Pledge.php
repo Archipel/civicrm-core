@@ -285,7 +285,7 @@ class CRM_Pledge_BAO_Pledge extends CRM_Pledge_DAO_Pledge {
    * @return mixed
    */
   public static function deletePledge($id) {
-    CRM_Utils_Hook::pre('delete', 'Pledge', $id, CRM_Core_DAO::$_nullArray);
+    CRM_Utils_Hook::pre('delete', 'Pledge', $id);
 
     $transaction = new CRM_Core_Transaction();
 
@@ -587,13 +587,13 @@ GROUP BY  currency
     foreach ($fields as $key => $val) {
       $returnProperties[$val] = TRUE;
     }
-    $details = CRM_Utils_Token::getTokenDetails($ids,
+    [$details] = CRM_Utils_Token::getTokenDetails($ids,
       $returnProperties,
       TRUE, TRUE, NULL,
       $tokens,
       get_class($form)
     );
-    $form->assign('contact', $details[0][$params['contact_id']]);
+    $form->assign('contact', $details[$params['contact_id']]);
 
     // handle custom data.
     if (!empty($params['hidden_custom'])) {

@@ -2841,7 +2841,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
   /**
    * Test long display names.
    *
-   * CRM-21258
+   * @see https://issues.civicrm.org/jira/browse/CRM-21258
    *
    * @param int $version
    *
@@ -3833,6 +3833,46 @@ class api_v3_ContactTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test that duplicates can be found even when phone type is specified.
+   *
+   * @param string $phoneKey
+   *
+   * @dataProvider getPhoneStrings
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testGetMatchesPhoneWithType($phoneKey) {
+    $ruleGroup = $this->createRuleGroup();
+    $this->callAPISuccess('Rule', 'create', [
+      'dedupe_rule_group_id' => $ruleGroup['id'],
+      'rule_table' => 'civicrm_phone',
+      'rule_field' => 'phone_numeric',
+      'rule_weight' => 8,
+    ]);
+    $contact1 = $this->individualCreate(['api.Phone.create' => ['phone' => 123]]);
+    $dedupeParams = [
+      $phoneKey => '123',
+      'contact_type' => 'Individual',
+    ];
+    $dupes = $this->callAPISuccess('Contact', 'duplicatecheck', [
+      'dedupe_rule_id' => $ruleGroup['id'],
+      'match' => $dedupeParams,
+    ])['values'];
+    $this->assertEquals([$contact1 => ['id' => $contact1]], $dupes);
+  }
+
+  /**
+   * @return array
+   */
+  public function getPhoneStrings() {
+    return [
+      ['phone-Primary-1'],
+      ['phone-Primary'],
+      ['phone-3-1'],
+    ];
+  }
+
+  /**
    * Test the duplicate check function.
    */
   public function testDuplicateCheckRuleNotReserved() {
@@ -3928,23 +3968,17 @@ class api_v3_ContactTest extends CiviUnitTestCase {
    */
   public function testMerge() {
     $this->createLoggedInUser();
-    $otherContact = $this->callAPISuccess('contact', 'create', $this->_params);
-    $retainedContact = $this->callAPISuccess('contact', 'create', $this->_params);
-    $this->callAPISuccess('contact', 'merge', [
-      'to_keep_id' => $retainedContact['id'],
-      'to_remove_id' => $otherContact['id'],
-      'auto_flip' => FALSE,
-    ]);
+    $this->ids['contact'][0] = $this->callAPISuccess('Contact', 'create', $this->_params)['id'];
+    $this->ids['contact'][1] = $this->callAPISuccess('Contact', 'create', $this->_params)['id'];
+    $retainedContact = $this->doMerge();
 
-    $contacts = $this->callAPISuccess('contact', 'get', $this->_params);
-    $this->assertEquals($retainedContact['id'], $contacts['id']);
     $activity = $this->callAPISuccess('Activity', 'getsingle', [
       'target_contact_id' => $retainedContact['id'],
       'activity_type_id' => 'Contact Merged',
     ]);
     $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($activity['activity_date_time'])));
     $activity2 = $this->callAPISuccess('Activity', 'getsingle', [
-      'target_contact_id' => $otherContact['id'],
+      'target_contact_id' => $this->ids['contact'][1],
       'activity_type_id' => 'Contact Deleted by Merge',
     ]);
     $this->assertEquals($activity['id'], $activity2['parent_id']);
@@ -3954,6 +3988,42 @@ class api_v3_ContactTest extends CiviUnitTestCase {
       'option_group_id' => 'priority',
     ]));
 
+  }
+
+  /**
+   * Test that a blank location does not overwrite a location with data.
+   *
+   * This is a poor data edge case where a contact has an address record with no meaningful data.
+   * This record should be removed in favour of the one with data.
+   *
+   * @dataProvider  getBooleanDataProvider
+   *
+   * @param bool $isReverse
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testMergeWithBlankLocationData($isReverse) {
+    $this->createLoggedInUser();
+    $this->ids['contact'][0] = $this->callAPISuccess('contact', 'create', $this->_params)['id'];
+    $this->ids['contact'][1] = $this->callAPISuccess('contact', 'create', $this->_params)['id'];
+    $contactIDWithBlankAddress = ($isReverse ? $this->ids['contact'][1] : $this->ids['contact'][0]);
+    $contactIDWithoutBlankAddress = ($isReverse ? $this->ids['contact'][0] : $this->ids['contact'][1]);
+    $this->callAPISuccess('Address', 'create', [
+      'contact_id' => $contactIDWithBlankAddress,
+      'location_type_id' => 1,
+    ]);
+    $this->callAPISuccess('Address', 'create', [
+      'country_id' => 'MX',
+      'contact_id' => $contactIDWithoutBlankAddress,
+      'street_address' => 'First on the left after you cross the border',
+      'postal_code' => 90210,
+      'location_type_id' => 1,
+    ]);
+
+    $contact = $this->doMerge($isReverse);
+    $this->assertEquals('Mexico', $contact['country']);
+    $this->assertEquals('90210', $contact['postal_code']);
+    $this->assertEquals('First on the left after you cross the border', $contact['street_address']);
   }
 
   /**
@@ -4097,12 +4167,36 @@ class api_v3_ContactTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test retrieving merged contacts.
+   *
+   * The goal here is to start with a contact deleted by merged and find out the contact that is the current version of them.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testMergedGetWithPermanentlyDeletedContact() {
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+
+    // First do an 'unnatural merge' - they 'like to merge into the lowest but this will mean that contact 0 merged to contact [3].
+    // When the batch merge runs.... the new lowest contact is contact[1]. All contacts will merge into that contact,
+    // including contact[3], resulting in only 3 existing at the end. For each contact the correct answer to 'who did I eventually
+    // wind up being should be [1]
+    $this->callAPISuccess('Contact', 'merge', ['to_remove_id' => $this->contactIDs[0], 'to_keep_id' => $this->contactIDs[3]]);
+    $this->callAPISuccess('Contact', 'delete', ['id' => $this->contactIDs[3], 'skip_undelete' => TRUE]);
+    $this->callAPIFailure('Contact', 'getmergedto', ['sequential' => 1, 'contact_id' => $this->contactIDs[0]]);
+    $title = CRM_Contact_Page_View::setTitle($this->contactIDs[0], TRUE);
+    $this->assertContains('civicrm/profile/view&amp;reset=1&amp;gid=7&amp;id=3&amp;snippet=4', $title);
+  }
+
+  /**
    * Test merging 2 contacts with delete to trash off.
    *
    * We are checking that there is no error due to attempting to add an activity for the
    * deleted contact.
    *
-   * CRM-18307
+   * @see https://issues.civicrm.org/jira/browse/CRM-18307
    */
   public function testMergeNoTrash() {
     $this->createLoggedInUser();
@@ -4120,7 +4214,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
   /**
    * Ensure format with return=group shows comma-separated group IDs.
    *
-   * CRM-19426
+   * @see https://issues.civicrm.org/jira/browse/CRM-19426
    *
    * @throws \CRM_Core_Exception
    */
@@ -4823,6 +4917,53 @@ class api_v3_ContactTest extends CiviUnitTestCase {
     $this->assertEquals($expected, $contact['count']);
     $this->callAPISuccess('Contact', 'delete', ['id' => $contact1, 'skip_undelete' => 1]);
     $this->callAPISuccess('Contact', 'delete', ['id' => $contact2, 'skip_undelete' => 1]);
+  }
+
+  /**
+   * Do the merge on the 2 contacts.
+   *
+   * @param bool $isReverse
+   *
+   * @return array|int
+   * @throws \CRM_Core_Exception
+   */
+  protected function doMerge($isReverse = FALSE) {
+    $this->callAPISuccess('Contact', 'merge', [
+      'to_keep_id' => $isReverse ? $this->ids['contact'][1] : $this->ids['contact'][0],
+      'to_remove_id' => $isReverse ? $this->ids['contact'][0] : $this->ids['contact'][1],
+      'auto_flip' => FALSE,
+    ]);
+    return $this->callAPISuccessGetSingle('Contact', ['id' => $isReverse ? $this->ids['contact'][1] : $this->ids['contact'][0]]);
+  }
+
+  /**
+   * Test a lack of fatal errors when the where contains an emoji.
+   *
+   * By default our DBs are not 🦉 compliant. This test will age
+   * out when we are.
+   *
+   * @throws \API_Exception
+   */
+  public function testEmojiInWhereClause(): void {
+    $schemaNeedsAlter = \CRM_Core_BAO_SchemaHandler::databaseSupportsUTF8MB4();
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8
+      ");
+    }
+    $this->callAPISuccess('Contact', 'get', [
+      'debug' => 1,
+      'first_name' => '🦉Claire',
+    ]);
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8mb4
+      ");
+    }
   }
 
 }

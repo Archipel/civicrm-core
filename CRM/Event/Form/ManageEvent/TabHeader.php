@@ -13,8 +13,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 /**
@@ -72,7 +70,7 @@ class CRM_Event_Form_ManageEvent_TabHeader {
     $tabs['registration'] = ['title' => ts('Online Registration')] + $default;
     // @fixme I don't understand the event permissions check here - can we just get rid of it?
     $permissions = CRM_Event_BAO_Event::getAllPermissions();
-    if (CRM_Core_Permission::check('administer CiviCRM') || !empty($permissions[CRM_Core_Permission::EDIT])) {
+    if (CRM_Core_Permission::check('administer CiviCRM data') || !empty($permissions[CRM_Core_Permission::EDIT])) {
       $tabs['reminder'] = ['title' => ts('Schedule Reminders'), 'class' => 'livePage'] + $default;
     }
     $tabs['conference'] = ['title' => ts('Conference Slots')] + $default;
@@ -85,6 +83,7 @@ class CRM_Event_Form_ManageEvent_TabHeader {
       unset($tabs['repeat']['class']);
     }
 
+    // @todo Move to eventcart extension
     // check if we're in shopping cart mode for events
     if (!(bool) Civi::settings()->get('enable_cart')) {
       unset($tabs['conference']);

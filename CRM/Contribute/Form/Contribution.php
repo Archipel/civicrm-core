@@ -951,30 +951,7 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
 
       CRM_Core_Error::statusBounce($e->getMessage(), $urlParams, ts('Payment Processor Error'));
     }
-    $session = CRM_Core_Session::singleton();
-    $buttonName = $this->controller->getButtonName();
-    if ($this->_context == 'standalone') {
-      if ($buttonName == $this->getButtonName('upload', 'new')) {
-        $session->replaceUserContext(CRM_Utils_System::url('civicrm/contribute/add',
-          'reset=1&action=add&context=standalone'
-        ));
-      }
-      else {
-        $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view',
-          "reset=1&cid={$this->_contactID}&selectedChild=contribute"
-        ));
-      }
-    }
-    elseif ($this->_context == 'contribution' && $this->_mode && $buttonName == $this->getButtonName('upload', 'new')) {
-      $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view/contribution',
-        "reset=1&action=add&context={$this->_context}&cid={$this->_contactID}&mode={$this->_mode}"
-      ));
-    }
-    elseif ($buttonName == $this->getButtonName('upload', 'new')) {
-      $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view/contribution',
-        "reset=1&action=add&context={$this->_context}&cid={$this->_contactID}"
-      ));
-    }
+    $this->setUserContext();
 
     //store contribution ID if not yet set (on create)
     if (empty($this->_id) && !empty($contribution->id)) {
@@ -1625,13 +1602,12 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
 
       // process associated membership / participant, CRM-4395
       if ($contribution->id && $action & CRM_Core_Action::UPDATE) {
-        $this->statusMessage[] = CRM_Contribute_BAO_Contribution::transitionComponentWithReturnMessage($contribution->id,
-          $contribution->contribution_status_id,
-          CRM_Utils_Array::value('contribution_status_id',
-            $this->_values
-          ),
-          $contribution->receive_date
-        );
+        CRM_Contribute_BAO_Contribution::transitionComponents([
+          'contribution_id' => $contribution->id,
+          'contribution_status_id' => $contribution->contribution_status_id,
+          'previous_contribution_status_id' => $this->_values['contribution_status_id'] ?? NULL,
+          'receive_date' => $contribution->receive_date,
+        ]);
       }
 
       array_unshift($this->statusMessage, ts('The contribution record has been saved.'));
@@ -1737,7 +1713,7 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
   /**
    * Calculate non deductible amount.
    *
-   * CRM-11956
+   * @see https://issues.civicrm.org/jira/browse/CRM-11956
    * if non_deductible_amount exists i.e. Additional Details field set was opened [and staff typed something] -
    * if non_deductible_amount does NOT exist - then calculate it depending on:
    * $financialType->is_deductible and whether there is a product (premium).
@@ -1811,6 +1787,36 @@ class CRM_Contribute_Form_Contribution extends CRM_Contribute_Form_AbstractEditP
     }
     if (!empty($this->_values['financial_type_id'])) {
       return $this->_values['financial_type_id'];
+    }
+  }
+
+  /**
+   * Set context in session
+   */
+  public function setUserContext(): void {
+    $session = CRM_Core_Session::singleton();
+    $buttonName = $this->controller->getButtonName();
+    if ($this->_context == 'standalone') {
+      if ($buttonName == $this->getButtonName('upload', 'new')) {
+        $session->replaceUserContext(CRM_Utils_System::url('civicrm/contribute/add',
+          'reset=1&action=add&context=standalone'
+        ));
+      }
+      else {
+        $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view',
+          "reset=1&cid={$this->_contactID}&selectedChild=contribute"
+        ));
+      }
+    }
+    elseif ($this->_context == 'contribution' && $this->_mode && $buttonName == $this->getButtonName('upload', 'new')) {
+      $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view/contribution',
+        "reset=1&action=add&context={$this->_context}&cid={$this->_contactID}&mode={$this->_mode}"
+      ));
+    }
+    elseif ($buttonName == $this->getButtonName('upload', 'new')) {
+      $session->replaceUserContext(CRM_Utils_System::url('civicrm/contact/view/contribution',
+        "reset=1&action=add&context={$this->_context}&cid={$this->_contactID}"
+      ));
     }
   }
 

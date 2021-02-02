@@ -145,32 +145,6 @@ function showHideByValue(trigger_field_id, trigger_value, target_element_id, tar
 }
 
 var submitcount = 0;
-/**
- * Old submit-once function. Will be removed soon.
- * @deprecated
- */
-function submitOnce(obj, formId, procText) {
-  // if named button clicked, change text
-  if (obj.value != null) {
-    cj('input[name=' + obj.name + ']').val(procText + " ...");
-  }
-  cj(obj).closest('form').attr('data-warn-changes', 'false');
-  if (document.getElementById) { // disable submit button for newer browsers
-    cj('input[name=' + obj.name + ']').attr("disabled", true);
-    document.getElementById(formId).submit();
-    return true;
-  }
-  else { // for older browsers
-    if (submitcount == 0) {
-      submitcount++;
-      return true;
-    }
-    else {
-      alert("Your request is currently being processed ... Please wait.");
-      return false;
-    }
-  }
-}
 
 /**
  * Function to show / hide the row in optionFields
@@ -218,7 +192,7 @@ if (!CRM.vars) CRM.vars = {};
   $.propHooks.disabled = {
     set: function (el, value, name) {
       // Sync button enabled status with wrapper css
-      if ($(el).is('span.crm-button > input.crm-form-submit')) {
+      if ($(el).is('.crm-button.crm-form-submit')) {
         $(el).parent().toggleClass('crm-button-disabled', !!value);
       }
       // Sync button enabled status with dialog button
@@ -275,6 +249,11 @@ if (!CRM.vars) CRM.vars = {};
         opts = placeholder || placeholder === '' ? '' : '[value!=""]';
       $elect.find('option' + opts).remove();
       var newOptions = CRM.utils.renderOptions(options, val);
+      if (options.length == 0) {
+        $elect.removeClass('required');
+      } else if ($elect.hasClass('crm-field-required') && !$elect.hasClass('required')) {
+        $elect.addClass('required');
+      }
       if (typeof placeholder === 'string') {
         if ($elect.is('[multiple]')) {
           select.attr('placeholder', placeholder);
@@ -313,6 +292,17 @@ if (!CRM.vars) CRM.vars = {};
       }
     });
     return rendered;
+  };
+
+  CRM.utils.getOptions = function(select) {
+    var options = [];
+    $('option', select).each(function() {
+      var option = {key: $(this).attr('value'), value: $(this).text()};
+      if (option.key !== '') {
+        options.push(option);
+      }
+    });
+    return options;
   };
 
   function chainSelect() {
@@ -883,7 +873,7 @@ if (!CRM.vars) CRM.vars = {};
       var that = this;
       validator.settings = $.extend({}, validator.settings, CRM.validate._defaults, CRM.validate.params);
       // Call our custom validation handler.
-      $(validator.currentForm).on("invalid-form.validate", validator.settings.invalidHandler );
+      $(validator.currentForm).on("invalid-form.validate", validator.settings.invalidHandler);
       // Call any post-initialization callbacks
       if (CRM.validate.functions && CRM.validate.functions.length) {
         $.each(CRM.validate.functions, function(i, func) {
@@ -967,7 +957,7 @@ if (!CRM.vars) CRM.vars = {};
           });
         }
       });
-      if ($("input:radio[name=radio_ts]").size() == 1) {
+      if ($("input:radio[name=radio_ts]").length == 1) {
         $("input:radio[name=radio_ts]").prop("checked", true);
       }
       $('.crm-select2:not(.select2-offscreen, .select2-container)', e.target).crmSelect2();
@@ -997,7 +987,7 @@ if (!CRM.vars) CRM.vars = {};
       $('form[data-submit-once]', e.target)
         .submit(submitOnceForm)
         .on('invalid-form', submitFormInvalid);
-      $('form[data-submit-once] input[type=submit]', e.target).click(function(e) {
+      $('form[data-submit-once] button[type=submit]', e.target).click(function(e) {
         submitButton = e.target;
       });
     })
@@ -1058,6 +1048,8 @@ if (!CRM.vars) CRM.vars = {};
   };
 
   $.fn.crmtooltip = function () {
+    var TOOLTIP_HIDE_DELAY = 300;
+
     $(document)
       .on('mouseover', 'a.crm-summary-link:not(.crm-processed)', function (e) {
         $(this).addClass('crm-processed crm-tooltip-active');
@@ -1072,8 +1064,13 @@ if (!CRM.vars) CRM.vars = {};
             .load(this.href);
         }
       })
-      .on('mouseout', 'a.crm-summary-link', function () {
-        $(this).removeClass('crm-processed crm-tooltip-active crm-tooltip-down');
+      .on('mouseleave', 'a.crm-summary-link', function () {
+        var tooltipLink = $(this);
+        setTimeout(function () {
+          if (tooltipLink.filter(':hover').length === 0) {
+            tooltipLink.removeClass('crm-processed crm-tooltip-active crm-tooltip-down');
+          }
+        }, TOOLTIP_HIDE_DELAY);
       })
       .on('click', 'a.crm-summary-link', false);
   };
@@ -1116,7 +1113,7 @@ if (!CRM.vars) CRM.vars = {};
     }
   };
   /**
-   * @see https://wiki.civicrm.org/confluence/display/CRMDOC/Notification+Reference
+   * @see https://docs.civicrm.org/dev/en/latest/framework/ui/#notifications-and-confirmations
    */
   CRM.status = function(options, deferred) {
     // For simple usage without async operations you can pass in a string. 2nd param is optional string 'error' if this is not a success msg.
@@ -1180,7 +1177,7 @@ if (!CRM.vars) CRM.vars = {};
   };
 
   /**
-   * @see https://wiki.civicrm.org/confluence/display/CRMDOC/Notification+Reference
+   * @see https://docs.civicrm.org/dev/en/latest/framework/ui/#notifications-and-confirmations
    */
   CRM.alert = function (text, title, type, options) {
     type = type || 'alert';
@@ -1228,7 +1225,7 @@ if (!CRM.vars) CRM.vars = {};
   };
 
   /**
-   * @see https://wiki.civicrm.org/confluence/display/CRMDOC/Notification+Reference
+   * @see https://docs.civicrm.org/dev/en/latest/framework/ui/#notifications-and-confirmations
    */
   CRM.confirm = function (options) {
     var dialog, url, msg, buttons = [], settings = {
@@ -1306,7 +1303,7 @@ if (!CRM.vars) CRM.vars = {};
   };
 
   /**
-   * @see https://wiki.civicrm.org/confluence/display/CRMDOC/Notification+Reference
+   * @see https://docs.civicrm.org/dev/en/latest/framework/ui/#notifications-and-confirmations
    */
   $.fn.crmError = function (text, title, options) {
     title = title || '';
@@ -1315,10 +1312,10 @@ if (!CRM.vars) CRM.vars = {};
 
     var extra = {
       expires: 0
-    };
+    }, label;
     if ($(this).length) {
       if (title === '') {
-        var label = $('label[for="' + $(this).attr('name') + '"], label[for="' + $(this).attr('id') + '"]').not('[generated=true]');
+        label = $('label[for="' + $(this).attr('name') + '"], label[for="' + $(this).attr('id') + '"]').not('[generated=true]');
         if (label.length) {
           label.addClass('crm-error');
           var $label = label.clone();
@@ -1337,8 +1334,10 @@ if (!CRM.vars) CRM.vars = {};
       setTimeout(function () {
         ele.one('change', function () {
           if (msg && msg.close) msg.close();
-          ele.removeClass('error');
-          label.removeClass('crm-error');
+          ele.removeClass('crm-error');
+          if (label) {
+            label.removeClass('crm-error');
+          }
         });
       }, 1000);
     }
@@ -1615,7 +1614,11 @@ if (!CRM.vars) CRM.vars = {};
     return Math.round(n / scale) * scale;
   };
 
-  // Create a js Date object from a unix timestamp or a yyyy-mm-dd string
+  /**
+   * Create a js Date object from a unix timestamp or a yyyy-mm-dd string
+   * @param input
+   * @returns {Date}
+   */
   CRM.utils.makeDate = function(input) {
     switch (typeof input) {
       case 'object':
@@ -1624,10 +1627,16 @@ if (!CRM.vars) CRM.vars = {};
 
       case 'string':
         // convert iso format with or without dashes
-        if (input.indexOf('-') > 0) {
-          return $.datepicker.parseDate('yy-mm-dd', input.substr(0, 10));
+        input = input.replace(/[- :]/g, '');
+        var output = $.datepicker.parseDate('yymmdd', input.substr(0, 8));
+        if (input.length === 14) {
+          output.setHours(
+            parseInt(input.substr(8, 2), 10),
+            parseInt(input.substr(10, 2), 10),
+            parseInt(input.substr(12, 2), 10)
+          );
         }
-        return $.datepicker.parseDate('yymmdd', input.substr(0, 8));
+        return output;
 
       case 'number':
         // convert unix timestamp
@@ -1636,10 +1645,39 @@ if (!CRM.vars) CRM.vars = {};
     throw 'Invalid input passed to CRM.utils.makeDate';
   };
 
-  // Format a date for output to the user
-  // Input may be a js Date object, a unix timestamp or a yyyy-mm-dd string
-  CRM.utils.formatDate = function(input, outputFormat) {
-    return input ? $.datepicker.formatDate(outputFormat || CRM.config.dateInputFormat, CRM.utils.makeDate(input)) : '';
+  /**
+   * Format a date (and optionally time) for output to the user
+   *
+   * @param {string|int|Date} input
+   *   Input may be a js Date object, a unix timestamp or a 'yyyy-mm-dd' string
+   * @param {string|null} dateFormat
+   *   A string like 'yy-mm-dd' or null to use the system default
+   * @param {int|bool} timeFormat
+   *   Leave empty to omit time from the output (default)
+   *   Or pass 12, 24, or true to use the system default for 12/24hr format
+   * @returns {string}
+   */
+  CRM.utils.formatDate = function(input, dateFormat, timeFormat) {
+    if (!input) {
+      return '';
+    }
+    var date = CRM.utils.makeDate(input),
+      output = $.datepicker.formatDate(dateFormat || CRM.config.dateInputFormat, date);
+    if (timeFormat) {
+      var hour = date.getHours(),
+        min = date.getMinutes(),
+        suf = '';
+      if (timeFormat === 12 || (timeFormat === true && !CRM.config.timeIs24Hr)) {
+        suf = ' ' + (hour < 12 ? ts('AM') : ts('PM'));
+        if (hour === 0 || hour > 12) {
+          hour = Math.abs(hour - 12);
+        }
+      } else if (hour < 10) {
+        hour = '0' + hour;
+      }
+      output += ' ' + hour + ':' + (min < 10 ? '0' : '') + min + suf;
+    }
+    return output;
   };
 
   // Used to set appropriate text color for a given background

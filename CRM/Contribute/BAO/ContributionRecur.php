@@ -163,6 +163,7 @@ class CRM_Contribute_BAO_ContributionRecur extends CRM_Contribute_DAO_Contributi
    *   (since it still makes sense to update / cancel
    */
   public static function getPaymentProcessorObject($id) {
+    CRM_Core_Error::deprecatedFunctionWarning('Use Civi\Payment\System');
     $processor = self::getPaymentProcessor($id);
     return is_array($processor) ? $processor['object'] : NULL;
   }
@@ -261,9 +262,6 @@ class CRM_Contribute_BAO_ContributionRecur extends CRM_Contribute_DAO_Contributi
     if ($recur->find(TRUE)) {
       $transaction = new CRM_Core_Transaction();
       $recur->contribution_status_id = $cancelledId;
-      $recur->start_date = CRM_Utils_Date::isoToMysql($recur->start_date);
-      $recur->create_date = CRM_Utils_Date::isoToMysql($recur->create_date);
-      $recur->modified_date = CRM_Utils_Date::isoToMysql($recur->modified_date);
       $recur->cancel_reason = $params['cancel_reason'] ?? NULL;
       $recur->cancel_date = date('YmdHis');
       $recur->save();
@@ -424,8 +422,7 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
       'id' => $id,
     ]);
     // First look for new-style template contribution with is_template=1
-    $templateContributions = \Civi\Api4\Contribution::get()
-      ->setCheckPermissions(FALSE)
+    $templateContributions = \Civi\Api4\Contribution::get(FALSE)
       ->addWhere('contribution_recur_id', '=', $id)
       ->addWhere('is_template', '=', 1)
       ->addWhere('is_test', '=', $is_test)
@@ -434,8 +431,7 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
       ->execute();
     if (!$templateContributions->count()) {
       // Fall back to old style template contributions
-      $templateContributions = \Civi\Api4\Contribution::get()
-        ->setCheckPermissions(FALSE)
+      $templateContributions = \Civi\Api4\Contribution::get(FALSE)
         ->addWhere('contribution_recur_id', '=', $id)
         ->addWhere('is_test', '=', $is_test)
         ->addOrderBy('id', 'DESC')
@@ -444,8 +440,15 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
     }
     if ($templateContributions->count()) {
       $templateContribution = $templateContributions->first();
-      $result = array_merge($templateContribution, $overrides);
       $lineItems = CRM_Price_BAO_LineItem::getLineItemsByContributionID($templateContribution['id']);
+      // We only permit the financial type to be overridden for single line items.
+      // Otherwise we need to figure out a whole lot of extra complexity.
+      // It's not UI-possible to alter financial_type_id for recurring contributions
+      // with more than one line item.
+      if (count($lineItems) > 1 && isset($overrides['financial_type_id'])) {
+        unset($overrides['financial_type_id']);
+      }
+      $result = array_merge($templateContribution, $overrides);
       $result['line_item'] = self::reformatLineItemsForRepeatContribution($result['total_amount'], $result['financial_type_id'], $lineItems, (array) $templateContribution);
       return $result;
     }
@@ -526,6 +529,7 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
    * @param bool $isFirstOrLastRecurringPayment
    */
   public static function sendRecurringStartOrEndNotification($ids, $recur, $isFirstOrLastRecurringPayment) {
+    CRM_Core_Error::deprecatedFunctionWarning('use CRM_Contribute_BAO_ContributionPage::recurringNotify');
     if ($isFirstOrLastRecurringPayment) {
       $autoRenewMembership = FALSE;
       if ($recur->id &&
@@ -547,10 +551,13 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
   /**
    * Copy custom data of the initial contribution into its recurring contributions.
    *
+   * @deprecated
+   *
    * @param int $recurId
    * @param int $targetContributionId
    */
   public static function copyCustomValues($recurId, $targetContributionId) {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
     if ($recurId && $targetContributionId) {
       // get the initial contribution id of recur id
       $sourceContributionId = CRM_Core_DAO::getFieldValue('CRM_Contribute_DAO_Contribution', $recurId, 'id', 'contribution_recur_id');
@@ -833,9 +840,8 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
    *
    * @throws \CiviCRM_API3_Exception
    */
-  public static function updateOnNewPayment($recurringContributionID, $paymentStatus, $effectiveDate) {
+  public static function updateOnNewPayment($recurringContributionID, $paymentStatus, string $effectiveDate = 'now') {
 
-    $effectiveDate = $effectiveDate ? date('Y-m-d', strtotime($effectiveDate)) : date('Y-m-d');
     if (!in_array($paymentStatus, ['Completed', 'Failed'])) {
       return;
     }
@@ -864,12 +870,18 @@ INNER JOIN civicrm_contribution       con ON ( con.id = mp.contribution_id )
 
     if (!empty($existing['installments']) && self::isComplete($recurringContributionID, $existing['installments'])) {
       $params['contribution_status_id'] = 'Completed';
+      $params['next_sched_contribution_date'] = 'null';
     }
     else {
-      // Only update next sched date if it's empty or 'just now' because payment processors may be managing
-      // the scheduled date themselves as core did not previously provide any help.
-      if (empty($existing['next_sched_contribution_date']) || strtotime($existing['next_sched_contribution_date']) ==
-        strtotime($effectiveDate)) {
+      // Only update next sched date if it's empty or up to 48 hours away because payment processors may be managing
+      // the scheduled date themselves as core did not previously provide any help. This check can possibly be removed
+      // as it's unclear if it actually is helpful...
+      // We should allow payment processors to pass this value into repeattransaction in future.
+      // Note 48 hours is a bit aribtrary but means that we can hopefully ignore the time being potentially
+      // rounded down to midnight.
+      $upperDateToConsiderProcessed = strtotime('+ 48 hours', ($effectiveDate ? strtotime($effectiveDate) : time()));
+      if (empty($existing['next_sched_contribution_date']) || strtotime($existing['next_sched_contribution_date']) <=
+        $upperDateToConsiderProcessed) {
         $params['next_sched_contribution_date'] = date('Y-m-d', strtotime('+' . $existing['frequency_interval'] . ' ' . $existing['frequency_unit'], strtotime($effectiveDate)));
       }
     }

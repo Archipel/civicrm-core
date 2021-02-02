@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -73,23 +71,65 @@ class ContactGetTest extends \api\v4\UnitTestCase {
       ->setValues(['first_name' => 'Dan', 'last_name' => $last_name])
       ->execute()->first();
 
-    $num = Contact::get()->setCheckPermissions(FALSE)->selectRowCount()->execute()->count();
+    $num = Contact::get(FALSE)->selectRowCount()->execute()->count();
 
     // The object's count() method will account for all results, ignoring limit & offset, while the array results are limited
-    $offset1 = Contact::get()->setCheckPermissions(FALSE)->setOffset(1)->execute();
+    $offset1 = Contact::get(FALSE)->setOffset(1)->execute();
     $this->assertCount($num, $offset1);
     $this->assertCount($num - 1, (array) $offset1);
-    $offset2 = Contact::get()->setCheckPermissions(FALSE)->setOffset(2)->execute();
+    $offset2 = Contact::get(FALSE)->setOffset(2)->execute();
     $this->assertCount($num - 2, (array) $offset2);
     $this->assertCount($num, $offset2);
     // With limit, it doesn't fetch total count by default
-    $limit2 = Contact::get()->setCheckPermissions(FALSE)->setLimit(2)->execute();
+    $limit2 = Contact::get(FALSE)->setLimit(2)->execute();
     $this->assertCount(2, (array) $limit2);
     $this->assertCount(2, $limit2);
     // With limit, you have to trigger the full row count manually
-    $limit2 = Contact::get()->setCheckPermissions(FALSE)->setLimit(2)->addSelect('sort_name', 'row_count')->execute();
+    $limit2 = Contact::get(FALSE)->setLimit(2)->addSelect('sort_name', 'row_count')->execute();
     $this->assertCount(2, (array) $limit2);
     $this->assertCount($num, $limit2);
+    $msg = '';
+    try {
+      $limit2->single();
+    }
+    catch (\API_Exception $e) {
+      $msg = $e->getMessage();
+    }
+    $this->assertRegExp(';Expected to find one Contact record;', $msg);
+    $limit1 = Contact::get(FALSE)->setLimit(1)->execute();
+    $this->assertCount(1, (array) $limit1);
+    $this->assertCount(1, $limit1);
+    $this->assertTrue(!empty($limit1->single()['sort_name']));
+  }
+
+  /**
+   * Test a lack of fatal errors when the where contains an emoji.
+   *
+   * By default our DBs are not 🦉 compliant. This test will age
+   * out when we are.
+   *
+   * @throws \API_Exception
+   */
+  public function testEmoji(): void {
+    $schemaNeedsAlter = \CRM_Core_BAO_SchemaHandler::databaseSupportsUTF8MB4();
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8
+      ");
+    }
+    Contact::get()
+      ->setDebug(TRUE)
+      ->addWhere('first_name', '=', '🦉Claire')
+      ->execute();
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8mb4
+      ");
+    }
   }
 
 }

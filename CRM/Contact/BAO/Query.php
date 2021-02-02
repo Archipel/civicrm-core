@@ -214,13 +214,6 @@ class CRM_Contact_BAO_Query {
   ];
 
   /**
-   * The cache to translate the option values into labels.
-   *
-   * @var array
-   */
-  public $_options;
-
-  /**
    * Are we in search mode.
    *
    * @var bool
@@ -517,6 +510,7 @@ class CRM_Contact_BAO_Query {
 
       // add activity fields
       $this->_fields = array_merge($this->_fields, CRM_Activity_BAO_Activity::exportableFields());
+      $this->_fields = array_merge($this->_fields, CRM_Activity_BAO_Activity::exportableFields('Case'));
       // Add hack as no unique name is defined for the field but the search form is in denial.
       $this->_fields['activity_priority_id'] = $this->_fields['priority_id'];
 
@@ -545,7 +539,6 @@ class CRM_Contact_BAO_Query {
     $this->_whereTables = [];
     $this->_where = [];
     $this->_qill = [];
-    $this->_options = [];
     $this->_cfIDs = [];
     $this->_paramLookup = [];
     $this->_having = [];
@@ -576,7 +569,6 @@ class CRM_Contact_BAO_Query {
       $this->_select = array_merge($this->_select, $this->_customQuery->_select);
       $this->_element = array_merge($this->_element, $this->_customQuery->_element);
       $this->_tables = array_merge($this->_tables, $this->_customQuery->_tables);
-      $this->_options = $this->_customQuery->_options;
     }
     $isForcePrimaryOnly = !empty($apiEntity);
     $this->_whereClause = $this->whereClause($isForcePrimaryOnly);
@@ -612,7 +604,7 @@ class CRM_Contact_BAO_Query {
    *
    * this code is primarily for search builder use case where different clauses can specify if they want deleted.
    *
-   * CRM-11971
+   * @see https://issues.civicrm.org/jira/browse/CRM-11971
    */
   public function buildParamsLookup() {
     $trashParamExists = FALSE;
@@ -1120,6 +1112,9 @@ class CRM_Contact_BAO_Query {
         }
 
         $field = $this->_fields[$elementName] ?? NULL;
+        if (isset($this->_pseudoConstantsSelect[$field['name']])) {
+          $this->_pseudoConstantsSelect[$name . '-' . $field['name']] = $this->_pseudoConstantsSelect[$field['name']];
+        }
 
         // hack for profile, add location id
         if (!$field) {
@@ -1487,6 +1482,9 @@ class CRM_Contact_BAO_Query {
     }
 
     if (!empty($this->_permissionWhereClause) && empty($this->_displayRelationshipType)) {
+      if (!empty($this->_permissionFromClause)) {
+        $from .= " $this->_permissionFromClause";
+      }
       if (empty($where)) {
         $where = "WHERE $this->_permissionWhereClause";
       }
@@ -1587,6 +1585,7 @@ class CRM_Contact_BAO_Query {
     }
 
     self::filterCountryFromValuesIfStateExists($formValues);
+    CRM_Core_BAO_CustomValue::fixCustomFieldValue($formValues);
 
     foreach ($formValues as $id => $values) {
       if (self::isAlreadyProcessedForQueryFormat($values)) {
@@ -2181,7 +2180,7 @@ class CRM_Contact_BAO_Query {
         $name, $op, $value, $grouping,
         'CRM_Contact_DAO_Contact',
         $field,
-        $field['title'],
+        $field['html']['label'] ?? $field['title'],
         CRM_Utils_Type::typeToString($dataType)
       );
       if ($name === 'gender_id') {
@@ -3265,7 +3264,6 @@ WHERE  $smartGroupClause
   public function tag(&$values) {
     list($name, $op, $value, $grouping, $wildcard) = $values;
 
-    list($qillop, $qillVal) = self::buildQillForFieldValue('CRM_Core_DAO_EntityTag', "tag_id", $value, $op, ['onlyActive' => FALSE]);
     // API/Search Builder format array(operator => array(values))
     if (is_array($value)) {
       if (in_array(key($value), CRM_Core_DAO::acceptedSQLOperators(), TRUE)) {
@@ -3276,6 +3274,19 @@ WHERE  $smartGroupClause
         $this->_useDistinct = TRUE;
       }
     }
+
+    if (strpos($op, 'NULL') || strpos($op, 'EMPTY')) {
+      $value = NULL;
+    }
+
+    $tagTree = CRM_Core_BAO_Tag::getChildTags();
+    foreach ((array) $value as $tagID) {
+      if (!empty($tagTree[$tagID])) {
+        $value = array_unique(array_merge($value, $tagTree[$tagID]));
+      }
+    }
+
+    list($qillop, $qillVal) = self::buildQillForFieldValue('CRM_Core_DAO_EntityTag', "tag_id", $value, $op, ['onlyActive' => FALSE]);
 
     // implode array, then remove all spaces
     $value = str_replace(' ', '', implode(',', (array) $value));
@@ -4594,8 +4605,10 @@ civicrm_relationship.start_date > {$today}
 
     list($select, $from, $where, $having) = $query->query($count);
 
-    $options = $query->_options;
     if (!empty($query->_permissionWhereClause)) {
+      if (!empty($query->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
+        $from .= " $query->_permissionFromClause";
+      }
       if (empty($where)) {
         $where = "WHERE $query->_permissionWhereClause";
       }
@@ -4640,7 +4653,7 @@ civicrm_relationship.start_date > {$today}
       }
       $values[$dao->$entityIDField] = $val;
     }
-    return [$values, $options];
+    return [$values];
   }
 
   /**
@@ -4782,7 +4795,7 @@ civicrm_relationship.start_date > {$today}
    * Country is implicit from the state, but including both results in
    * a poor query as there is no combined index on state AND country.
    *
-   * CRM-18125
+   * @see https://issues.civicrm.org/jira/browse/CRM-18125
    *
    * @param array $formValues
    */
@@ -4975,10 +4988,7 @@ civicrm_relationship.start_date > {$today}
     $sqlParts = $this->getSearchSQLParts(NULL, NULL, NULL, FALSE, FALSE, TRUE);
     $query = "SELECT DISTINCT LEFT(contact_a.sort_name, 1) as sort_name
       {$sqlParts['from']}
-      {$sqlParts['where']}
-      {$sqlParts['having']}
-      GROUP BY sort_name
-      ORDER BY sort_name asc";
+      {$sqlParts['where']}";
     $dao = CRM_Core_DAO::executeQuery($query);
     return $dao;
   }
@@ -5044,17 +5054,17 @@ civicrm_relationship.start_date > {$today}
    */
   public function generatePermissionClause($onlyDeleted = FALSE, $count = FALSE) {
     if (!$this->_skipPermission) {
-      $this->_permissionWhereClause = CRM_ACL_API::whereClause(
-        CRM_Core_Permission::VIEW,
-        $this->_tables,
-        $this->_whereTables,
-        NULL,
-        $onlyDeleted,
-        $this->_skipDeleteClause
-      );
+      $permissionClauses = CRM_Contact_BAO_Contact_Permission::cacheClause();
+      $this->_permissionWhereClause = $permissionClauses[1];
+      $this->_permissionFromClause = $permissionClauses[0];
 
-      if (!$onlyDeleted && CRM_Core_Permission::check('access deleted contacts')) {
-        $this->_permissionWhereClause = str_replace(' ( 1 ) ', '(contact_a.is_deleted = 0)', $this->_permissionWhereClause);
+      if (CRM_Core_Permission::check('access deleted contacts')) {
+        if (!$onlyDeleted) {
+          $this->_permissionWhereClause .= ' AND (contact_a.is_deleted = 0)';
+        }
+        else {
+          $this->_permissionWhereClause .= " AND (contact_a.is_deleted) ";
+        }
       }
 
       if (isset($this->_tables['civicrm_activity'])) {
@@ -5077,19 +5087,6 @@ civicrm_relationship.start_date > {$today}
         elseif (!empty($clauses)) {
           $this->_permissionWhereClause .= '(' . implode(' AND ', $clauses) . ')';
         }
-      }
-
-      // regenerate fromClause since permission might have added tables
-      if ($this->_permissionWhereClause) {
-        //fix for row count in qill (in contribute/membership find)
-        if (!$count) {
-          $this->_useDistinct = TRUE;
-        }
-        //CRM-15231
-        $this->_fromClause = self::fromClause($this->_tables, NULL, NULL, $this->_primaryLocation, $this->_mode);
-        $this->_simpleFromClause = self::fromClause($this->_whereTables, NULL, NULL, $this->_primaryLocation, $this->_mode);
-        // note : this modifies _fromClause and _simpleFromClause
-        $this->includePseudoFieldsJoin($this->_sort);
       }
     }
     else {
@@ -5122,6 +5119,9 @@ civicrm_relationship.start_date > {$today}
    */
   public function summaryContribution($context = NULL) {
     list($innerselect, $from, $where, $having) = $this->query(TRUE);
+    if (!empty($this->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
+      $from .= " $this->_permissionFromClause";
+    }
     if ($this->_permissionWhereClause) {
       $where .= " AND " . $this->_permissionWhereClause;
     }
@@ -5825,6 +5825,9 @@ AND   displayRelType.is_active = 1
       $from = str_replace("INNER JOIN", "LEFT JOIN", $from);
       $from .= $qcache['from'];
       $where = $qcache['where'];
+      if (!empty($this->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
+        $from .= " $this->_permissionFromClause";
+      }
       if (!empty($this->_permissionWhereClause)) {
         $where .= "AND $this->_permissionWhereClause";
       }
@@ -6927,6 +6930,17 @@ AND   displayRelType.is_active = 1
       }
     }
     return $field;
+  }
+
+  /**
+   * Get the field datatype, using the type in the database rather than the pseudofield, if a pseudofield.
+   *
+   * @param string $fieldName
+   *
+   * @return string
+   */
+  public function getDataTypeForRealField($fieldName) {
+    return CRM_Utils_Type::typeToString($this->getMetadataForRealField($fieldName)['type']);
   }
 
   /**

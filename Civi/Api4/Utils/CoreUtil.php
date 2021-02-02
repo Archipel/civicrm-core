@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -71,6 +69,15 @@ class CoreUtil {
       $entityName = $customGroup ? "Custom_$customGroup" : NULL;
     }
     return $entityName;
+  }
+
+  /**
+   * @return string[]
+   */
+  public static function getOperators() {
+    $operators = \CRM_Core_DAO::acceptedSQLOperators();
+    $operators[] = 'CONTAINS';
+    return $operators;
   }
 
 }

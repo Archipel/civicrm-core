@@ -135,6 +135,23 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   protected $ids = [];
 
   /**
+   * Should financials be checked after the test but before tear down.
+   *
+   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
+   * are some test data issues and some real bugs currently blockinng.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = FALSE;
+
+  /**
+   * Should location types be checked to ensure primary addresses are correctly assigned after each test.
+   *
+   * @var bool
+   */
+  protected $isLocationTypesOnPostAssert = TRUE;
+
+  /**
    * Class used for hooks during tests.
    *
    * This can be used to test hooks within tests. For example in the ACL_PermissionTrait:
@@ -228,7 +245,8 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     static $dbName = NULL;
     if ($dbName === NULL) {
       require_once "DB.php";
-      $dsninfo = DB::parseDSN(CIVICRM_DSN);
+      $dsn = CRM_Utils_SQL::autoSwitchDSN(CIVICRM_DSN);
+      $dsninfo = DB::parseDSN($dsn);
       $dbName = $dsninfo['database'];
     }
     return $dbName;
@@ -479,6 +497,22 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   }
 
   /**
+   * CHeck that all tests that have created payments have created them with the right financial entities.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function assertPostConditions() {
+    if ($this->isLocationTypesOnPostAssert) {
+      $this->assertLocationValidity();
+    }
+    if (!$this->isValidateFinancialsOnPostAssert) {
+      return;
+    }
+    $this->validateAllPayments();
+    $this->validateAllContributions();
+  }
+
+  /**
    * Create a batch of external API calls which can
    * be executed concurrently.
    *
@@ -703,19 +737,17 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @return mixed
    * @throws \CRM_Core_Exception
    */
-  public function paymentProcessorTypeCreate($params = NULL) {
-    if (is_null($params)) {
-      $params = [
-        'name' => 'API_Test_PP',
-        'title' => 'API Test Payment Processor',
-        'class_name' => 'CRM_Core_Payment_APITest',
-        'billing_mode' => 'form',
-        'is_recur' => 0,
-        'is_reserved' => 1,
-        'is_active' => 1,
-      ];
-    }
-    $result = $this->callAPISuccess('payment_processor_type', 'create', $params);
+  public function paymentProcessorTypeCreate($params = []) {
+    $params = array_merge([
+      'name' => 'API_Test_PP',
+      'title' => 'API Test Payment Processor',
+      'class_name' => 'CRM_Core_Payment_APITest',
+      'billing_mode' => 'form',
+      'is_recur' => 0,
+      'is_reserved' => 1,
+      'is_active' => 1,
+    ], $params);
+    $result = $this->callAPISuccess('PaymentProcessorType', 'create', $params);
 
     CRM_Core_PseudoConstant::flush('paymentProcessorType');
 
@@ -728,6 +760,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @param array $params
    *
    * @return mixed
+   * @throws \CRM_Core_Exception
    */
   public function paymentProcessorAuthorizeNetCreate($params = []) {
     $params = array_merge([
@@ -748,7 +781,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     ], $params);
 
     $result = $this->callAPISuccess('PaymentProcessor', 'create', $params);
-    return $result['id'];
+    return (int) $result['id'];
   }
 
   /**
@@ -1054,12 +1087,13 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @throws \CRM_Core_Exception
    */
   protected function eventCreatePaid($params, $options = [['name' => 'hundy', 'amount' => 100]], $key = 'event') {
+    $params['is_monetary'] = TRUE;
     $event = $this->eventCreate($params);
-    $this->ids['event'][$key] = (int) $event['id'];
-    $this->priceSetID = $this->ids['PriceSet'][] = $this->eventPriceSetCreate(55, 0, 'Radio', $options);
-    CRM_Price_BAO_PriceSet::addTo('civicrm_event', $event['id'], $this->priceSetID);
-    $priceSet = CRM_Price_BAO_PriceSet::getSetDetail($this->priceSetID, TRUE, FALSE);
-    $priceSet = $priceSet[$this->priceSetID] ?? NULL;
+    $this->ids['Event'][$key] = (int) $event['id'];
+    $this->ids['PriceSet'][$key] = $this->eventPriceSetCreate(55, 0, 'Radio', $options);
+    CRM_Price_BAO_PriceSet::addTo('civicrm_event', $event['id'], $this->ids['PriceSet'][$key]);
+    $priceSet = CRM_Price_BAO_PriceSet::getSetDetail($this->ids['PriceSet'][$key], TRUE, FALSE);
+    $priceSet = $priceSet[$this->ids['PriceSet'][$key]] ?? NULL;
     $this->eventFeeBlock = $priceSet['fields'] ?? NULL;
     return $event;
   }
@@ -1196,7 +1230,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     // clear getfields cache
     CRM_Core_PseudoConstant::flush();
     $this->callAPISuccess('phone', 'getfields', ['version' => 3, 'cache_clear' => 1]);
-    return $locationType;
+    return $locationType->id;
   }
 
   /**
@@ -2470,6 +2504,7 @@ VALUES
    * @throws \CRM_Core_Exception
    */
   public function setupRecurringPaymentProcessorTransaction($recurParams = [], $contributionParams = []) {
+    $this->ids['campaign'][0] = $this->callAPISuccess('Campaign', 'create', ['title' => 'get the money'])['id'];
     $contributionParams = array_merge([
       'total_amount' => '200',
       'invoice_id' => $this->_invoiceID,
@@ -2481,6 +2516,8 @@ VALUES
       'is_test' => 0,
       'receive_date' => '2019-07-25 07:34:23',
       'skipCleanMoney' => TRUE,
+      'amount_level' => 'expensive',
+      'campaign_id' => $this->ids['campaign'][0],
     ], $contributionParams);
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', array_merge([
       'contact_id' => $this->_contactID,
@@ -2779,13 +2816,10 @@ VALUES
   protected function swapMessageTemplateForTestTemplate($templateName = 'contribution_online_receipt', $type = 'html') {
     $testTemplate = file_get_contents(__DIR__ . '/../../templates/message_templates/' . $templateName . '_' . $type . '.tpl');
     CRM_Core_DAO::executeQuery(
-      "UPDATE civicrm_option_group og
-      LEFT JOIN civicrm_option_value ov ON ov.option_group_id = og.id
-      LEFT JOIN civicrm_msg_template m ON m.workflow_id = ov.id
-      SET m.msg_{$type} = %1
-      WHERE og.name LIKE 'msg_tpl_workflow_%'
-      AND ov.name = '{$templateName}'
-      AND m.is_default = 1", [1 => [$testTemplate, 'String']]
+      "UPDATE civicrm_msg_template
+      SET msg_{$type} = %1
+      WHERE workflow_name = '{$templateName}'
+      AND is_default = 1", [1 => [$testTemplate, 'String']]
     );
   }
 
@@ -3236,9 +3270,22 @@ VALUES
    * @throws \CRM_Core_Exception
    */
   public function getFormObject($class, $formValues = [], $pageName = '') {
+    $_POST = $formValues;
+    /* @var CRM_Core_Form $form */
     $form = new $class();
     $_SERVER['REQUEST_METHOD'] = 'GET';
-    $form->controller = new CRM_Core_Controller();
+    switch ($class) {
+      case 'CRM_Event_Cart_Form_Checkout_Payment':
+      case 'CRM_Event_Cart_Form_Checkout_ParticipantsAndPrices':
+        $form->controller = new CRM_Event_Cart_Controller_Checkout();
+        break;
+
+      default:
+        $form->controller = new CRM_Core_Controller();
+    }
+    if (!$pageName) {
+      $pageName = $form->getName();
+    }
     $form->controller->setStateMachine(new CRM_Core_StateMachine($form->controller));
     $_SESSION['_' . $form->controller->_name . '_container']['values'][$pageName] = $formValues;
     return $form;
@@ -3538,15 +3585,34 @@ VALUES
    * @throws \CRM_Core_Exception
    */
   protected function validateAllContributions() {
-    $contributions = $this->callAPISuccess('Contribution', 'get', [])['values'];
+    $contributions = $this->callAPISuccess('Contribution', 'get', ['return' => ['tax_amount', 'total_amount']])['values'];
     foreach ($contributions as $contribution) {
       $lineItems = $this->callAPISuccess('LineItem', 'get', ['contribution_id' => $contribution['id']])['values'];
       $total = 0;
+      $taxTotal = 0;
       foreach ($lineItems as $lineItem) {
         $total += $lineItem['line_total'];
+        $taxTotal += (float) ($lineItem['tax_amount'] ?? 0);
       }
+      $this->assertEquals($taxTotal, (float) ($contribution['tax_amount'] ?? 0));
       $this->assertEquals($total, $contribution['total_amount']);
     }
+  }
+
+  /**
+   * @return array|int
+   * @throws \CRM_Core_Exception
+   */
+  protected function createRuleGroup() {
+    $ruleGroup = $this->callAPISuccess('RuleGroup', 'create', [
+      'contact_type' => 'Individual',
+      'threshold' => 8,
+      'used' => 'General',
+      'name' => 'TestRule',
+      'title' => 'TestRule',
+      'is_reserved' => 0,
+    ]);
+    return $ruleGroup;
   }
 
   /**
@@ -3578,6 +3644,148 @@ VALUES
     $this->callAPIAndDocument($this->_entity, 'delete', $deleteParams, __FUNCTION__, __FILE__);
     $checkDeleted = $this->callAPISuccess($this->_entity, 'get', []);
     $this->assertEquals(0, $checkDeleted['count']);
+  }
+
+  /**
+   * Create and return a case object for the given Client ID.
+   *
+   * @param int $clientId
+   * @param int $loggedInUser
+   *   Omit or pass NULL to use the same as clientId
+   * @param array $extra
+   *   Optional specific parameters such as start_date
+   *
+   * @return CRM_Case_BAO_Case
+   */
+  public function createCase($clientId, $loggedInUser = NULL, $extra = NULL) {
+    if (empty($loggedInUser)) {
+      // backwards compatibility - but it's more typical that the creator is a different person than the client
+      $loggedInUser = $clientId;
+    }
+    $caseParams = [
+      'activity_subject' => 'Case Subject',
+      'client_id'        => $clientId,
+      'case_type_id'     => 1,
+      'status_id'        => 1,
+      'case_type'        => 'housing_support',
+      'subject'          => 'Case Subject',
+      'start_date'       => ($extra['start_date'] ?? date("Y-m-d")),
+      'start_date_time'  => ($extra['start_date_time'] ?? date("YmdHis")),
+      'medium_id'        => 2,
+      'activity_details' => '',
+    ];
+    $form = new CRM_Case_Form_Case();
+    return $form->testSubmit($caseParams, 'OpenCase', $loggedInUser, 'standalone');
+  }
+
+  /**
+   * Validate that all location entities have exactly one primary.
+   *
+   * This query takes about 2 minutes on a DB with 10s of millions of contacts.
+   */
+  public function assertLocationValidity() {
+    $this->assertEquals(0, CRM_Core_DAO::singleValueQuery('SELECT COUNT(*) FROM
+
+(SELECT a1.contact_id
+FROM civicrm_address a1
+  LEFT JOIN civicrm_address a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+  a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_address a1
+       LEFT JOIN civicrm_address a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_email a1
+       LEFT JOIN civicrm_email a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_email a1
+       LEFT JOIN civicrm_email a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_phone a1
+       LEFT JOIN civicrm_phone a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_phone a1
+       LEFT JOIN civicrm_phone a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_im a1
+       LEFT JOIN civicrm_im a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_im a1
+       LEFT JOIN civicrm_im a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE (a1.is_primary = 1 AND a2.id IS NOT NULL)
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL) as primary_descrepancies
+    '));
   }
 
 }

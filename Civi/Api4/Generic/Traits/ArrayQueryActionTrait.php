@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -62,7 +60,7 @@ trait ArrayQueryActionTrait {
    * @return bool
    */
   private function evaluateFilters($row) {
-    $where = $this->getWhere();
+    $where = array_values($this->getWhere());
     $allConditions = in_array($where[0], ['AND', 'OR', 'NOT']) ? $where : ['AND', $where];
     return $this->walkFilters($row, $allConditions);
   }
@@ -159,6 +157,15 @@ trait ArrayQueryActionTrait {
 
       case 'NOT IN':
         return !in_array($value, $expected);
+
+      case 'CONTAINS':
+        if (is_array($value)) {
+          return in_array($expected, $value);
+        }
+        elseif (is_string($value) || is_numeric($value)) {
+          return strpos((string) $value, (string) $expected) !== FALSE;
+        }
+        return $value == $expected;
 
       default:
         throw new NotImplementedException("Unsupported operator: '$operator' cannot be used with array data");

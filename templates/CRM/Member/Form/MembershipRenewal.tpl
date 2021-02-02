@@ -15,24 +15,29 @@
   {/if}
   {if !$email}
     <div class="messages status no-popup">
-      <div class="icon inform-icon"></div>
+      {icon icon="fa-info-circle"}{/icon}
       <p>{ts}You will not be able to send an automatic email receipt for this Renew Membership because there is no email address recorded for this contact. If you want a receipt to be sent when this Membership is recorded, click Cancel and then click Edit from the Summary tab to add an email address before Renewal the Membership.{/ts}</p>
     </div>
   {/if}
   {if $membershipMode}
     <div class="help">
-      {ts 1=$displayName 2=$registerMode}Use this form to Renew Membership Record on behalf of %1.
-        <strong>A %2 transaction will be submitted</strong>
-        using the selected payment processor.{/ts}
+      {ts 1=$displayName}Use this form to Renew Membership Record on behalf of %1.{/ts}
+      {if $registerMode == 'LIVE'}
+        {ts}<strong>A LIVE transaction will be submitted</strong> using the selected payment processor.{/ts}
+      {else}
+        {ts}<strong>A TEST transaction will be submitted</strong> using the selected payment processor.{/ts}
+      {/if}
     </div>
   {/if}
   {if $action eq 32768}
     {if $cancelAutoRenew}
       <div class="messages status no-popup">
-        <div class="icon inform-icon"></div>
-        <p>{ts 1=$cancelAutoRenew}This membership is set to renew automatically {if $renewalDate}on {$renewalDate|crmDate}{/if}. You will need to cancel the auto-renew option if you want to modify the Membership Type, End Date or Membership Status.
-            <a href="%1">Click here</a>
-            if you want to cancel the automatic renewal option.{/ts}</p>
+        {icon icon="fa-info-circle"}{/icon}
+        {if $renewalDate}
+          <p>{ts 1=$cancelAutoRenew 2=$renewalDate|crmDate}This membership is set to renew automatically on %2. You will need to cancel the auto-renew option if you want to modify the Membership Type, End Date or Membership Status. <a href="%1">Click here</a> if you want to cancel the automatic renewal option.{/ts}</p>
+        {else}
+          <p>{ts 1=$cancelAutoRenew}This membership is set to renew automatically. You will need to cancel the auto-renew option if you want to modify the Membership Type, End Date or Membership Status. <a href="%1">Click here</a> if you want to cancel the automatic renewal option.{/ts}</p>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -68,7 +73,7 @@
       </tr>
       <tr class="crm-member-membershiprenew-form-block-end_date">
         <td class="label">{ts}Membership End Date{/ts}</td>
-        <td class="html-adjust">&nbsp;{$endDate}</td>
+        <td class="html-adjust">&nbsp;{$endDate|crmDate}</td>
       </tr>
       <tr class="crm-member-membershiprenew-form-block-renewal_date">
         <td class="label">{$form.renewal_date.label}</td>

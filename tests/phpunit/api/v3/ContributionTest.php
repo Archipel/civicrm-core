@@ -9,6 +9,8 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\Contribution;
+
 /**
  *  Test APIv3 civicrm_contribute_* functions
  *
@@ -20,6 +22,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
 
   use CRMTraits_Profile_ProfileTrait;
   use CRMTraits_Custom_CustomDataTrait;
+  use CRMTraits_Financial_OrderTrait;
 
   protected $_individualId;
   protected $_contribution;
@@ -107,7 +110,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
    */
   public function tearDown() {
     $this->quickCleanUpFinancialEntities();
-    $this->quickCleanup(['civicrm_uf_match']);
+    $this->quickCleanup(['civicrm_uf_match'], TRUE);
     $financialAccounts = $this->callAPISuccess('FinancialAccount', 'get', []);
     foreach ($financialAccounts['values'] as $financialAccount) {
       if ($financialAccount['name'] === 'Test Tax financial account ' || $financialAccount['name'] === 'Test taxable financial Type') {
@@ -177,7 +180,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $contribution2 = $this->callAPISuccess('contribution', 'create', $p);
 
     // Now we have 2 - test getcount.
-    $contribution = $this->callAPISuccess('contribution', 'getcount', []);
+    $contribution = $this->callAPISuccess('contribution', 'getcount');
     $this->assertEquals(2, $contribution);
     // Test id only format.
     $contribution = $this->callAPISuccess('contribution', 'get', [
@@ -2096,7 +2099,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   /**
    * Test to ensure mail is sent on chosing pay later
    */
-  public function testpayLater() {
+  public function testPayLater() {
     $mut = new CiviMailUtils($this, TRUE);
     $this->swapMessageTemplateForTestTemplate();
     $this->createLoggedInUser();
@@ -2138,7 +2141,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'description' => 'Online Contribution: Help Support CiviCRM!',
       'price_set_id' => $priceSet['id'],
     ];
-    $this->callAPISuccess('contribution_page', 'submit', $params);
+    $this->callAPISuccess('ContributionPage', 'submit', $params);
 
     $mut->checkMailLog([
       'is_pay_later:::1',
@@ -2327,6 +2330,46 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test custom data is copied over from the template transaction.
+   *
+   * (Over time various discussions have deemed this to be the most recent one, allowing
+   * users to alter custom data going forwards. This is implemented for line items already.
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   */
+  public function testRepeatTransactionWithCustomData() {
+    $this->createCustomGroupWithFieldOfType(['extends' => 'Contribution', 'name' => 'Repeat'], 'text');
+    $originalContribution = $this->setUpRepeatTransaction([], 'single', [$this->getCustomFieldName('text') => 'first']);
+    $this->callAPISuccess('contribution', 'repeattransaction', [
+      'contribution_recur_id' => $originalContribution['contribution_recur_id'],
+      'contribution_status_id' => 'Completed',
+      'trxn_id' => 'my_trxn',
+    ]);
+
+    $contribution = Contribution::get()
+      ->addWhere('trxn_id', '=', 'my_trxn')
+      ->addSelect('Custom_Group.Enter_text_here')
+      ->addSelect('id')
+      ->execute()->first();
+    $this->assertEquals('first', $contribution['Custom_Group.Enter_text_here']);
+
+    Contribution::update()->setValues(['Custom_Group.Enter_text_here' => 'second'])->addWhere('id', '=', $contribution['id'])->execute();
+
+    $this->callAPISuccess('contribution', 'repeattransaction', [
+      'original_contribution_id' => $originalContribution['id'],
+      'contribution_status_id' => 'Completed',
+      'trxn_id' => 'number_3',
+    ]);
+
+    $contribution = Contribution::get()
+      ->addWhere('trxn_id', '=', 'number_3')
+      ->setSelect(['id', 'Custom_Group.Enter_text_here'])
+      ->execute()->first();
+    $this->assertEquals('second', $contribution['Custom_Group.Enter_text_here']);
+  }
+
+  /**
    * Test repeat contribution successfully creates line items (plural).
    *
    * @throws \CRM_Core_Exception
@@ -2510,6 +2553,36 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   /**
+   * This is one of those tests that locks in existing behaviour.
+   *
+   * I feel like correct behaviour is arguable & has been discussed in the past. However, if the membership has
+   * a date which says it should be expired then the result of repeattransaction is to push that date
+   * to be one membership term from 'now' with status 'new'.
+   */
+  public function testRepeattransactionRenewMembershipOldMembership() {
+    $entities = $this->setUpAutoRenewMembership();
+    $newStatusID = CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', 'New');
+    $membership = $this->callAPISuccess('Membership', 'create', [
+      'id' => $entities[1]['id'],
+      'join_date' => '4 months ago',
+      'start_date' => '3 months ago',
+      'end_date' => '2 months ago',
+    ]);
+    $membership = $membership['values'][$membership['id']];
+
+    // This status does not appear to be calculated at all and is set to 'new'. Feels like a bug.
+    $this->assertEquals($newStatusID, $membership['status_id']);
+
+    // So it seems renewing this expired membership results in it's new status being current and it being pushed to a future date
+    $this->callAPISuccess('Contribution', 'repeattransaction', ['original_contribution_id' => $entities[0]['id'], 'contribution_status_id' => 'Completed']);
+    $membership = $this->callAPISuccessGetSingle('Membership', ['id' => $membership['id']]);
+    // If this date calculation winds up being flakey the spirit of the test would be maintained by just checking
+    // date is greater than today.
+    $this->assertEquals(date('Y-m-d', strtotime('+ 1 month -1 day')), $membership['end_date']);
+    $this->assertEquals($newStatusID, $membership['membership_type_id']);
+  }
+
+  /**
    * CRM-19945 Tests that Contribute.repeattransaction DOES NOT renew a membership when contribution status=Failed
    *
    * @dataProvider contributionStatusProvider
@@ -2642,7 +2715,10 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   /**
-   * CRM-17718 test appropriate action if financial type has changed for single line items.
+   * Test financial_type_id override behaviour with a single line item.
+   *
+   * CRM-17718 a passed in financial_type_id is allowed to override the original contribution where there
+   * is only one line item.
    */
   public function testRepeatTransactionPassedInFinancialType() {
     $originalContribution = $this->setUpRecurringContribution();
@@ -2669,7 +2745,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       ],
     ];
 
-    $this->callAPISuccessGetSingle('contribution', [
+    $this->callAPISuccessGetSingle('Contribution', [
       'total_amount' => 100,
       'financial_type_id' => 2,
     ]);
@@ -2690,6 +2766,72 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     unset($expectedLineItem['id'], $expectedLineItem['entity_id']);
     unset($lineItem2['values'][0]['id'], $lineItem2['values'][0]['entity_id']);
     $this->assertEquals($expectedLineItem, $lineItem2['values'][0]);
+  }
+
+  /**
+   * Test Contribution with Order api.
+   *
+   * @throws \CRM_Core_Exception|\CiviCRM_API3_Exception
+   */
+  public function testContributionOrder() {
+    $this->_contactID = $this->individualCreate();
+    $this->createContributionAndMembershipOrder();
+    $contribution = $this->callAPISuccess('contribution', 'get')['values'][$this->ids['Contribution'][0]];
+    $this->assertEquals('Pending Label**', $contribution['contribution_status']);
+    $membership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $this->_contactID]);
+
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $this->ids['Contribution'][0],
+      'payment_instrument_id' => 'Check',
+      'total_amount' => 300,
+    ]);
+    $contribution = $this->callAPISuccess('contribution', 'get')['values'][$this->ids['Contribution'][0]];
+    $this->assertEquals('Completed', $contribution['contribution_status']);
+
+    $lineItem = $this->callAPISuccess('LineItem', 'get', [
+      'sequential' => 1,
+      'contribution_id' => $this->ids['Contribution'][0],
+    ])['values'];
+    $this->assertCount(2, $lineItem);
+    $this->assertEquals($this->ids['Contribution'][0], $lineItem[0]['entity_id']);
+    $this->assertEquals('civicrm_contribution', $lineItem[0]['entity_table']);
+    $this->assertEquals($this->ids['Contribution'][0], $lineItem[0]['contribution_id']);
+    $this->assertEquals($this->ids['Contribution'][0], $lineItem[1]['contribution_id']);
+    $this->assertEquals('100.00', $lineItem[0]['line_total']);
+    $this->assertEquals('200.00', $lineItem[1]['line_total']);
+    $this->assertEquals($membership['id'], $lineItem[1]['entity_id']);
+    $this->assertEquals('civicrm_membership', $lineItem[1]['entity_table']);
+  }
+
+  /**
+   * Test financial_type_id override behaviour with a single line item.
+   *
+   * CRM-17718 a passed in financial_type_id is not allowed to override the original contribution where there
+   * is more than one line item.
+   */
+  public function testRepeatTransactionPassedInFinancialTypeTwoLineItems() {
+    $this->_params = $this->getParticipantOrderParams();
+    $originalContribution = $this->setUpRecurringContribution();
+
+    $this->callAPISuccess('Contribution', 'repeattransaction', [
+      'original_contribution_id' => $originalContribution['id'],
+      'contribution_status_id' => 'Completed',
+      'trxn_id' => 'repeat',
+      'financial_type_id' => 2,
+    ]);
+
+    // Retrieve the new contribution and note the financial type passed in has been ignored.
+    $contribution = $this->callAPISuccessGetSingle('Contribution', [
+      'trxn_id' => 'repeat',
+    ]);
+    $this->assertEquals(4, $contribution['financial_type_id']);
+
+    $lineItems = $this->callAPISuccess('line_item', 'get', [
+      'entity_id' => $contribution['id'],
+    ])['values'];
+    foreach ($lineItems as $lineItem) {
+      $this->assertNotEquals(2, $lineItem['financial_type_id']);
+    }
   }
 
   /**
@@ -2905,7 +3047,10 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $this->callAPISuccess('contribution', 'completetransaction', ['id' => $contribution['id'], 'trxn_date' => date('Y-m-d')]);
     $contribution = $this->callAPISuccess('contribution', 'get', ['id' => $contribution['id'], 'sequential' => 1]);
     $this->assertEquals('Completed', $contribution['values'][0]['contribution_status']);
-    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($contribution['values'][0]['receive_date'])));
+    // Make sure receive_date is original date and make sure payment date is today
+    $this->assertEquals('2012-05-11', date('Y-m-d', strtotime($contribution['values'][0]['receive_date'])));
+    $payment = $this->callAPISuccess('payment', 'get', ['contribution_id' => $contribution['id'], 'sequential' => 1]);
+    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($payment['values'][0]['trxn_date'])));
     $mut->checkMailLog([
       'Receipt - Contribution',
       'receipt_date:::' . date('Ymd'),
@@ -2939,7 +3084,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
    * Test that $is_recur is assigned to the receipt.
    */
   public function testCompleteTransactionForRecurring() {
-
+    $this->mut = new CiviMailUtils($this, TRUE);
     $this->swapMessageTemplateForTestTemplate();
     $recurring = $this->setUpRecurringContribution();
     $contributionPage = $this->createReceiptableContributionPage(['is_recur' => TRUE, 'recur_frequency_unit' => 'month', 'recur_interval' => 1]);
@@ -3184,7 +3329,11 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $this->assertEquals(1, $status);
     $mut->checkMailLog([
       'amount:::500.00',
-      'receive_date:::20130201000000',
+      // The `receive_date` should remain as it was created.
+      // TODO: the latest payment transaction date (and maybe other details,
+      // such as amount and payment instrument) would be a useful token to make
+      // available.
+      'receive_date:::20120511000000',
       "receipt_date:::\n",
     ]);
     $mut->stop();
@@ -3203,16 +3352,17 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $mut = new CiviMailUtils($this, TRUE);
     $mut->clearMessages();
     $this->_individualId = $this->createLoggedInUser();
+    // Unset source to test whether one is generated if not set already on the contribution.
+    unset($this->_params['source']);
     $contributionID = $this->createPendingParticipantContribution();
     $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event']);
     $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event', 'weight' => 2], ['name' => 'post_1', 'title' => 'title_post_2', 'frontend_title' => 'public 2']);
     $this->createJoinedProfile(['entity_id' => $this->_ids['event']['test'], 'entity_table' => 'civicrm_event', 'weight' => 3], ['name' => 'post_2', 'title' => 'title_post_3', 'frontend_title' => 'public 3']);
     $this->eliminateUFGroupOne();
 
-    $this->callAPISuccess('contribution', 'completetransaction', [
-      'id' => $contributionID,
-    ]
-    );
+    $this->callAPISuccess('contribution', 'completetransaction', ['id' => $contributionID]);
+    $contribution = $this->callAPISuccessGetSingle('Contribution', ['id' => $contributionID, 'return' => ['contribution_source']]);
+    $this->assertEquals('Online Event Registration: Annual CiviCRM meet', $contribution['contribution_source']);
     $participantStatus = $this->callAPISuccessGetValue('participant', [
       'id' => $this->_ids['participant'],
       'return' => 'participant_status_id',
@@ -3410,14 +3560,32 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test membership is renewed when transaction completed.
+   * Test membership is renewed for 2 terms when transaction completed based on the line item having 2 terms as qty.
+   *
+   * Also check that altering the qty for the most recent contribution results in repeattransaction picking it up.
    */
   public function testCompleteTransactionMembershipPriceSetTwoTerms() {
     $this->createPriceSetWithPage('membership');
     $this->setUpPendingContribution($this->_ids['price_field_value'][1]);
     $this->callAPISuccess('contribution', 'completetransaction', ['id' => $this->_ids['contribution']]);
-    $membership = $this->callAPISuccess('membership', 'getsingle', ['id' => $this->_ids['membership']]);
+    $membership = $this->callAPISuccessGetSingle('membership', ['id' => $this->_ids['membership']]);
     $this->assertEquals(date('Y-m-d', strtotime('yesterday + 2 years')), $membership['end_date']);
+
+    $paymentProcessorID = $this->paymentProcessorAuthorizeNetCreate();
+
+    $contributionRecurID = $this->callAPISuccess('ContributionRecur', 'create', ['contact_id' => $membership['contact_id'], 'payment_processor_id' => $paymentProcessorID, 'amount' => 20, 'frequency_interval' => 1])['id'];
+    $this->callAPISuccess('Contribution', 'create', ['id' => $this->_ids['contribution'], 'contribution_recur_id' => $contributionRecurID]);
+    $this->callAPISuccess('contribution', 'repeattransaction', ['contribution_recur_id' => $contributionRecurID, 'contribution_status_id' => 'Completed']);
+    $membership = $this->callAPISuccessGetSingle('membership', ['id' => $this->_ids['membership']]);
+    $this->assertEquals(date('Y-m-d', strtotime('yesterday + 4 years')), $membership['end_date']);
+
+    // Update the most recent contribution to have a qty of 1 in it's line item and then repeat, expecting just 1 year to be added.
+    $contribution = Contribution::get()->setOrderBy(['id' => 'DESC'])->setSelect(['id'])->execute()->first();
+    CRM_Core_DAO::executeQuery('UPDATE civicrm_line_item SET price_field_value_id = ' . $this->_ids['price_field_value'][0] . ' WHERE contribution_id = ' . $contribution['id']);
+    $this->callAPISuccess('contribution', 'repeattransaction', ['contribution_recur_id' => $contributionRecurID, 'contribution_status_id' => 'Completed']);
+    $membership = $this->callAPISuccessGetSingle('membership', ['id' => $this->_ids['membership']]);
+    $this->assertEquals(date('Y-m-d', strtotime('yesterday + 5 years')), $membership['end_date']);
+
     $this->cleanUpAfterPriceSets();
   }
 
@@ -3431,17 +3599,12 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
    *
    * @param int $priceFieldValueID
    * @param array $contriParams
+   *
+   * @throws \CRM_Core_Exception
    */
   public function setUpPendingContribution($priceFieldValueID, $contriParams = []) {
     $contactID = $this->individualCreate();
-    $membership = $this->callAPISuccess('membership', 'create', [
-      'contact_id' => $contactID,
-      'membership_type_id' => $this->_ids['membership_type'],
-      'start_date' => 'yesterday - 1 year',
-      'end_date' => 'yesterday',
-      'join_date' => 'yesterday - 1 year',
-    ]);
-    $contribution = $this->callAPISuccess('contribution', 'create', array_merge([
+    $contribution = $this->callAPISuccess('Order', 'create', array_merge([
       'domain_id' => 1,
       'contact_id' => $contactID,
       'receive_date' => date('Ymd'),
@@ -3454,23 +3617,33 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'source' => 'SSF',
       'contribution_status_id' => 2,
       'contribution_page_id' => $this->_ids['contribution_page'],
-      'api.membership_payment.create' => ['membership_id' => $membership['id']],
+      'line_items' => [
+        [
+          'line_item' => [
+            [
+              'price_field_id' => $this->_ids['price_field'][0],
+              'qty' => 1,
+              'entity_table' => 'civicrm_membership',
+              'unit_price' => 20,
+              'line_total' => 20,
+              'financial_type_id' => 1,
+              'price_field_value_id' => $priceFieldValueID,
+            ],
+          ],
+          'params' => [
+            'contact_id' => $contactID,
+            'membership_type_id' => $this->_ids['membership_type'],
+            'start_date' => 'yesterday - 1 year',
+            'end_date' => 'yesterday',
+            'join_date' => 'yesterday - 1 year',
+          ],
+        ],
+      ],
     ], $contriParams));
 
-    $this->callAPISuccess('line_item', 'create', [
-      'entity_id' => $contribution['id'],
-      'entity_table' => 'civicrm_contribution',
-      'contribution_id' => $contribution['id'],
-      'price_field_id' => $this->_ids['price_field'][0],
-      'qty' => 1,
-      'unit_price' => 20,
-      'line_total' => 20,
-      'financial_type_id' => 1,
-      'price_field_value_id' => $priceFieldValueID,
-    ]);
     $this->_ids['contact'] = $contactID;
     $this->_ids['contribution'] = $contribution['id'];
-    $this->_ids['membership'] = $membership['id'];
+    $this->_ids['membership'] = $this->callAPISuccessGetValue('MembershipPayment', ['return' => 'membership_id', 'contribution_id' => $contribution['id']]);
   }
 
   /**
@@ -3578,6 +3751,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     ], [
       'Event',
     ]);
+    $this->checkReceiptDetails($mut, $contributionPage['id'], $contribution['id']);
     $mut->stop();
   }
 
@@ -3604,6 +3778,42 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     ], [
       'Event',
     ]);
+  }
+
+  /**
+   * Check receipt details in sent mail via API
+   *
+   * @param CiviMailUtils $mut
+   * @param int $pageID Page ID
+   * @param int $contributionID Contribution ID
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function checkReceiptDetails($mut, $pageID, $contributionID) {
+    $pageReceipt = [
+      'receipt_from_name' => "Page FromName",
+      'receipt_from_email' => "page_from@email.com",
+      'cc_receipt' => "page_cc@email.com",
+      'receipt_text' => "Page Receipt Text",
+    ];
+    $customReceipt = [
+      'receipt_from_name' => "Custom FromName",
+      'receipt_from_email' => "custom_from@email.com",
+      'cc_receipt' => "custom_cc@email.com",
+      'receipt_text' => "Test Custom Receipt Text",
+    ];
+    $this->callAPISuccess('ContributionPage', 'create', array_merge([
+      'id' => $pageID,
+      'is_email_receipt' => 1,
+    ], $pageReceipt));
+
+    $this->callAPISuccess('contribution', 'sendconfirmation', array_merge([
+      'id' => $contributionID,
+      'payment_processor_id' => $this->paymentProcessorID,
+    ], $customReceipt));
+
+    //Verify if custom receipt details are present in email.
+    $mut->checkMailLog(array_values($customReceipt), array_values($pageReceipt));
   }
 
   /**
@@ -4015,6 +4225,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
    *   Parameters to merge into the recur only.
    *
    * @return array|int
+   * @throws \CRM_Core_Exception
    */
   protected function setUpRecurringContribution($generalParams = [], $recurParams = []) {
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', array_merge([
@@ -4028,12 +4239,14 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       'frequency_unit' => 'month',
       'payment_processor_id' => $this->paymentProcessorID,
     ], $generalParams, $recurParams));
-    $originalContribution = $this->callAPISuccess('contribution', 'create', array_merge(
+    $contributionParams = array_merge(
       $this->_params,
       [
         'contribution_recur_id' => $contributionRecur['id'],
-      ], $generalParams)
-    );
+        'contribution_status_id' => 'Pending',
+      ], $generalParams);
+    $contributionParams['api.Payment.create'] = ['total_amount' => $contributionParams['total_amount']];
+    $originalContribution = $this->callAPISuccess('Order', 'create', $contributionParams);
     return $originalContribution;
   }
 
@@ -4170,6 +4383,7 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
       $params = array_merge($params, $contributionParams);
       $originalContribution = $this->callAPISuccess('contribution', 'create', $params);
     }
+    $originalContribution['contribution_recur_id'] = $contributionRecur['id'];
     $originalContribution['payment_processor_id'] = $paymentProcessorID;
     return $originalContribution;
   }
@@ -4595,6 +4809,244 @@ class api_v3_ContributionTest extends CiviUnitTestCase {
     $params = $this->_params;
     $params['custom_' . $this->ids['CustomField']['radio']] = 'Red Testing';
     $contribution = $this->callAPISuccess('Contribution', 'Create', $params);
+  }
+
+  /**
+   * Test repeatTransaction with installments and next_sched_contribution_date
+   *
+   * @dataProvider getRepeatTransactionNextSchedData
+   *
+   * @param array $dataSet
+   *
+   * @throws \Exception
+   */
+  public function testRepeatTransactionUpdateNextSchedContributionDate($dataSet) {
+    $paymentProcessorID = $this->paymentProcessorCreate();
+    // Create the contribution before the recur so it doesn't trigger the update of next_sched_contribution_date
+    $contribution = $this->callAPISuccess('contribution', 'create', array_merge(
+        $this->_params,
+        [
+          'contribution_status_id' => 'Completed',
+          'receive_date' => $dataSet['repeat'][0]['receive_date'],
+        ])
+    );
+    $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', array_merge([
+      'contact_id' => $this->_individualId,
+      'frequency_interval' => '1',
+      'amount' => '500',
+      'contribution_status_id' => 'Pending',
+      'start_date' => '2012-01-01 00:00:00',
+      'currency' => 'USD',
+      'frequency_unit' => 'month',
+      'payment_processor_id' => $paymentProcessorID,
+    ], $dataSet['recur']));
+    // Link the existing contribution to the recur *after* creating the recur.
+    // If we just created the contribution now the next_sched_contribution_date would be automatically set
+    //   and we want to test the case when it is empty.
+    $this->callAPISuccess('contribution', 'create', [
+      'id' => $contribution['id'],
+      'contribution_recur_id' => $contributionRecur['id'],
+    ]);
+
+    $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', [
+      'id' => $contributionRecur['id'],
+      'return' => ['next_sched_contribution_date', 'contribution_status_id'],
+    ]);
+    // Check that next_sched_contribution_date is empty
+    $this->assertEquals('', $contributionRecur['next_sched_contribution_date'] ?? '');
+
+    $this->callAPISuccess('Contribution', 'repeattransaction', [
+      'contribution_status_id' => 'Completed',
+      'contribution_recur_id' => $contributionRecur['id'],
+      'receive_date' => $dataSet['repeat'][0]['receive_date'],
+    ]);
+    $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', [
+      'id' => $contributionRecur['id'],
+      'return' => ['next_sched_contribution_date', 'contribution_status_id'],
+    ]);
+    // Check that recur has status "In Progress"
+    $this->assertEquals(
+      (string) CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_ContributionRecur', 'contribution_status_id', $dataSet['repeat'][0]['expectedRecurStatus']),
+      $contributionRecur['contribution_status_id']
+    );
+    // Check that next_sched_contribution_date has been set to 1 period after the contribution receive date (ie. 1 month)
+    $this->assertEquals($dataSet['repeat'][0]['expectedNextSched'], $contributionRecur['next_sched_contribution_date']);
+
+    // Now call Contribution.repeattransaction again and check that the next_sched_contribution_date has moved forward by 1 period again
+    $this->callAPISuccess('Contribution', 'repeattransaction', [
+      'contribution_status_id' => 'Completed',
+      'contribution_recur_id' => $contributionRecur['id'],
+      'receive_date' => $dataSet['repeat'][1]['receive_date'],
+    ]);
+    $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', [
+      'id' => $contributionRecur['id'],
+      'return' => ['next_sched_contribution_date', 'contribution_status_id'],
+    ]);
+    // Check that recur has status "In Progress" or "Completed" depending on whether number of installments has been reached
+    $this->assertEquals(
+      (string) CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_ContributionRecur', 'contribution_status_id', $dataSet['repeat'][1]['expectedRecurStatus']),
+      $contributionRecur['contribution_status_id']
+    );
+    // Check that next_sched_contribution_date has been set to 1 period after the contribution receive date (ie. 1 month)
+    $this->assertEquals($dataSet['repeat'][1]['expectedNextSched'], $contributionRecur['next_sched_contribution_date'] ?? '');
+  }
+
+  /**
+   * Get dates for testing.
+   *
+   * @return array
+   */
+  public function getRepeatTransactionNextSchedData() {
+    // Both these tests handle/test the case that next_sched_contribution_date is empty when Contribution.repeattransaction
+    //   is called for the first time. Historically setting it was inconsistent but on new updates it should always be set.
+    /*
+     * This tests that calling Contribution.repeattransaction with installments does the following:
+     * - For the first call to repeattransaction the recur status is In Progress and next_sched_contribution_date is updated
+     *   to match next expected receive_date.
+     * - Once the 3rd contribution is created contributionRecur status = completed and next_sched_contribution_date = ''.
+     */
+    $result['receive_date_includes_time_with_installments']['2012-01-01-1-month'] = [
+      'recur' => [
+        'start_date' => '2012-01-01',
+        'frequency_interval' => 1,
+        'installments' => '3',
+        'frequency_unit' => 'month',
+      ],
+      'repeat' => [
+        [
+          'receive_date' => '2012-02-29 16:00:00',
+          'expectedNextSched' => '2012-03-29 00:00:00',
+          'expectedRecurStatus' => 'In Progress',
+        ],
+        [
+          'receive_date' => '2012-03-29 16:00:00',
+          'expectedNextSched' => '',
+          'expectedRecurStatus' => 'Completed',
+        ],
+      ],
+    ];
+    /*
+     * This tests that calling Contribution.repeattransaction with no installments does the following:
+     * - For the each call to repeattransaction the recur status is In Progress and next_sched_contribution_date is updated
+     *   to match next expected receive_date.
+     */
+    $result['receive_date_includes_time_no_installments']['2012-01-01-1-month'] = [
+      'recur' => [
+        'start_date' => '2012-01-01',
+        'frequency_interval' => 1,
+        'frequency_unit' => 'month',
+      ],
+      'repeat' => [
+        [
+          'receive_date' => '2012-02-29 16:00:00',
+          'expectedNextSched' => '2012-03-29 00:00:00',
+          'expectedRecurStatus' => 'In Progress',
+        ],
+        [
+          'receive_date' => '2012-03-29 16:00:00',
+          'expectedNextSched' => '2012-04-29 00:00:00',
+          'expectedRecurStatus' => 'In Progress',
+        ],
+      ],
+    ];
+    return $result;
+  }
+
+  /**
+   * Make sure that recording a payment doesn't alter the receive_date of a
+   * pending contribution.
+   */
+  public function testPaymentDontChangeReceiveDate() {
+    $params = [
+      'contact_id' => $this->_individualId,
+      'total_amount' => 100,
+      'receive_date' => '2020-02-02',
+      'contribution_status_id' => 'Pending',
+    ];
+    $contributionID = $this->contributionCreate($params);
+    $paymentParams = [
+      'contribution_id' => $contributionID,
+      'total_amount' => 100,
+      'trxn_date' => '2020-03-04',
+    ];
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+
+    //check if contribution status is set to "Completed".
+    $contribution = $this->callAPISuccess('Contribution', 'getSingle', [
+      'id' => $contributionID,
+    ]);
+    $this->assertEquals('2020-02-02 00:00:00', $contribution['receive_date']);
+  }
+
+  /**
+   * Make sure that recording a payment with Different Payment Instrument update main contribution record payment
+   * instrument too. If multiple Payment Recorded, last payment record payment (when No more due) instrument set to main
+   * payment
+   */
+  public function testPaymentVerifyPaymentInstrumentChange() {
+    // Create Pending contribution with pay later mode, with payment instrument Check
+    $params = [
+      'contact_id' => $this->_individualId,
+      'total_amount' => 100,
+      'receive_date' => '2020-02-02',
+      'contribution_status_id' => 'Pending',
+      'is_pay_later' => 1,
+      'payment_instrument_id' => 'Check',
+    ];
+    $contributionID = $this->contributionCreate($params);
+
+    // Record the the Payment with instrument other than Check, e.g EFT
+    $paymentParams = [
+      'contribution_id' => $contributionID,
+      'total_amount' => 50,
+      'trxn_date' => '2020-03-04',
+      'payment_instrument_id' => 'EFT',
+    ];
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+
+    $contribution = $this->callAPISuccess('Contribution', 'getSingle', [
+      'id' => $contributionID,
+    ]);
+    // payment status should be 'Partially paid'
+    $this->assertEquals('Partially paid', $contribution['contribution_status']);
+
+    // Record the the Payment with instrument other than Check, e.g Cash (pay all remaining amount)
+    $paymentParams = [
+      'contribution_id' => $contributionID,
+      'total_amount' => 50,
+      'trxn_date' => '2020-03-04',
+      'payment_instrument_id' => 'Cash',
+    ];
+    $this->callAPISuccess('payment', 'create', $paymentParams);
+
+    //check if contribution Payment Instrument (Payment Method) is is set to "Cash".
+    $contribution = $this->callAPISuccess('Contribution', 'getSingle', [
+      'id' => $contributionID,
+    ]);
+    $this->assertEquals('Cash', $contribution['payment_instrument']);
+    $this->assertEquals('Completed', $contribution['contribution_status']);
+  }
+
+  /**
+   * Test the "clean money" functionality.
+   */
+  public function testCleanMoney() {
+    $params = [
+      'contact_id' => $this->_individualId,
+      'financial_type_id' => 1,
+      'total_amount' => '$100',
+      'fee_amount' => '$20',
+      'net_amount' => '$80',
+      'non_deductible_amount' => '$80',
+      'sequential' => 1,
+    ];
+    $id = $this->callAPISuccess('Contribution', 'create', $params)['id'];
+    // Reading the return values of the API isn't reliable here; get the data from the db.
+    $contribution = $this->callAPISuccess('Contribution', 'getsingle', ['id' => $id]);
+    $this->assertEquals('100.00', $contribution['total_amount']);
+    $this->assertEquals('20.00', $contribution['fee_amount']);
+    $this->assertEquals('80.00', $contribution['net_amount']);
+    $this->assertEquals('80.00', $contribution['non_deductible_amount']);
   }
 
 }

@@ -426,7 +426,13 @@ class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
   public function testGetSelfServiceEligibility($selfSvcEnabled, $selfSvcHours, $hoursToEvent, $participantStatusId, $isBackOffice, $successExpected) {
     $participantId = $this->participantCreate(['contact_id' => $this->_contactId, 'event_id' => $this->_eventId, 'status_id' => $participantStatusId]);
     $now = new Datetime();
-    $startDate = $now->add(new DateInterval("PT{$hoursToEvent}H"))->format('Y-m-d H:i:s');
+    if ($hoursToEvent >= 0) {
+      $startDate = $now->add(new DateInterval("PT{$hoursToEvent}H"))->format('Y-m-d H:i:s');
+    }
+    else {
+      $hoursAfterEvent = abs($hoursToEvent);
+      $startDate = $now->sub(new DateInterval("PT{$hoursAfterEvent}H"))->format('Y-m-d H:i:s');
+    }
     $this->callAPISuccess('Event', 'create', [
       'id' => $this->_eventId,
       'allow_selfcancelxfer' => $selfSvcEnabled,
@@ -434,27 +440,14 @@ class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
       'start_date' => $startDate,
     ]);
     $url = CRM_Utils_System::url('civicrm/event/info', "reset=1&id={$this->_eventId}");
-    // If we return without an error, then success.  But we don't always expect success.
-    try {
-      CRM_Event_BAO_Participant::getSelfServiceEligibility($participantId, $url, $isBackOffice);
-    }
-    catch (\Exception $e) {
-      if ($successExpected === FALSE) {
-        return;
-      }
-      else {
-        $this->fail();
-      }
-    }
-    if ($successExpected === FALSE) {
-      $this->fail();
-    }
+    $details = CRM_Event_BAO_Participant::getSelfServiceEligibility($participantId, $url, $isBackOffice);
+    $this->assertEquals($details['eligible'], $successExpected);
   }
 
   public function selfServiceScenarios() {
     // Standard pass scenario
     $scenarios[] = [
-      'selfSvcEnabled' => TRUE,
+      'selfSvcEnabled' => 1,
       'selfSvcHours' => 12,
       'hoursToEvent' => 16,
       'participantStatusId' => 1,
@@ -463,7 +456,7 @@ class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
     ];
     // Too late to self-service
     $scenarios[] = [
-      'selfSvcEnabled' => TRUE,
+      'selfSvcEnabled' => 1,
       'selfSvcHours' => 12,
       'hoursToEvent' => 8,
       'participantStatusId' => 1,
@@ -472,10 +465,54 @@ class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
     ];
     // Participant status is other than "Registered".
     $scenarios[] = [
-      'selfSvcEnabled' => TRUE,
+      'selfSvcEnabled' => 1,
       'selfSvcHours' => 12,
       'hoursToEvent' => 16,
       'participantStatusId' => 2,
+      'isBackOffice' => FALSE,
+      'successExpected' => FALSE,
+    ];
+    // Event doesn't allow self-service
+    $scenarios[] = [
+      'selfSvcEnabled' => 0,
+      'selfSvcHours' => 12,
+      'hoursToEvent' => 16,
+      'participantStatusId' => 1,
+      'isBackOffice' => FALSE,
+      'successExpected' => FALSE,
+    ];
+    // Cancellation deadline is > 24 hours, still ok to cancel
+    $scenarios[] = [
+      'selfSvcEnabled' => 1,
+      'selfSvcHours' => 36,
+      'hoursToEvent' => 46,
+      'participantStatusId' => 1,
+      'isBackOffice' => FALSE,
+      'successExpected' => TRUE,
+    ];
+    // Cancellation deadline is > 24 hours, too late to cancel
+    $scenarios[] = [
+      'selfSvcEnabled' => 1,
+      'selfSvcHours' => 36,
+      'hoursToEvent' => 25,
+      'participantStatusId' => 1,
+      'isBackOffice' => FALSE,
+      'successExpected' => FALSE,
+    ];
+    // Cancellation deadline is < 0 hours
+    $scenarios[] = [
+      'selfSvcEnabled' => 1,
+      'selfSvcHours' => -12,
+      'hoursToEvent' => 4,
+      'participantStatusId' => 1,
+      'isBackOffice' => FALSE,
+      'successExpected' => TRUE,
+    ];
+    $scenarios[] = [
+      'selfSvcEnabled' => 1,
+      'selfSvcHours' => 0,
+      'hoursToEvent' => -6,
+      'participantStatusId' => 1,
       'isBackOffice' => FALSE,
       'successExpected' => FALSE,
     ];

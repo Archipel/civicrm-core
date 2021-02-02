@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -27,6 +25,7 @@ namespace Civi\Api4;
  * Stores search parameters for populating smart groups with live results.
  *
  * @see https://docs.civicrm.org/user/en/latest/organising-your-data/smart-groups/
+ * @searchable false
  * @package Civi\Api4
  */
 class SavedSearch extends Generic\DAOEntity {

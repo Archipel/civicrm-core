@@ -14,8 +14,6 @@
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
- * $Id$
- *
  */
 
 
@@ -24,8 +22,10 @@ namespace Civi\Api4;
 /**
  * UFMatch entity - links civicrm contacts with users created externally
  *
+ * @searchable false
  * @package Civi\Api4
  */
 class UFMatch extends Generic\DAOEntity {
+  use Generic\Traits\EntityBridge;
 
 }

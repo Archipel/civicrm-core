@@ -10,7 +10,7 @@
 {* this template is used for adding/editing/deleting memberships for a contact  *}
 {if $isRecur}
   <div class="messages status no-popup">
-    <div class="icon inform-icon"></div>
+    {icon icon="fa-info-circle"}{/icon}
     <p>{ts}This membership is set to renew automatically {if $endDate}on {$endDate|crmDate}{/if}. Please be aware that any changes that you make here may not be reflected in the payment processor. Please ensure that you alter the related subscription at the payment processor.{/ts}</p>
     {if $cancelAutoRenew}<p>{ts 1=$cancelAutoRenew}To stop the automatic renewal:
       <a href="%1">Cancel auto-renew</a>
@@ -42,7 +42,7 @@
   {/if}
   {if !$emailExists and $action neq 8 and $context neq 'standalone'}
   <div class="messages status no-popup">
-    <div class="icon inform-icon"></div>
+    {icon icon="fa-info-circle"}{/icon}
     <p>{ts}You will not be able to send an automatic email receipt for this Membership because there is no email address recorded for this contact. If you want a receipt to be sent when this Membership is recorded, click Cancel and then click Edit from the Summary tab to add an email address before recording the Membership.{/ts}</p>
   </div>
   {/if}
@@ -65,7 +65,7 @@
     <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
     {if $action eq 8}
     <div class="messages status no-popup">
-      <div class="icon inform-icon"></div>&nbsp;
+      {icon icon="fa-info-circle"}{/icon}
       {$deleteMessage}
     </div>
     {else}
@@ -163,9 +163,9 @@
             <span class="description">{ts}When <strong>Status Override</strong> is active, the selected status will remain in force (it will NOT be subject to membership status rules) until it is cancelled or become inactive.{/ts}</span></td></tr>
         {/if}
 
-        {if $accessContribution and !$membershipMode AND ($action neq 2 or (!$rows.0.contribution_id AND !$softCredit) or $onlinePendingContributionId)}
+        {if $accessContribution and !$membershipMode AND ($action neq 2 or (!$rows.0.contribution_id AND !$softCredit))}
           <tr id="contri">
-            <td class="label">{if $onlinePendingContributionId}{ts}Update Payment Status{/ts}{else}{$form.record_contribution.label}{/if}</td>
+            <td class="label">{$form.record_contribution.label}</td>
             <td>{$form.record_contribution.html}<br />
               <span class="description">{ts}Check this box to enter or update payment information. You will also be able to generate a customized receipt.{/ts}</span></td>
           </tr>
@@ -251,7 +251,7 @@
   </div> <!-- end form-block -->
 
   {if $action neq 8} {* Jscript additions not need for Delete action *}
-    {if $accessContribution and !$membershipMode AND ($action neq 2 or !$rows.0.contribution_id or $onlinePendingContributionId)}
+    {if $accessContribution and !$membershipMode AND ($action neq 2 or !$rows.0.contribution_id)}
 
     {include file="CRM/common/showHideByFieldValue.tpl"
     trigger_field_id    ="record_contribution"
@@ -268,7 +268,7 @@
       function setPaymentBlock(mode, checkboxEvent) {
         var memType = parseInt(cj('#membership_type_id_1').val( ));
         var isPriceSet = 0;
-        var existingAmount = {/literal}{if !empty($onlinePendingContributionId)}1{else}0{/if}{literal};
+        var existingAmount = 0;
 
         if ( cj('#price_set_id').length > 0 && cj('#price_set_id').val() ) {
           isPriceSet = 1;
