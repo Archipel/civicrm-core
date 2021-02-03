@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3877832b2ea8b061992a614b7a73a456",
+    "content-hash": "a9dea38488ecfe977da08b616641ebd7",
     "packages": [
         {
             "name": "adrienrn/php-mimetyper",
@@ -411,6 +411,10 @@
                 }
             ],
             "description": "Define a 'compile' event for all packages in the dependency-graph",
+            "support": {
+                "issues": "https://github.com/civicrm/composer-compile-plugin/issues",
+                "source": "https://github.com/civicrm/composer-compile-plugin/tree/v0.15"
+            },
             "time": "2021-01-13T05:12:30+00:00"
         },
         {
@@ -4084,5 +4088,5 @@
     "platform-overrides": {
         "php": "7.1"
     },
-    "plugin-api-version": "1.1.0"
+    "plugin-api-version": "2.0.0"
 }
