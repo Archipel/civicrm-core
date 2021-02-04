@@ -817,7 +817,9 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    * @throws \CiviCRM_API3_Exception
    * @throws \Civi\Payment\Exception\PaymentProcessorException
    */
-  public function testSubmitWithPCP() {
+  public function testSubmitWithPCP(): void {
+    $mut = new CiviMailUtils($this, TRUE);
+    $mut->clearMessages();
     $params = $this->pcpParams();
     $pcpID = $this->createPCPBlock($params);
     $form = new CRM_Contribute_Form_Contribution();
@@ -834,6 +836,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     ], CRM_Core_Action::ADD);
     $softCredit = $this->callAPISuccessGetSingle('ContributionSoft', []);
     $this->assertEquals('Dobby', $softCredit['pcp_roll_nickname']);
+    $mut->checkMailLog(['Personal Campaign Page Owner Notification']);
   }
 
   /**
@@ -1070,7 +1073,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   public function testSubmitSaleTax($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
     $form = new CRM_Contribute_Form_Contribution();
 
     $form->testSubmit([
@@ -1120,7 +1123,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    */
   public function testSubmitWithOutSaleTax() {
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
     $form = new CRM_Contribute_Form_Contribution();
 
     $form->testSubmit([
@@ -1158,11 +1161,11 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    *
    * @throws \Exception
    */
-  public function testReSubmitSaleTax($thousandSeparator) {
+  public function testReSubmitSaleTax($thousandSeparator): void {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
-    list($form, $contribution) = $this->doInitialSubmit();
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
+    [$form, $contribution] = $this->doInitialSubmit();
     $this->assertEquals(11000, $contribution['total_amount']);
     $this->assertEquals(1000, $contribution['tax_amount']);
     $this->assertEquals(11000, $contribution['net_amount']);
@@ -1202,7 +1205,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     $mut->checkMailLog($strings);
     $this->callAPISuccessGetCount('FinancialTrxn', [], 3);
     $items = $this->callAPISuccess('FinancialItem', 'get', ['sequential' => 1])['values'];
-    $this->assertEquals(2, count($items));
+    $this->assertCount(2, $items);
     $this->assertEquals('Contribution Amount', $items[0]['description']);
     $this->assertEquals('Sales Tax', $items[1]['description']);
 
@@ -1222,8 +1225,8 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   public function testReSubmitSaleTaxAlteredAmount($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
-    list($form, $contribution) = $this->doInitialSubmit();
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
+    [$form, $contribution] = $this->doInitialSubmit();
 
     $mut = new CiviMailUtils($this, TRUE);
     // Testing here if when we edit something trivial like adding a check_number tax, net, total amount stay the same:
@@ -1773,7 +1776,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
 
     // The page contents load later by ajax, so there's just the surrounding
     // html available now, but we can check at least one thing while we're here.
-    $this->assertStringContainsString("selectedTab = 'widget';", $contents);
+    $this->assertContains("mainTabContainer", $contents);
   }
 
 }

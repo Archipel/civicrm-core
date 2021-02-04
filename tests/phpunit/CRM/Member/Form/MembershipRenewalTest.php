@@ -10,6 +10,7 @@
  */
 
 use Civi\Api4\Contact;
+use Civi\Api4\LineItem;
 
 /**
  *  Test CRM_Member_Form_Membership functions.
@@ -77,7 +78,8 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
   public function setUp() {
     parent::setUp();
 
-    timecop_travel(mktime(1, 0, 0, 8, 1, 2020));
+    // NOTE: This will mock time for PHP. However, some values populated by MySQL ("modified_date") may leak through.
+    CRM_Utils_Time::setTime('2020-08-01 01:00:00');
 
     $this->_individualId = $this->individualCreate();
     $this->_paymentProcessorID = $this->processorCreate();
@@ -127,7 +129,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     foreach ($this->ids['contact'] as $contactID) {
       $this->callAPISuccess('contact', 'delete', ['id' => $contactID, 'skip_undelete' => TRUE]);
     }
-    timecop_return();
+    CRM_Utils_Time::resetTime();
   }
 
   /**
@@ -186,7 +188,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
    */
   public function testSubmitWithTax() {
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->financialTypeID);
+    $this->addTaxAccountToFinancialType($this->financialTypeID);
     $form = $this->getForm();
     $form->testSubmit(array_merge($this->getBaseSubmitParams(), [
       'total_amount' => '50.00',
@@ -194,6 +196,30 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $contribution = $this->callAPISuccessGetSingle('Contribution', ['contact_id' => $this->_individualId, 'is_test' => TRUE, 'return' => ['total_amount', 'tax_amount']]);
     $this->assertEquals(50, $contribution['total_amount']);
     $this->assertEquals(4.55, $contribution['tax_amount']);
+  }
+
+  /**
+   * Test submitting with tax enabled but a rate of zero.
+   *
+   * https://lab.civicrm.org/dev/core/-/issues/2024
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testSubmitWithTaxOfZero() {
+    $this->enableTaxAndInvoicing();
+    $this->addTaxAccountToFinancialType($this->financialTypeID, ['tax_rate' => 0]);
+    $form = $this->getForm();
+    $form->testSubmit(array_merge($this->getBaseSubmitParams(), [
+      'total_amount' => '50.00',
+    ]));
+    $contribution = $this->callAPISuccessGetSingle('Contribution', ['contact_id' => $this->_individualId, 'is_test' => TRUE, 'return' => ['total_amount', 'tax_amount']]);
+    $this->assertEquals(50, $contribution['total_amount']);
+    $this->assertEquals(0, $contribution['tax_amount']);
+    $lines = LineItem::get()->addWhere('contribution_id', '=', $contribution['id'])->execute();
+    $this->assertCount(1, $lines);
   }
 
   /**
@@ -220,7 +246,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $membership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $this->_individualId]);
     $this->assertEquals($newMembershipTypeID, $membership['membership_type_id']);
     // The date (31 Dec this year) should be progressed by 2 months to 28 Dec next year.
-    $this->assertEquals(date('Y', strtotime($membershipBefore['end_date'])) + 1 . '-02-28', $membership['end_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y', strtotime($membershipBefore['end_date'])) + 1 . '-02-28', $membership['end_date']);
   }
 
   /**
@@ -243,7 +269,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $params = [
       'cid' => $this->_individualId,
       'price_set_id' => 0,
-      'join_date' => date('m/d/Y'),
+      'join_date' => CRM_Utils_Time::date('m/d/Y'),
       'start_date' => '',
       'end_date' => '',
       'campaign_id' => '',
@@ -263,7 +289,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'cvv2' => '123',
       'credit_card_exp_date' => [
         'M' => '9',
-        'Y' => date('Y') + 1,
+        'Y' => CRM_Utils_Time::date('Y') + 1,
       ],
       'credit_card_type' => 'Visa',
       'billing_first_name' => 'Test',
@@ -282,7 +308,6 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $membership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $this->_individualId]);
     $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', ['contact_id' => $this->_individualId]);
     $this->assertEquals(1, $contributionRecur['is_email_receipt']);
-    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($contributionRecur['modified_date'])));
     $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($contributionRecur['modified_date'])));
     $this->assertNotEmpty($contributionRecur['invoice_id']);
     $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id',
@@ -348,23 +373,23 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $form->testSubmit($params);
     $membership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $this->_individualId]);
     $this->assertEquals('2020-04-13', $membership['join_date']);
-    $this->assertEquals(date('Y-01-01'), $membership['start_date']);
-    $nextYear = date('Y') + 1;
-    $this->assertEquals(date($nextYear . '-01-31'), $membership['end_date']);
-    $expectedStatus = (strtotime(date('Y-07-14')) > time()) ? 'New' : 'Current';
+    $this->assertEquals(CRM_Utils_Time::date('Y-01-01'), $membership['start_date']);
+    $nextYear = CRM_Utils_Time::date('Y') + 1;
+    $this->assertEquals(CRM_Utils_Time::date($nextYear . '-01-31'), $membership['end_date']);
+    $expectedStatus = (strtotime(CRM_Utils_Time::date('Y-07-14')) > CRM_Utils_Time::time()) ? 'New' : 'Current';
     $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', $expectedStatus), $membership['status_id']);
     $this->assertNotEmpty($membership['contribution_recur_id']);
     $this->assertNotEmpty('original_source', $membership['source']);
 
     $log = $this->callAPISuccessGetSingle('MembershipLog', ['membership_id' => $membership['id'], 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
-    $this->assertEquals(date($nextYear . '-01-01'), $log['start_date']);
-    $this->assertEquals(date($nextYear . '-01-31'), $log['end_date']);
-    $this->assertEquals(date('Y-m-d'), $log['modified_date']);
+    $this->assertEquals(CRM_Utils_Time::date($nextYear . '-01-01'), $log['start_date']);
+    $this->assertEquals(CRM_Utils_Time::date($nextYear . '-01-31'), $log['end_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-m-d'), $log['modified_date']);
 
     $contributionRecur = $this->callAPISuccessGetSingle('ContributionRecur', ['contact_id' => $this->_individualId]);
     $this->assertEquals($contributionRecur['id'], $membership['contribution_recur_id']);
     $this->assertEquals(0, $contributionRecur['is_email_receipt']);
-    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($contributionRecur['modified_date'])));
+    $this->assertEquals(date('Y-m-d'), CRM_Utils_Time::date('Y-m-d', strtotime($contributionRecur['modified_date'])));
     $this->assertNotEmpty($contributionRecur['invoice_id']);
     // @todo fix this part!
     /*
@@ -461,7 +486,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $originalMembership = $this->callAPISuccessGetSingle('membership', []);
     $params = [
       'cid' => $this->_individualId,
-      'join_date' => date('m/d/Y'),
+      'join_date' => CRM_Utils_Time::date('m/d/Y'),
       'start_date' => '',
       'end_date' => '',
       // This format reflects the 23 being the organisation & the 25 being the type.
@@ -490,7 +515,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'return' => ['tax_amount', 'trxn_id'],
     ]);
     $this->assertEquals($contribution['trxn_id'], 777);
-    $this->assertEquals(NULL, $contribution['tax_amount']);
+    $this->assertEquals(0.00, $contribution['tax_amount']);
 
     $this->callAPISuccessGetCount('LineItem', [
       'entity_id' => $membership['id'],
@@ -572,7 +597,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $originalMembership = $this->callAPISuccessGetSingle('membership', []);
     $params = [
       'cid' => $this->_individualId,
-      'join_date' => date('m/d/Y'),
+      'join_date' => CRM_Utils_Time::date('m/d/Y'),
       'start_date' => '',
       'end_date' => '',
       // This format reflects the 23 being the organisation & the 25 being the type.
@@ -655,7 +680,7 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
       'cvv2' => '123',
       'credit_card_exp_date' => [
         'M' => '9',
-        'Y' => date('Y') + 1,
+        'Y' => CRM_Utils_Time::date('Y') + 1,
       ],
       'credit_card_type' => 'Visa',
       'billing_first_name' => 'Test',
@@ -704,13 +729,13 @@ class CRM_Member_Form_MembershipRenewalTest extends CiviUnitTestCase {
     $form->testSubmit($params);
     $renewedMembership = $this->callAPISuccessGetSingle('Membership', ['id' => $originalMembership['id']]);
     $this->assertEquals('sauce', $renewedMembership['source']);
-    $this->assertEquals(date('Y-01-01'), $renewedMembership['start_date']);
-    $this->assertEquals(date('2019-03-01'), $renewedMembership['join_date']);
-    $this->assertEquals(date('Y-12-31'), $renewedMembership['end_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-01-01'), $renewedMembership['start_date']);
+    $this->assertEquals(CRM_Utils_Time::date('2019-03-01'), $renewedMembership['join_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-12-31'), $renewedMembership['end_date']);
     $log = $this->callAPISuccessGetSingle('MembershipLog', ['membership_id' => $renewedMembership['id'], 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
-    $this->assertEquals(date('Y-01-01'), $log['start_date']);
-    $this->assertEquals(date('Y-12-31'), $log['end_date']);
-    $this->assertEquals(date('Y-m-d'), $log['modified_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-01-01'), $log['start_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-12-31'), $log['end_date']);
+    $this->assertEquals(CRM_Utils_Time::date('Y-m-d'), $log['modified_date']);
     $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', 'Current'), $log['status_id']);
   }
 
