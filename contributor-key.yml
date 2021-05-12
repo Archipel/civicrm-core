@@ -209,6 +209,10 @@
 - github      : borisson
   name        : Joris Vercammen
 
+- github      : braders
+  name        : Bradley Taylor
+  organization: BrightMinded Ltd
+
 - name        : Brian McFee
   jira        : brian
 
@@ -387,6 +391,9 @@
 
 - github      : don-alejandro-z
 
+- github      : dptarrant
+  name        : Dave T
+
 - github      : dwoods-encircle
   organization: enCircle Solutions Ltd.
   name        : Darren Woods
@@ -467,6 +474,8 @@
   name        : Eli Lisseck
   organization: AGH Strategies
   jira        : elilisseck
+
+- github      : elinw
 
 - github      : Elennio
   name        : Elennio Dec
@@ -685,6 +694,8 @@
 - github      : ivan-compucorp
   name        : Ivan
   organization: CompuCorp
+
+- github      : J0WI
 
 - github      : jaapjansma
   name        : Jaap Jansma
@@ -971,6 +982,8 @@
 
 - github      : lucky091588
 
+- github      : lunar-debian
+
 - github      : lyyana
   name        : Yuliyana Liyana
   organization: Oxfam Germany
@@ -1109,6 +1122,9 @@
 - name        : Michael Lueck
   organization: Lueck Data Systems
   jira        : mdlueck
+
+- github      : mflandorfer
+  organization: Greenpeace CEE
 
 - github      : mlutfy
   name        : Mathieu Lutfy
@@ -1351,6 +1367,10 @@
 - name        : Lutz Frommberger
   jira        : re-quest
 
+- github      : rgilman
+  name        : Robert Gilman
+  organization: Context Institute
+
 - github      : robbrandt
   name        : Rob Brandt
   organization: Botanical Society of America
@@ -1507,6 +1527,8 @@
 - name`       : Stevel
   jira        : stevel
 
+- github      : StijnVanhandsaeme
+
 - github      : stoob
   name        : Stuart Gaston
   organization: Korlon
@@ -1514,7 +1536,7 @@
 
 - github      : sunilpawar
   name        : Sunil Pawar
-  organization: CiviDesk
+  organization: Skvare
   jira        : sunil
 
 - github      : swastikpareek
@@ -1533,6 +1555,8 @@
 
 - github      : tanyabouman
   name        : Tanya Bouman
+
+- github      : tapashdatta
 
 - github      : TBSliver
   name        : Tom Bloor
@@ -1730,3 +1754,11 @@
 - github      : UshaMakoa
   name        : Usha F. Matisson
   organization: Makoa
+
+- github      : ahed-compucorp
+  name        : Ahed Eid
+  organization: CompuCorp
+
+- github      : wintermoor
+  name        : Torben Bertram
+  organization: ECOPLAN

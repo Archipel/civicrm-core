@@ -123,6 +123,9 @@ class Container {
     ))
       ->setFactory([new Reference(self::SELF), 'createAngularManager'])->setPublic(TRUE);
 
+    $container->setDefinition('angularjs.loader', new Definition('Civi\Angular\AngularLoader', []))
+      ->setPublic(TRUE);
+
     $container->setDefinition('dispatcher', new Definition(
       'Civi\Core\CiviEventDispatcher',
       []
@@ -222,6 +225,9 @@ class Container {
       ->setFactory('Civi\Crypto\CryptoRegistry::createDefaultRegistry')->setPublic(TRUE);
 
     $container->setDefinition('crypto.token', new Definition('Civi\Crypto\CryptoToken', []))
+      ->setPublic(TRUE);
+
+    $container->setDefinition('crypto.jwt', new Definition('Civi\Crypto\CryptoJwt', []))
       ->setPublic(TRUE);
 
     if (empty(\Civi::$statics[__CLASS__]['boot'])) {
@@ -348,6 +354,7 @@ class Container {
    */
   public function createEventDispatcher() {
     // Continue building on the original dispatcher created during bootstrap.
+    /** @var CiviEventDispatcher $dispatcher */
     $dispatcher = static::getBootService('dispatcher.boot');
 
     $dispatcher->addListener('civi.core.install', ['\Civi\Core\InstallationCanary', 'check']);
@@ -367,6 +374,7 @@ class Container {
     $dispatcher->addListener('hook_civicrm_eventDefs', ['\Civi\API\Events', 'hookEventDefs']);
     $dispatcher->addListener('hook_civicrm_eventDefs', ['\Civi\Core\Event\SystemInstallEvent', 'hookEventDefs']);
     $dispatcher->addListener('hook_civicrm_buildAsset', ['\Civi\Angular\Page\Modules', 'buildAngularModules']);
+    $dispatcher->addListenerService('civi.region.render', ['angularjs.loader', 'onRegionRender']);
     $dispatcher->addListener('hook_civicrm_buildAsset', ['\CRM_Utils_VisualBundle', 'buildAssetJs']);
     $dispatcher->addListener('hook_civicrm_buildAsset', ['\CRM_Utils_VisualBundle', 'buildAssetCss']);
     $dispatcher->addListener('hook_civicrm_buildAsset', ['\CRM_Core_Resources', 'renderMenubarStylesheet']);
@@ -566,6 +574,10 @@ class Container {
         $container->set($name, $obj);
       }
       \Civi::$statics[__CLASS__]['container'] = $container;
+      // Ensure all container-based serivces have a chance to add their listeners.
+      // Without this, it's a matter of happenstance (dependent upon particular page-request/configuration/etc).
+      $container->get('dispatcher');
+
     }
     else {
       $bootServices['dispatcher.boot']->setDispatchPolicy($mainDispatchPolicy);

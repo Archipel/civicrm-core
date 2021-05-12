@@ -23,6 +23,10 @@
                 'label',
                 'api_entity',
                 'api_params',
+                'created.display_name',
+                'modified.display_name',
+                'created_date',
+                'modified_date',
                 'GROUP_CONCAT(display.name ORDER BY display.id) AS display_name',
                 'GROUP_CONCAT(display.label ORDER BY display.id) AS display_label',
                 'GROUP_CONCAT(display.type:icon ORDER BY display.id) AS display_icon',
@@ -50,7 +54,7 @@
             return crmApi4('SavedSearch', 'get', {
               where: [['id', '=', params.id]],
               chain: {
-                groups: ['Group', 'get', {select: ['id', 'title', 'description', 'visibility', 'group_type'], where: [['saved_search_id', '=', '$id']]}],
+                groups: ['Group', 'get', {select: ['id', 'title', 'description', 'visibility', 'group_type', 'custom.*'], where: [['saved_search_id', '=', '$id']]}],
                 displays: ['SearchDisplay', 'get', {where: [['saved_search_id', '=', '$id']]}]
               }
             }, 0);
@@ -81,7 +85,7 @@
       $scope.$ctrl = this;
     })
 
-    .factory('searchMeta', function() {
+    .factory('searchMeta', function($q) {
       function getEntity(entityName) {
         if (entityName) {
           return _.find(CRM.crmSearchAdmin.schema, {name: entityName});
@@ -116,17 +120,21 @@
         // Add the numbered suffix to the join conditions
         // If this is a deep join, also add the base entity prefix
         var prefix = alias.replace(new RegExp('_?' + join.alias + '_?\\d?\\d?$'), '');
-        _.each(result.conditions, function(condition) {
+        function replaceRefs(condition) {
           if (_.isArray(condition)) {
             _.each(condition, function(ref, side) {
-              if (side !== 1 && _.includes(ref, '.')) {
-                condition[side] = ref.replace(join.alias + '.', alias + '.');
-              } else if (side !== 1 && prefix.length && !_.includes(ref, '"') && !_.includes(ref, "'")) {
-                condition[side] = prefix + '.' + ref;
+              if (side !== 1 && typeof ref === 'string') {
+                if (_.includes(ref, '.')) {
+                  condition[side] = ref.replace(join.alias + '.', alias + '.');
+                } else if (prefix.length && !_.includes(ref, '"') && !_.includes(ref, "'")) {
+                  condition[side] = prefix + '.' + ref;
+                }
               }
             });
           }
-        });
+        }
+        _.each(result.conditions, replaceRefs);
+        _.each(result.defaults, replaceRefs);
         return result;
       }
       function getFieldAndJoin(fieldName, entityName) {
@@ -144,7 +152,7 @@
         if (dotSplit.length === 2) {
           field = _.find(getEntity(entityName).fields, {name: dotSplit[0] + '.' + name});
           if (field) {
-            field.entity = entityName;
+            field.baseEntity = entityName;
             return {field: field};
           }
         }
@@ -157,7 +165,7 @@
           field = _.find(getEntity(join.bridge).fields, {name: name});
         }
         if (field) {
-          field.entity = entityName;
+          field.baseEntity = entityName;
           return {field: field, join: join};
         }
       }
@@ -166,7 +174,7 @@
           return;
         }
         var splitAs = expr.split(' AS '),
-          info = {fn: null, modifier: ''},
+          info = {fn: null, modifier: '', field: {}, alias: _.last(splitAs)},
           fieldName = splitAs[0],
           bracketPos = splitAs[0].indexOf('(');
         if (bracketPos >= 0) {
@@ -184,7 +192,6 @@
           info.suffix = !split[1] ? '' : ':' + split[1];
           info.field = fieldAndJoin.field;
           info.join = fieldAndJoin.join;
-          info.alias = splitAs[1] || (info.fn ? info.fn.name + ':' + info.path + info.suffix : split[0]);
         }
         return info;
       }
@@ -224,8 +231,40 @@
               }
             });
           });
+        },
+        pickIcon: function() {
+          var deferred = $q.defer();
+          $('#crm-search-admin-icon-picker').off('change').siblings('.crm-icon-picker-button').click();
+          $('#crm-search-admin-icon-picker').on('change', function() {
+            deferred.resolve($(this).val());
+          });
+          return deferred.promise;
+        }
+      };
+    })
+    .directive('contenteditable', function() {
+      return {
+        require: 'ngModel',
+        link: function(scope, elm, attrs, ctrl) {
+          // view -> model
+          elm.on('blur', function() {
+            ctrl.$setViewValue(elm.html());
+          });
+
+          // model -> view
+          ctrl.$render = function() {
+            elm.html(ctrl.$viewValue);
+          };
         }
       };
     });
+
+  // Shoehorn in a non-angular widget for picking icons
+  $(function() {
+    $('#crm-container').append('<div style="display:none"><input id="crm-search-admin-icon-picker"></div>');
+    CRM.loadScript(CRM.config.resourceBase + 'js/jquery/jquery.crmIconPicker.js').done(function() {
+      $('#crm-search-admin-icon-picker').crmIconPicker();
+    });
+  });
 
 })(angular, CRM.$, CRM._);

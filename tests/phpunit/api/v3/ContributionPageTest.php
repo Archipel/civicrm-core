@@ -54,7 +54,7 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
     $this->contactIds[] = $this->individualCreate();
     $this->params = [
@@ -83,7 +83,7 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function tearDown() {
+  public function tearDown(): void {
     foreach ($this->contactIds as $id) {
       $this->callAPISuccess('contact', 'delete', ['id' => $id]);
     }
@@ -421,7 +421,7 @@ class api_v3_ContributionPageTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function testSubmitMembershipBlockNotSeparatePaymentWithEmail() {
+  public function testSubmitMembershipBlockNotSeparatePaymentWithEmail(): void {
     $mut = new CiviMailUtils($this, TRUE);
     $this->setUpMembershipContributionPage();
     $this->addProfile('supporter_profile', $this->_ids['contribution_page']);

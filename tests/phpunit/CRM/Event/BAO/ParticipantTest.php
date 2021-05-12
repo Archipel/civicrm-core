@@ -16,7 +16,7 @@
  */
 class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
 
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
     $this->_contactId = $this->individualCreate();
     $event = $this->eventCreate();
@@ -515,6 +515,15 @@ class CRM_Event_BAO_ParticipantTest extends CiviUnitTestCase {
       'participantStatusId' => 1,
       'isBackOffice' => FALSE,
       'successExpected' => FALSE,
+    ];
+    // Update from back office even when self-service is disabled
+    $scenarios[] = [
+      'selfSvcEnabled' => 0,
+      'selfSvcHours' => 12,
+      'hoursToEvent' => 16,
+      'participantStatusId' => 1,
+      'isBackOffice' => TRUE,
+      'successExpected' => TRUE,
     ];
     return $scenarios;
   }

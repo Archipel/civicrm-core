@@ -34,15 +34,19 @@ use Civi\Api4\Tag;
 class FkJoinTest extends UnitTestCase {
 
   public function setUpHeadless() {
+    $this->loadDataSet('DefaultDataSet');
+
+    return parent::setUpHeadless();
+  }
+
+  public function tearDown(): void {
     $relatedTables = [
       'civicrm_activity',
       'civicrm_phone',
       'civicrm_activity_contact',
     ];
     $this->cleanup(['tablesToTruncate' => $relatedTables]);
-    $this->loadDataSet('DefaultDataSet');
-
-    return parent::setUpHeadless();
+    parent::tearDown();
   }
 
   /**
@@ -99,6 +103,24 @@ class FkJoinTest extends UnitTestCase {
     $this->assertEquals('1', $contacts[0]['phone.location_type_id']);
   }
 
+  public function testImplicitJoinOnExplicitJoin() {
+    $contacts = Contact::get(FALSE)
+      ->addWhere('id', '=', $this->getReference('test_contact_1')['id'])
+      ->addJoin('Address AS address', TRUE, ['id', '=', 'address.contact_id'], ['address.location_type_id', '=', 1])
+      ->addSelect('id', 'address.country.iso_code')
+      ->execute();
+    $this->assertCount(1, $contacts);
+    $this->assertEquals('US', $contacts[0]['address.country.iso_code']);
+  }
+
+  public function testExcludeJoin() {
+    $contacts = Contact::get(FALSE)
+      ->addJoin('Address AS address', 'EXCLUDE', ['id', '=', 'address.contact_id'], ['address.location_type_id', '=', 1])
+      ->addSelect('id')
+      ->execute()->column('id');
+    $this->assertNotContains($this->getReference('test_contact_1')['id'], $contacts);
+  }
+
   public function testJoinToTheSameTableTwice() {
     $cid1 = Contact::create(FALSE)
       ->addValue('first_name', 'Aaa')
@@ -123,8 +145,8 @@ class FkJoinTest extends UnitTestCase {
     $contacts = Contact::get(FALSE)
       ->addSelect('id', 'first_name', 'any_email.email', 'any_email.location_type_id:name', 'any_email.is_primary', 'primary_email.email')
       ->setJoin([
-        ['Email AS any_email', TRUE, NULL],
-        ['Email AS primary_email', FALSE, ['primary_email.is_primary', '=', TRUE]],
+        ['Email AS any_email', 'INNER', NULL],
+        ['Email AS primary_email', 'LEFT', ['primary_email.is_primary', '=', TRUE]],
       ])
       ->addWhere('id', 'IN', [$cid1, $cid2, $cid3])
       ->addOrderBy('any_email.id')

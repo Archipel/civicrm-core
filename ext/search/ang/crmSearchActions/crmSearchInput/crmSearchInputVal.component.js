@@ -10,12 +10,13 @@
     require: {ngModel: 'ngModel'},
     template: '<div class="form-group" ng-include="$ctrl.getTemplate()"></div>',
     controller: function($scope, formatForSelect2) {
-      var ts = $scope.ts = CRM.ts(),
+      var ts = $scope.ts = CRM.ts('org.civicrm.search'),
         ctrl = this;
 
       this.$onInit = function() {
         var rendered = false;
         ctrl.dateRanges = CRM.crmSearchActions.dateRanges;
+        ctrl.entity = ctrl.field.fk_entity || ctrl.field.entity;
 
         this.ngModel.$render = function() {
           ctrl.value = ctrl.ngModel.$viewValue;
@@ -97,12 +98,16 @@
           return '~/crmSearchActions/crmSearchInput/select.html';
         }
 
-        if (ctrl.field.fk_entity) {
+        if (ctrl.field.fk_entity || ctrl.field.name === 'id') {
           return '~/crmSearchActions/crmSearchInput/entityRef.html';
         }
 
         if (ctrl.field.data_type === 'Integer') {
           return '~/crmSearchActions/crmSearchInput/integer.html';
+        }
+
+        if (ctrl.field.data_type === 'Float') {
+          return '~/crmSearchActions/crmSearchInput/float.html';
         }
 
         return '~/crmSearchActions/crmSearchInput/text.html';

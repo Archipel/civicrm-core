@@ -58,7 +58,7 @@ class CRM_Core_Permission_Drupal8 extends CRM_Core_Permission_DrupalBase {
     $allCorePerms = \CRM_Core_Permission::basicPermissions(TRUE);
 
     $dperms = \Drupal::service('user.permissions')->getPermissions();
-    $modules = system_get_info('module');
+    $modules = \Drupal::service('extension.list.module')->getAllInstalledInfo();
 
     $permissions = [];
     foreach ($dperms as $permName => $dperm) {
@@ -109,6 +109,7 @@ class CRM_Core_Permission_Drupal8 extends CRM_Core_Permission_DrupalBase {
    * @inheritDoc
    */
   public function upgradePermissions($permissions) {
+    // @todo - this should probably call getCoreAndComponentPermissions.
     $civicrm_perms = array_keys(CRM_Core_Permission::getCorePermissions());
     if (empty($civicrm_perms)) {
       throw new CRM_Core_Exception("Cannot upgrade permissions: permission list missing");

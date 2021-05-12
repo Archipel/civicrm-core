@@ -27,7 +27,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
 
     $this->_apiversion = 3;
@@ -40,7 +40,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    *
    * @throws \Exception
    */
-  public function tearDown() {
+  public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
     $this->quickCleanup(['civicrm_uf_match']);
     unset(CRM_Core_Config::singleton()->userPermissionClass->permissions);

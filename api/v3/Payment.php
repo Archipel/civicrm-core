@@ -135,12 +135,6 @@ function civicrm_api3_payment_create($params) {
       }
     }
   }
-  if (!empty($params['payment_processor'])) {
-    // I can't find evidence this is passed in - I was gonna just remove it but decided to deprecate  as I see getToFinancialAccount
-    // also anticipates it.
-    CRM_Core_Error::deprecatedFunctionWarning('passing payment_processor is deprecated - use payment_processor_id');
-    $params['payment_processor_id'] = $params['payment_processor'];
-  }
   // Check if it is an update
   if (!empty($params['id'])) {
     $amount = $params['total_amount'];
@@ -348,6 +342,11 @@ function _civicrm_api3_payment_get_spec(&$params) {
     'trxn_id' => [
       'title' => ts('Transaction ID'),
       'description' => ts('Transaction id supplied by external processor. This may not be unique.'),
+      'type' => CRM_Utils_Type::T_STRING,
+    ],
+    'order_reference' => [
+      'title' => ts('Order Reference'),
+      'description' => ts('Payment Processor external order reference'),
       'type' => CRM_Utils_Type::T_STRING,
     ],
     'trxn_date' => [

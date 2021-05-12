@@ -61,10 +61,12 @@ function generateJoomlaConfig($version) {
   require_once 'CRM/Core/Permission.php';
   require_once 'CRM/Utils/String.php';
   require_once 'CRM/Core/I18n.php';
-  $permissions = CRM_Core_Permission::getCorePermissions(TRUE);
+  $permissions = CRM_Core_Permission::getCorePermissions();
 
   $crmFolderDir = $sourceCheckoutDir . DIRECTORY_SEPARATOR . 'CRM';
 
+  // @todo call getCoreAndComponentPermissions instead and let that
+  // do the work of these next 15-20 lines.
   require_once 'CRM/Core/Component.php';
   $components = CRM_Core_Component::getComponentsFromFile($crmFolderDir);
   foreach ($components as $comp) {

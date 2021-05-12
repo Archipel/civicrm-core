@@ -125,9 +125,11 @@ function dm_core_exts() {
   echo ext/ewaysingle
   echo ext/financialacls
   echo ext/afform
+  echo ext/authx
   echo ext/greenwich
   echo ext/contributioncancelactions
   echo ext/oauth-client
+  echo ext/recaptcha
 }
 
 ## Copy all packages

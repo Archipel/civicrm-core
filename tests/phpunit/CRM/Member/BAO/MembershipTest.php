@@ -19,7 +19,7 @@ class CRM_Member_BAO_MembershipTest extends CiviUnitTestCase {
   private $_membershipStatusID;
   private $_membershipTypeID;
 
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
 
     $this->_contactID = $this->organizationCreate();
@@ -34,7 +34,7 @@ class CRM_Member_BAO_MembershipTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function tearDown() {
+  public function tearDown(): void {
     $this->membershipTypeDelete(['id' => $this->_membershipTypeID]);
     $this->membershipStatusDelete($this->_membershipStatusID);
     $this->contactDelete($this->_contactID);

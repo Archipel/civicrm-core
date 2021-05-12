@@ -3,55 +3,28 @@
 
   angular.module('crmSearchAdmin').component('crmSearchAdminLinkSelect', {
     bindings: {
-      column: '<',
+      link: '<',
       apiEntity: '<',
-      apiParams: '<'
+      apiParams: '<',
+      links: '<',
+      onChange: '&'
     },
     templateUrl: '~/crmSearchAdmin/crmSearchAdminLinkSelect.html',
-    controller: function ($scope, $element, $timeout, searchMeta) {
-      var ts = $scope.ts = CRM.ts(),
+    controller: function ($scope, $element, $timeout) {
+      var ts = $scope.ts = CRM.ts('org.civicrm.search'),
         ctrl = this;
 
-      // Return all possible links to main entity or join entities
-      function getLinks() {
-        var links = _.cloneDeep(searchMeta.getEntity(ctrl.apiEntity).paths || []);
-        _.each(ctrl.apiParams.join, function(join) {
-          var joinName = join[0].split(' AS '),
-            joinEntity = searchMeta.getEntity(joinName[0]);
-          _.each(joinEntity.paths, function(path) {
-            var link = _.cloneDeep(path);
-            link.path = link.path.replace(/\[/g, '[' + joinName[1] + '.');
-            links.push(link);
+      this.setValue = function(val) {
+        ctrl.link  = ctrl.link  || {};
+        var link = ctrl.getLink(val),
+          oldVal = ctrl.link.path;
+        ctrl.link.path = val;
+        if (!link) {
+          $timeout(function () {
+            $('input[type=text]', $element).focus();
           });
-        });
-        return links;
-      }
-
-      function onChange() {
-        var val = $('select', $element).val();
-        if (val !== ctrl.column.link) {
-          var link = ctrl.getLink(val);
-          if (link) {
-            ctrl.column.link = link.path;
-            ctrl.column.title = link.title;
-          } else if (val === 'civicrm/') {
-            ctrl.column.link = val;
-            $timeout(function() {
-              $('input', $element).focus();
-            });
-          } else {
-            ctrl.column.link = '';
-            ctrl.column.title = '';
-          }
         }
-      }
-
-      this.$onInit = function() {
-        this.links = getLinks();
-
-        $('select', $element).on('change', function() {
-          $scope.$apply(onChange);
-        });
+        ctrl.onChange({before: oldVal, after: val});
       };
 
       this.getLink = function(path) {

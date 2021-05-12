@@ -113,6 +113,16 @@ class FieldSpec {
   protected $columnName;
 
   /**
+   * @var bool
+   */
+  protected $readonly = FALSE;
+
+  /**
+   * @var callable[]
+   */
+  protected $outputFormatters = [];
+
+  /**
    * Aliases for the valid data types
    *
    * @var array
@@ -357,6 +367,50 @@ class FieldSpec {
    */
   public function setInputAttrs($inputAttrs) {
     $this->inputAttrs = $inputAttrs;
+
+    return $this;
+  }
+
+  /**
+   * @return callable[]
+   */
+  public function getOutputFormatters() {
+    return $this->outputFormatters;
+  }
+
+  /**
+   * @param callable[] $outputFormatters
+   * @return $this
+   */
+  public function setOutputFormatters($outputFormatters) {
+    $this->outputFormatters = $outputFormatters;
+
+    return $this;
+  }
+
+  /**
+   * @param callable $outputFormatter
+   * @return $this
+   */
+  public function addOutputFormatter($outputFormatter) {
+    $this->outputFormatters[] = $outputFormatter;
+
+    return $this;
+  }
+
+  /**
+   * @return bool
+   */
+  public function getreadonly() {
+    return $this->readonly;
+  }
+
+  /**
+   * @param bool $readonly
+   * @return $this
+   */
+  public function setreadonly($readonly) {
+    $this->readonly = (bool) $readonly;
 
     return $this;
   }

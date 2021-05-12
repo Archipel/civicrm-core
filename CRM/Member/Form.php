@@ -64,6 +64,27 @@ class CRM_Member_Form extends CRM_Contribute_Form_AbstractEditPayment {
   public $_priceSet;
 
   /**
+   * The order being processed.
+   *
+   * @var \CRM_Financial_BAO_Order
+   */
+  protected $order;
+
+  /**
+   * This string is the used for passing to the buildAmount hook.
+   *
+   * @var string
+   */
+  protected $formContext = 'membership';
+
+  /**
+   * @return string
+   */
+  public function getFormContext(): string {
+    return $this->formContext;
+  }
+
+  /**
    * Explicitly declare the entity api name.
    */
   public function getDefaultEntity() {
@@ -307,16 +328,13 @@ class CRM_Member_Form extends CRM_Contribute_Form_AbstractEditPayment {
       $this->_contactID = $formValues['contact_id'];
     }
 
-    list($this->_memberDisplayName,
-      $this->_memberEmail
-      ) = CRM_Contact_BAO_Contact_Location::getEmailDetails($this->_contactID);
+    [$this->_memberDisplayName, $this->_memberEmail] = CRM_Contact_BAO_Contact_Location::getEmailDetails($this->_contactID);
 
     //CRM-10375 Where the payer differs to the member the payer should get the email.
     // here we store details in order to do that
     if (!empty($formValues['soft_credit_contact_id'])) {
       $this->_receiptContactId = $this->_contributorContactID = $formValues['soft_credit_contact_id'];
-      list($this->_contributorDisplayName,
-        $this->_contributorEmail) = CRM_Contact_BAO_Contact_Location::getEmailDetails($this->_contributorContactID);
+      [$this->_contributorDisplayName, $this->_contributorEmail] = CRM_Contact_BAO_Contact_Location::getEmailDetails($this->_contributorContactID);
     }
     else {
       $this->_receiptContactId = $this->_contributorContactID = $this->_contactID;
@@ -453,11 +471,21 @@ class CRM_Member_Form extends CRM_Contribute_Form_AbstractEditPayment {
    * @return array
    */
   protected function setPriceSetParameters(array $formValues): array {
+    // process price set and get total amount and line items.
     $this->_priceSetId = $this->getPriceSetID($formValues);
+    $this->ensurePriceParamsAreSet($formValues);
     $priceSetDetails = $this->getPriceSetDetails($formValues);
     $this->_priceSet = $priceSetDetails[$this->_priceSetId];
-    // process price set and get total amount and line items.
-    $this->ensurePriceParamsAreSet($formValues);
+    $this->order = new CRM_Financial_BAO_Order();
+    $this->order->setPriceSelectionFromUnfilteredInput($formValues);
+    $this->order->setPriceSetID($this->getPriceSetID($formValues));
+    $this->order->setForm($this);
+    if ($priceSetDetails[$this->order->getPriceSetID()]['is_quick_config'] && isset($formValues['total_amount'])) {
+      // Amount overrides only permitted on quick config.
+      // Possibly Order object should enforce this...
+      $this->order->setOverrideTotalAmount((float) $formValues['total_amount']);
+    }
+    $this->order->setOverrideFinancialTypeID((int) $formValues['financial_type_id']);
     return $formValues;
   }
 
@@ -466,9 +494,10 @@ class CRM_Member_Form extends CRM_Contribute_Form_AbstractEditPayment {
    *
    * @param array $formValues
    */
-  public function testSubmit($formValues) {
+  public function testSubmit(array $formValues): void {
+    $this->exportedValues = $formValues;
     $this->setContextVariables($formValues);
-    $this->_memType = $formValues['membership_type_id'][1];
+    $this->_memType = !empty($formValues['membership_type_id']) ? $formValues['membership_type_id'][1] : NULL;
     $this->_params = $formValues;
     $this->submit();
   }
@@ -483,17 +512,36 @@ class CRM_Member_Form extends CRM_Contribute_Form_AbstractEditPayment {
    * @throws \CiviCRM_API3_Exception
    */
   protected function getOrderParams(): array {
-    $order = new CRM_Financial_BAO_Order();
-    $order->setPriceSelectionFromUnfilteredInput($this->_params);
-    $order->setPriceSetID($this->getPriceSetID($this->_params));
-    $order->setOverrideTotalAmount($this->_params['total_amount']);
-    $order->setOverrideFinancialTypeID((int) $this->_params['financial_type_id']);
     return [
-      'lineItems' => [$this->_priceSetId => $order->getLineItems()],
+      'lineItems' => [$this->_priceSetId => $this->order->getLineItems()],
       // This is one of those weird & wonderful legacy params we aim to get rid of.
       'processPriceSet' => TRUE,
-      'tax_amount' => $order->getTotalTaxAmount(),
+      'tax_amount' => $this->order->getTotalTaxAmount(),
     ];
+  }
+
+  /**
+   * Get the currency in use.
+   *
+   * This just defaults to getting the default currency
+   * as other currencies are not supported on the membership
+   * forms at the moment.
+   *
+   * @param array $submittedValues
+   *
+   * @return string
+   */
+  public function getCurrency($submittedValues = []): string {
+    return CRM_Core_Config::singleton()->defaultCurrency;
+  }
+
+  /**
+   * Get the relevant payment instrument id.
+   *
+   * @return int
+   */
+  protected function getPaymentInstrumentID(): int {
+    return (int) $this->getSubmittedValue('payment_instrument_id') ?: $this->_paymentProcessor['object']->getPaymentInstrumentID();
   }
 
 }

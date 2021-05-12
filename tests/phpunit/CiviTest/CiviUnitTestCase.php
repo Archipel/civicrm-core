@@ -317,14 +317,12 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   /**
    *  Common setup functions for all unit tests.
    */
-  protected function setUp() {
+  protected function setUp(): void {
     $session = CRM_Core_Session::singleton();
     $session->set('userID', NULL);
 
     $this->_apiversion = 3;
 
-    // REVERT
-    $this->errorScope = CRM_Core_TemporaryErrorScope::useException();
     //  Use a temporary file for STDIN
     $GLOBALS['stdin'] = tmpfile();
     if ($GLOBALS['stdin'] === FALSE) {
@@ -374,12 +372,13 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
 
     $this->renameLabels();
     $this->_sethtmlGlobals();
+    $this->ensureMySQLMode(['IGNORE_SPACE', 'ERROR_FOR_DIVISION_BY_ZERO', 'STRICT_TRANS_TABLES']);
   }
 
   /**
    * Read everything from the datasets directory and insert into the db.
    */
-  public function loadAllFixtures() {
+  public function loadAllFixtures(): void {
     $fixturesDir = __DIR__ . '/../../fixtures';
 
     CRM_Core_DAO::executeQuery("SET FOREIGN_KEY_CHECKS = 0;");
@@ -463,7 +462,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   /**
    *  Common teardown functions for all unit tests.
    */
-  protected function tearDown() {
+  protected function tearDown(): void {
     $this->_apiversion = 3;
     $this->resetLabels();
 
@@ -3661,23 +3660,23 @@ VALUES
    *
    * @return CRM_Case_BAO_Case
    */
-  public function createCase($clientId, $loggedInUser = NULL, $extra = NULL) {
+  public function createCase($clientId, $loggedInUser = NULL, $extra = []) {
     if (empty($loggedInUser)) {
       // backwards compatibility - but it's more typical that the creator is a different person than the client
       $loggedInUser = $clientId;
     }
-    $caseParams = [
+    $caseParams = array_merge([
       'activity_subject' => 'Case Subject',
       'client_id'        => $clientId,
       'case_type_id'     => 1,
       'status_id'        => 1,
       'case_type'        => 'housing_support',
       'subject'          => 'Case Subject',
-      'start_date'       => ($extra['start_date'] ?? date("Y-m-d")),
-      'start_date_time'  => ($extra['start_date_time'] ?? date("YmdHis")),
+      'start_date'       => date("Y-m-d"),
+      'start_date_time'  => date("YmdHis"),
       'medium_id'        => 2,
       'activity_details' => '',
-    ];
+    ], $extra);
     $form = new CRM_Case_Form_Case();
     return $form->testSubmit($caseParams, 'OpenCase', $loggedInUser, 'standalone');
   }
@@ -3790,6 +3789,18 @@ WHERE a1.is_primary = 0
   AND a2.id IS NULL
   AND a1.contact_id IS NOT NULL) as primary_descrepancies
     '));
+  }
+
+  /**
+   * Ensure the specified mysql mode/s are activated.
+   *
+   * @param array $modes
+   */
+  protected function ensureMySQLMode(array $modes): void {
+    $currentModes = array_fill_keys(CRM_Utils_SQL::getSqlModes(), 1);
+    $currentModes = array_merge($currentModes, array_fill_keys($modes, 1));
+    CRM_Core_DAO::executeQuery("SET GLOBAL sql_mode = '" . implode(',', array_keys($currentModes)) . "'");
+    CRM_Core_DAO::executeQuery("SET sql_mode = '" . implode(',', array_keys($currentModes)) . "'");
   }
 
 }

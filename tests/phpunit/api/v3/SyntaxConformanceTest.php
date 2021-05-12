@@ -81,7 +81,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
    * and that will never exist (eg an obsoleted Entity
    * they need to be returned by the function toBeSkipped_{$action} (because it has to be a static method and therefore couldn't access a this->toBeSkipped)
    */
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
     $this->enableCiviCampaign();
     $this->toBeImplemented['get'] = [
@@ -132,7 +132,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     $this->deletableTestObjects = [];
   }
 
-  public function tearDown() {
+  public function tearDown(): void {
     foreach ($this->deletableTestObjects as $entityName => $entities) {
       foreach ($entities as $entityID) {
         CRM_Core_DAO::deleteTestObjects($entityName, ['id' => $entityID]);
@@ -753,6 +753,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
           'website_type_id',
           // Not a real field
           'option.autoweight',
+          'field_name',
         ],
         'break_return' => [
           // These fields get auto-adjusted by the BAO prior to saving
