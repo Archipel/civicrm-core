@@ -1,18 +1,12 @@
 [submodule "api/org.timelab.api"]
 	path = api/org.timelab.api
 	url = https://github.com/AlainBenbassat/org.timelab.api.git
-[submodule "ext/CiviProxy"]
-	path = ext/CiviProxy
-	url = https://github.com/systopia/CiviProxy
 [submodule "ext/nz.co.fuzion.omnipaymultiprocessor"]
 	path = ext/nz.co.fuzion.omnipaymultiprocessor
 	url = https://github.com/Archipel/nz.co.fuzion.omnipaymultiprocessor.git
 [submodule "packages"]
 	path = packages
 	url = https://github.com/Archipel/civicrm-packages.git
-[submodule "ext/com.cividesk.apikey"]
-	path = ext/com.cividesk.apikey
-	url = https://github.com/cividesk/com.cividesk.apikey.git
 [submodule "ext/expense-notes"]
 	path = ext/expense-notes
 	url = https://gitlab+deploy-token-175891:j9x9ePzWvo8DHzzmJshk@gitlab.com/weynwebworks/civicrm-extension-expense-notes.git
