@@ -10,13 +10,6 @@
  +--------------------------------------------------------------------+
  */
 
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4\Generic;
 
 use Civi\API\Exception\NotImplementedException;
@@ -69,6 +62,12 @@ class BasicGetFieldsAction extends BasicGetAction {
   protected $values = [];
 
   /**
+   * @var bool
+   * @deprecated
+   */
+  protected $includeCustom;
+
+  /**
    * To implement getFields for your own entity:
    *
    * 1. From your entity class add a static getFields method.
@@ -94,7 +93,9 @@ class BasicGetFieldsAction extends BasicGetAction {
     else {
       $values = $this->getRecords();
     }
-    $this->formatResults($values);
+    // $isInternal param is not part of function signature (to be compatible with parent class)
+    $isInternal = func_get_args()[1] ?? FALSE;
+    $this->formatResults($values, $isInternal);
     $this->queryArray($values, $result);
   }
 
@@ -109,9 +110,11 @@ class BasicGetFieldsAction extends BasicGetAction {
    * Instead just override $this->fields and this function will respect that.
    *
    * @param array $values
+   * @param bool $isInternal
    */
-  protected function formatResults(&$values) {
-    $fields = array_column($this->fields(), 'name');
+  protected function formatResults(&$values, $isInternal) {
+    $fieldDefaults = array_column($this->fields(), 'default_value', 'name') +
+      array_fill_keys(array_column($this->fields(), 'name'), NULL);
     // Enforce field permissions
     if ($this->checkPermissions) {
       foreach ($values as $key => $field) {
@@ -120,21 +123,25 @@ class BasicGetFieldsAction extends BasicGetAction {
         }
       }
     }
+    // Unless this is an internal getFields call, filter out @internal properties
+    $internalProps = $isInternal ? [] : array_filter(array_column($this->fields(), '@internal', 'name'));
     foreach ($values as &$field) {
       $defaults = array_intersect_key([
         'title' => empty($field['name']) ? NULL : ucwords(str_replace('_', ' ', $field['name'])),
         'entity' => $this->getEntityName(),
-        'required' => FALSE,
-        'readonly' => FALSE,
         'options' => !empty($field['pseudoconstant']),
-        'data_type' => \CRM_Utils_Array::value('type', $field, 'String'),
-      ], array_flip($fields));
-      $field += $defaults;
-      $field['label'] = $field['label'] ?? $field['title'];
+      ], $fieldDefaults);
+      $field += $defaults + $fieldDefaults;
+      if (array_key_exists('label', $fieldDefaults)) {
+        $field['label'] = $field['label'] ?? $field['title'] ?? $field['name'];
+      }
+      if (!empty($field['options']) && is_array($field['options']) && empty($field['suffixes']) && array_key_exists('suffixes', $field)) {
+        $this->setFieldSuffixes($field);
+      }
       if (isset($defaults['options'])) {
         $field['options'] = $this->formatOptionList($field['options']);
       }
-      $field += array_fill_keys($fields, NULL);
+      $field = array_diff_key($field, $internalProps);
     }
   }
 
@@ -180,6 +187,22 @@ class BasicGetFieldsAction extends BasicGetAction {
   }
 
   /**
+   * Set supported field suffixes based on available option keys
+   * @param array $field
+   */
+  private function setFieldSuffixes(array &$field) {
+    // These suffixes are always supported if a field has options
+    $field['suffixes'] = ['name', 'label'];
+    $firstOption = reset($field['options']);
+    // If first option is an array, merge in those keys as available suffixes
+    if (is_array($firstOption)) {
+      // Remove 'id' because there is no practical reason to use it as a field suffix
+      $otherKeys = array_diff(array_keys($firstOption), ['id', 'name', 'label']);
+      $field['suffixes'] = array_merge($field['suffixes'], $otherKeys);
+    }
+  }
+
+  /**
    * @return string
    */
   public function getAction() {
@@ -203,15 +226,21 @@ class BasicGetFieldsAction extends BasicGetAction {
   }
 
   /**
-   * @param bool $includeCustom
-   * @return $this
+   * Helper function to retrieve options from an option group (for non-DAO entities).
+   *
+   * @param string $optionGroupName
    */
-  public function setIncludeCustom(bool $includeCustom) {
-    // Be forgiving if the param doesn't exist and don't throw an exception
-    if (property_exists($this, 'includeCustom')) {
-      $this->includeCustom = $includeCustom;
+  public function pseudoconstantOptions(string $optionGroupName) {
+    if ($this->getLoadOptions()) {
+      $options = \CRM_Core_OptionValue::getValues(['name' => $optionGroupName]);
+      foreach ($options as &$option) {
+        $option['id'] = $option['value'];
+      }
     }
-    return $this;
+    else {
+      $options = TRUE;
+    }
+    return $options;
   }
 
   public function fields() {
@@ -237,12 +266,24 @@ class BasicGetFieldsAction extends BasicGetAction {
         'description' => ts('Explanation of the purpose of the field'),
       ],
       [
+        'name' => 'type',
+        'data_type' => 'String',
+        'default_value' => 'Field',
+        'options' => [
+          'Field' => ts('Primary Field'),
+          'Custom' => ts('Custom Field'),
+          'Filter' => ts('Search Filter'),
+          'Extra' => ts('Extra API Field'),
+        ],
+      ],
+      [
         'name' => 'default_value',
         'data_type' => 'String',
       ],
       [
         'name' => 'required',
         'data_type' => 'Boolean',
+        'default_value' => FALSE,
       ],
       [
         'name' => 'required_if',
@@ -251,10 +292,23 @@ class BasicGetFieldsAction extends BasicGetAction {
       [
         'name' => 'options',
         'data_type' => 'Array',
+        'default_value' => FALSE,
+      ],
+      [
+        'name' => 'suffixes',
+        'data_type' => 'Array',
+        'default_value' => NULL,
+        'options' => ['name', 'label', 'description', 'abbr', 'color', 'icon'],
+        'description' => 'Available option transformations, e.g. :name, :label',
+      ],
+      [
+        'name' => 'operators',
+        'data_type' => 'Array',
+        'description' => 'If set, limits the operators that can be used on this field for "get" actions.',
       ],
       [
         'name' => 'data_type',
-        'data_type' => 'String',
+        'default_value' => 'String',
         'options' => [
           'Array' => ts('Array'),
           'Boolean' => ts('Boolean'),
@@ -270,13 +324,13 @@ class BasicGetFieldsAction extends BasicGetAction {
         'name' => 'input_type',
         'data_type' => 'String',
         'options' => [
-          'ChainSelect' => ts('ChainSelect'),
-          'CheckBox' => ts('CheckBox'),
-          'Date' => ts('Date'),
-          'EntityRef' => ts('EntityRef'),
+          'ChainSelect' => ts('Chain-Select'),
+          'CheckBox' => ts('Checkboxes'),
+          'Date' => ts('Date Picker'),
+          'EntityRef' => ts('Autocomplete Entity'),
           'File' => ts('File'),
           'Number' => ts('Number'),
-          'Radio' => ts('Radio'),
+          'Radio' => ts('Radio Buttons'),
           'Select' => ts('Select'),
           'Text' => ts('Text'),
         ],
@@ -300,10 +354,13 @@ class BasicGetFieldsAction extends BasicGetAction {
       [
         'name' => 'readonly',
         'data_type' => 'Boolean',
+        'description' => 'True for auto-increment, calculated, or otherwise non-editable fields.',
+        'default_value' => FALSE,
       ],
       [
         'name' => 'output_formatters',
         'data_type' => 'Array',
+        '@internal' => TRUE,
       ],
     ];
   }

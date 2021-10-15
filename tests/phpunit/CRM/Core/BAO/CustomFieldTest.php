@@ -1,5 +1,7 @@
 <?php
 
+use Civi\Api4\CustomField;
+
 /**
  * Class CRM_Core_BAO_CustomFieldTest
  *
@@ -605,7 +607,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'label' => 'Enter text here',
         'groupTitle' => 'Custom Group',
         'default_value' => 'xyz',
-        'custom_group_id' => '1',
+        'custom_group_id' => $customGroupID,
         'extends' => 'Contact',
         'extends_entity_column_value' => NULL,
         'extends_entity_column_id' => NULL,
@@ -949,12 +951,12 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
   /**
    * Test the bulk create function works.
    */
-  public function testBulkCreate() {
+  public function testBulkCreate(): void {
     $customGroup = $this->customGroupCreate([
       'extends' => 'Individual',
       'title' => 'my bulk group',
     ]);
-    CRM_Core_BAO_CustomField::bulkSave([
+    CustomField::save(FALSE)->setRecords([
       [
         'label' => 'Test',
         'data_type' => 'String',
@@ -967,16 +969,16 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'html_type' => 'Link',
         'is_search_range' => '0',
       ],
-    ],
+    ])->setDefaults(
     [
       'custom_group_id' => $customGroup['id'],
       'is_active' => 1,
       'is_searchable' => 1,
-    ]);
+    ])->execute();
     $dao = CRM_Core_DAO::executeQuery(('SHOW CREATE TABLE ' . $customGroup['values'][$customGroup['id']]['table_name']));
     $dao->fetch();
-    $this->assertContains('`test_link_2` varchar(255) COLLATE ' . CRM_Core_BAO_SchemaHandler::getInUseCollation() . ' DEFAULT NULL', $dao->Create_Table);
-    $this->assertContains('KEY `INDEX_my_text` (`my_text`)', $dao->Create_Table);
+    $this->assertStringContainsString('`test_link_2` varchar(255) COLLATE ' . CRM_Core_BAO_SchemaHandler::getInUseCollation() . ' DEFAULT NULL', $dao->Create_Table);
+    $this->assertStringContainsString('KEY `INDEX_my_text` (`my_text`)', $dao->Create_Table);
   }
 
   /**

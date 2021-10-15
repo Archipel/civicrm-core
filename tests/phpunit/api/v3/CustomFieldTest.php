@@ -9,6 +9,8 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\OptionGroup;
+
 /**
  *  Test APIv3 civicrm_create_custom_group
  *
@@ -175,22 +177,9 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test  using example code.
-   */
-  /*function testCustomFieldCreateExample( )
-  {
-
-  $customGroup = $this->customGroupCreate('Individual','date_test_group',3);
-  require_once 'api/v3/examples/CustomField/Create.ex.php';
-  $result = custom_field_create_example();
-  $expectedResult = custom_field_create_expectedresult();
-  $this->assertEquals($result,$expectedResult);
-  }*/
-
-  /**
    * Check with data type - Options with option_values
    */
-  public function testCustomFieldCreateWithEmptyOptionGroup() {
+  public function testCustomFieldCreateWithEmptyOptionGroup(): void {
     $customGroup = $this->customGroupCreate(['extends' => 'Contact', 'title' => 'select_test_group']);
     $params = [
       'custom_group_id' => $customGroup['id'],
@@ -203,9 +192,9 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
       'is_active' => 1,
     ];
 
-    $customField = $this->callAPISuccess('custom_field', 'create', $params);
+    $customField = $this->callAPISuccess('CustomField', 'create', $params);
     $this->assertNotNull($customField['id']);
-    $optionGroupID = $this->callAPISuccess('custom_field', 'getvalue', [
+    $optionGroupID = $this->callAPISuccess('CustomField', 'getvalue', [
       'id' => $customField['id'],
       'return' => 'option_group_id',
     ]);
@@ -214,7 +203,7 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
     $optionGroup = $this->callAPISuccess('option_group', 'getsingle', [
       'id' => $optionGroupID,
     ]);
-    $this->assertEquals($optionGroup['title'], 'Country');
+    $this->assertEquals('Country', $optionGroup['title']);
     $optionValueCount = $this->callAPISuccess('option_value', 'getcount', [
       'option_group_id' => $optionGroupID,
     ]);
@@ -236,10 +225,10 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
       'is_searchable' => 0,
       'is_active' => 1,
     ];
-    $customField = $this->callAPISuccess('custom_field', 'create', $params);
+    $customField = $this->callAPISuccess('CustomField', 'create', $params);
     $this->assertNotNull($customField['id']);
     $params['label'] = 'ààà';
-    $customField = $this->callAPISuccess('custom_field', 'create', $params);
+    $customField = $this->callAPISuccess('CustomField', 'create', $params);
     $this->assertNotNull($customField['id']);
   }
 
@@ -573,17 +562,22 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
     $this->customGroupDelete($customGroup['id']);
   }
 
-  public function testCustomFieldCreateWithOptionGroupName() {
+  /**
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   */
+  public function testCustomFieldCreateWithOptionGroupName(): void {
     $customGroup = $this->customGroupCreate(['extends' => 'Individual', 'title' => 'test_custom_group']);
+    OptionGroup::create()->setValues(['name' => 'abc'])->execute();
     $params = [
       'custom_group_id' => $customGroup['id'],
       'name' => 'Activity type',
       'label' => 'Activity type',
       'data_type' => 'String',
       'html_type' => 'Select',
-      'option_group_id' => 'activity_type',
+      'option_group_id' => 'abc',
     ];
-    $result = $this->callAPISuccess('CustomField', 'create', $params);
+    $this->callAPISuccess('CustomField', 'create', $params);
   }
 
   /**
@@ -593,15 +587,18 @@ class api_v3_CustomFieldTest extends CiviUnitTestCase {
    */
   public function getCustomFieldKeys($getFieldsResult) {
     $isCustom = function ($key) {
-      return preg_match('/^custom_/', $key);
+      return 0 === strpos($key, 'custom_');
     };
     $r = array_values(array_filter(array_keys($getFieldsResult['values']), $isCustom));
     sort($r);
     return $r;
   }
 
+  /**
+   * @throws \CRM_Core_Exception
+   */
   public function testMakeSearchableContactReferenceFieldUnsearchable() {
-    $customGroup = $this->customGroupCreate([
+    $this->customGroupCreate([
       'name' => 'testCustomGroup',
       'title' => 'testCustomGroup',
       'extends' => 'Individual',

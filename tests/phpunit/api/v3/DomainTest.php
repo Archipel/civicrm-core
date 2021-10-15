@@ -76,12 +76,12 @@ class api_v3_DomainTest extends CiviUnitTestCase {
    * Takes no params.
    * Testing mainly for format.
    */
-  public function testGet() {
+  public function testGet(): void {
 
     $params = ['sequential' => 1];
     $result = $this->callAPIAndDocument('domain', 'get', $params, __FUNCTION__, __FILE__);
 
-    $this->assertType('array', $result);
+    $this->assertIsArray($result);
 
     $domain = $result['values'][0];
     $this->assertEquals("info@EXAMPLE.ORG", $domain['from_email']);
@@ -100,12 +100,14 @@ class api_v3_DomainTest extends CiviUnitTestCase {
 
   /**
    * Test get function with current domain.
+   *
+   * @throws \CRM_Core_Exception
    */
-  public function testGetCurrentDomain() {
+  public function testGetCurrentDomain(): void {
     $params = ['current_domain' => 1];
     $result = $this->callAPISuccess('domain', 'get', $params);
 
-    $this->assertType('array', $result);
+    $this->assertIsArray($result);
 
     foreach ($result['values'] as $key => $domain) {
       if ($key == 'version') {

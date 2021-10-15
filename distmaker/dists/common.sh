@@ -110,26 +110,16 @@ function dm_install_coreext() {
   shift
 
   for relext in "$@" ; do
-    [ ! -d "$to/$relext" ] && mkdir -p "$to/$relext"
-    ${DM_RSYNC:-rsync} -avC $excludes_rsync --include=core "$repo/$relext/./" "$to/$relext/./"
+    [ ! -d "$to/ext/$relext" ] && mkdir -p "$to/ext/$relext"
+    ${DM_RSYNC:-rsync} -avC $excludes_rsync --include=core "$repo/ext/$relext/./" "$to/ext/$relext/./"
   done
 }
 
 ## Get a list of default/core extension directories (space-delimited)
 ## reldirs=$(dm_core_exts)
 function dm_core_exts() {
-  echo ext/search
-  echo ext/sequentialcreditnotes
-  echo ext/flexmailer
-  echo ext/eventcart
-  echo ext/ewaysingle
-  echo ext/financialacls
-  echo ext/afform
-  echo ext/authx
-  echo ext/greenwich
-  echo ext/contributioncancelactions
-  echo ext/oauth-client
-  echo ext/recaptcha
+  ## grep to exclude comments and blank lines
+  grep '^[a-zA-Z]' "$DM_SOURCEDIR"/distmaker/core-ext.txt
 }
 
 ## Copy all packages

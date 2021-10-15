@@ -327,7 +327,8 @@ class CRM_Utils_File {
       require_once 'DB.php';
       $dsn = CRM_Utils_SQL::autoSwitchDSN($dsn);
       try {
-        $db = DB::connect($dsn);
+        $options = CRM_Utils_SQL::isSSLDSN($dsn) ? ['ssl' => TRUE] : [];
+        $db = DB::connect($dsn, $options);
       }
       catch (Exception $e) {
         die("Cannot open $dsn: " . $e->getMessage());
@@ -414,14 +415,11 @@ class CRM_Utils_File {
    *   whether the file can be include()d or require()d
    */
   public static function isIncludable($name) {
-    $x = @fopen($name, 'r', TRUE);
-    if ($x) {
-      fclose($x);
-      return TRUE;
-    }
-    else {
+    $full_filepath = stream_resolve_include_path($name);
+    if ($full_filepath === FALSE) {
       return FALSE;
     }
+    return is_readable($full_filepath);
   }
 
   /**
@@ -459,6 +457,27 @@ class CRM_Utils_File {
     else {
       return CRM_Utils_String::munge("{$basename}_{$uniqID}", '_', 240) . "." . CRM_Utils_Array::value('extension', $info);
     }
+  }
+
+  /**
+   * CRM_Utils_String::munge() doesn't handle unicode and needs to be able
+   * to generate valid database tablenames so will sometimes generate a
+   * random string. Here what we want is a human-sensible filename that might
+   * contain unicode.
+   * Note that this does filter out emojis and such, but keeps characters that
+   * are considered alphanumeric in non-english languages.
+   *
+   * @param string $input
+   * @param string $replacementString Character or string to replace invalid characters with. Can be the empty string.
+   * @param int $cutoffLength Length to truncate the result after replacements.
+   * @return string
+   */
+  public static function makeFilenameWithUnicode(string $input, string $replacementString = '_', int $cutoffLength = 63): string {
+    $filename = preg_replace('/\W/u', $replacementString, $input);
+    if ($cutoffLength) {
+      return mb_substr($filename, 0, $cutoffLength);
+    }
+    return $filename;
   }
 
   /**
@@ -620,38 +639,6 @@ HTACCESS;
       }
     }
     return FALSE;
-  }
-
-  /**
-   * @param $directory
-   *
-   * @return string
-   * @deprecated
-   *   Computation of a relative path requires some base.
-   *   This implementation is problematic because it relies on an
-   *   implicit base which was constructed problematically.
-   */
-  public static function relativeDirectory($directory) {
-    // Do nothing on windows
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-      return $directory;
-    }
-
-    // check if directory is relative, if so return immediately
-    if (!self::isAbsolute($directory)) {
-      return $directory;
-    }
-
-    // make everything relative from the baseFilePath
-    $basePath = self::baseFilePath();
-    // check if basePath is a substr of $directory, if so
-    // return rest of string
-    if (substr($directory, 0, strlen($basePath)) == $basePath) {
-      return substr($directory, strlen($basePath));
-    }
-
-    // return the original value
-    return $directory;
   }
 
   /**

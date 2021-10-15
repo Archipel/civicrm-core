@@ -20,8 +20,6 @@
 namespace api\v4\Spec;
 
 use Civi\Api4\Service\Spec\CustomFieldSpec;
-use Civi\Api4\Service\Spec\FieldSpec;
-use Civi\Api4\Service\Spec\RequestSpec;
 use Civi\Api4\Service\Spec\SpecFormatter;
 use api\v4\UnitTestCase;
 
@@ -29,16 +27,6 @@ use api\v4\UnitTestCase;
  * @group headless
  */
 class SpecFormatterTest extends UnitTestCase {
-
-  public function testSpecToArray() {
-    $spec = new RequestSpec('Contact', 'get');
-    $fieldName = 'last_name';
-    $field = new FieldSpec($fieldName, 'Contact');
-    $spec->addFieldSpec($field);
-    $arraySpec = SpecFormatter::specToArray($spec->getFields());
-
-    $this->assertEquals('String', $arraySpec[$fieldName]['data_type']);
-  }
 
   /**
    * @dataProvider arrayFieldSpecProvider
@@ -61,8 +49,8 @@ class SpecFormatterTest extends UnitTestCase {
 
     $data = [
       'custom_group_id' => $customGroupId,
-      'custom_group.name' => 'my_group',
-      'custom_group.title' => 'My Group',
+      'custom_group_id.name' => 'my_group',
+      'custom_group_id.title' => 'My Group',
       'id' => $customFieldId,
       'name' => $name,
       'label' => $name,

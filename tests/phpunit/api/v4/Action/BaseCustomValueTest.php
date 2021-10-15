@@ -20,29 +20,25 @@
 namespace api\v4\Action;
 
 use api\v4\UnitTestCase;
-use api\v4\Traits\TableDropperTrait;
+use Civi\Api4\CustomGroup;
+use Civi\Api4\CustomField;
 
 abstract class BaseCustomValueTest extends UnitTestCase {
 
-  use \api\v4\Traits\OptionCleanupTrait {
-    setUp as setUpOptionCleanup;
-  }
-  use TableDropperTrait;
-
   /**
-   * Set up baseline for testing
+   * Delete all created options groups.
+   *
+   * @throws \API_Exception
    */
-  public function setUp(): void {
-    $this->setUpOptionCleanup();
-    $cleanup_params = [
-      'tablesToTruncate' => [
-        'civicrm_custom_group',
-        'civicrm_custom_field',
-      ],
-    ];
-
-    $this->dropByPrefix('civicrm_value_my');
-    $this->cleanup($cleanup_params);
+  public function tearDown(): void {
+    $optgroups = CustomField::get(FALSE)->addSelect('option_group_id')->addWhere('option_group_id', 'IS NOT NULL')->execute();
+    foreach ($optgroups as $optgroup) {
+      \Civi\Api4\OptionValue::delete(FALSE)->addWhere('option_group_id', '=', $optgroup['option_group_id'])->execute();
+      \Civi\Api4\OptionGroup::delete(FALSE)->addWhere('id', '=', $optgroup['option_group_id'])->execute();
+    }
+    CustomField::delete(FALSE)->addWhere('id', '>', 0)->execute();
+    CustomGroup::delete(FALSE)->addWhere('id', '>', 0)->execute();
+    parent::tearDown();
   }
 
 }

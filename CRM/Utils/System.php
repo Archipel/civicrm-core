@@ -282,6 +282,43 @@ class CRM_Utils_System {
   }
 
   /**
+   * Return the Notification URL for Payments.
+   *
+   * @param string $path
+   *   The path being linked to, such as "civicrm/add".
+   * @param array|string $query
+   *   A query string to append to the link, or an array of key-value pairs.
+   * @param bool $absolute
+   *   Whether to force the output to be an absolute link (beginning with a
+   *   URI-scheme such as 'http:'). Useful for links that will be displayed
+   *   outside the site, such as in an RSS feed.
+   * @param string $fragment
+   *   A fragment identifier (named anchor) to append to the link.
+   * @param bool $htmlize
+   *   Whether to encode special html characters such as &.
+   * @param bool $frontend
+   *   This link should be to the CMS front end (applies to WP & Joomla).
+   * @param bool $forceBackend
+   *   This link should be to the CMS back end (applies to WP & Joomla).
+   *
+   * @return string
+   *   The Notification URL.
+   */
+  public static function getNotifyUrl(
+    $path = NULL,
+    $query = NULL,
+    $absolute = FALSE,
+    $fragment = NULL,
+    $htmlize = TRUE,
+    $frontend = FALSE,
+    $forceBackend = FALSE
+  ) {
+    $config = CRM_Core_Config::singleton();
+    $query = self::makeQueryString($query);
+    return $config->userSystem->getNotifyUrl($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+  }
+
+  /**
    * Generates an extern url.
    *
    * @param string $path
@@ -1826,32 +1863,6 @@ class CRM_Utils_System {
       civicrm_api3('Setting', 'create', ['domain_id' => 'all', 'site_id' => $sid]);
     }
     return $sid;
-  }
-
-  /**
-   * @deprecated
-   * Determine whether this system is deployed using version control.
-   *
-   * Normally sites would tune their php error settings to prevent deprecation
-   * notices appearing on a live site. However, on some systems the user
-   * does not have control over this setting. Sites with version-controlled
-   * deployments are unlikely to be in a situation where they cannot alter their
-   * php error level reporting so we can trust that the are able to set them
-   * to suppress deprecation / php error level warnings if appropriate but
-   * in order to phase in deprecation warnings we originally chose not to
-   * show them on sites who might not be able to set their error_level in
-   * a way that is appropriate to their site.
-   *
-   * @return bool
-   */
-  public static function isDevelopment() {
-    CRM_Core_Error::deprecatedWarning('isDevelopment() is deprecated. Set your php error_reporting or MySQL settings appropriately instead.');
-    static $cache = NULL;
-    if ($cache === NULL) {
-      global $civicrm_root;
-      $cache = file_exists("{$civicrm_root}/.svn") || file_exists("{$civicrm_root}/.git");
-    }
-    return $cache;
   }
 
   /**

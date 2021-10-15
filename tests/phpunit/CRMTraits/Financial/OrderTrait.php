@@ -79,16 +79,19 @@ trait CRMTraits_Financial_OrderTrait {
    */
   protected function createContributionAndMembershipOrder(): void {
     $this->ids['membership_type'][0] = $this->membershipTypeCreate();
-    $orderID = $this->callAPISuccess('Order', 'create', [
+    if (empty($this->ids['Contact']['order'])) {
+      $this->ids['Contact']['order'] = $this->individualCreate();
+    }
+    $order = $this->callAPISuccess('Order', 'create', [
       'financial_type_id' => 'Donation',
-      'contact_id' => $this->_contactID,
+      'contact_id' => $this->ids['Contact']['order'],
       'is_test' => 0,
       'payment_instrument_id' => 'Check',
       'receive_date' => date('Y-m-d'),
       'line_items' => [
         [
           'params' => [
-            'contact_id' => $this->_contactID,
+            'contact_id' => $this->ids['Contact']['order'],
             'source' => 'Payment',
           ],
           'line_item' => [
@@ -110,7 +113,7 @@ trait CRMTraits_Financial_OrderTrait {
         ],
         [
           'params' => [
-            'contact_id' => $this->_contactID,
+            'contact_id' => $this->ids['Contact']['order'],
             'membership_type_id' => 'General',
             'source' => 'Payment',
             // This is necessary because Membership_BAO otherwise ignores the
@@ -121,9 +124,15 @@ trait CRMTraits_Financial_OrderTrait {
           'line_item' => $this->getMembershipLineItem(),
         ],
       ],
-    ])['id'];
+    ]);
 
-    $this->ids['Contribution'][0] = $orderID;
+    $this->ids['Contribution'][0] = $order['id'];
+    foreach ($order['values'][$order['id']]['line_item'] as $line) {
+      if (($line['entity_table'] ?? '') === 'civicrm_membership') {
+        $this->ids['Membership']['order'] = $line['entity_id'];
+      }
+    }
+
   }
 
   /**
@@ -209,7 +218,7 @@ trait CRMTraits_Financial_OrderTrait {
    */
   protected function createEventOrder($orderParams = []) {
     $this->ids['Contribution'][0] = $this->callAPISuccess('Order', 'create', array_merge($this->getParticipantOrderParams(), $orderParams))['id'];
-    $this->ids['Participant'][0] = $this->callAPISuccessGetValue('ParticipantPayment', ['return' => 'participant_id', 'contribution_id' => $this->ids['Contribution'][0]]);
+    $this->ids['Participant'][0] = $this->callAPISuccessGetValue('ParticipantPayment', ['options' => ['limit' => 1], 'return' => 'participant_id', 'contribution_id' => $this->ids['Contribution'][0]]);
   }
 
   /**

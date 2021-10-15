@@ -25,9 +25,35 @@ class TokenCompatSubscriber implements EventSubscriberInterface {
    */
   public static function getSubscribedEvents() {
     return [
-      'civi.token.eval' => 'onEvaluate',
+      'civi.token.eval' => [
+        ['setupSmartyAliases', 1000],
+        ['onEvaluate'],
+      ],
       'civi.token.render' => 'onRender',
     ];
+  }
+
+  /**
+   * Interpret the variable `$context['smartyTokenAlias']` (e.g. `mySmartyField' => `tkn_entity.tkn_field`).
+   *
+   * We need to ensure that any tokens like `{tkn_entity.tkn_field}` are hydrated, so
+   * we pretend that they are in use.
+   *
+   * @param \Civi\Token\Event\TokenValueEvent $e
+   */
+  public function setupSmartyAliases(TokenValueEvent $e) {
+    $aliasedTokens = [];
+    foreach ($e->getRows() as $row) {
+      $aliasedTokens = array_unique(array_merge($aliasedTokens,
+        array_values($row->context['smartyTokenAlias'] ?? [])));
+    }
+
+    $fakeMessage = implode('', array_map(function ($f) {
+      return '{' . $f . '}';
+    }, $aliasedTokens));
+
+    $proc = $e->getTokenProcessor();
+    $proc->addMessage('TokenCompatSubscriber.aliases', $fakeMessage, 'text/plain');
   }
 
   /**
@@ -37,14 +63,11 @@ class TokenCompatSubscriber implements EventSubscriberInterface {
    * @throws TokenException
    */
   public function onEvaluate(TokenValueEvent $e) {
-    // For reasons unknown, replaceHookTokens requires a pre-computed list of
-    // hook *categories* (aka entities aka namespaces). We'll cache
-    // this in the TokenProcessor's context.
+    // For reasons unknown, replaceHookTokens used to require a pre-computed list of
+    // hook *categories* (aka entities aka namespaces). We cache
+    // this in the TokenProcessor's context but can likely remove it now.
 
-    $hookTokens = [];
-    \CRM_Utils_Hook::tokens($hookTokens);
-    $categories = array_keys($hookTokens);
-    $e->getTokenProcessor()->context['hookTokenCategories'] = $categories;
+    $e->getTokenProcessor()->context['hookTokenCategories'] = \CRM_Utils_Token::getTokenCategories();
 
     $messageTokens = $e->getTokenProcessor()->getMessageTokens();
     $returnProperties = array_fill_keys($messageTokens['contact'] ?? [], 1);
@@ -54,6 +77,10 @@ class TokenCompatSubscriber implements EventSubscriberInterface {
       if (empty($row->context['contactId'])) {
         continue;
       }
+
+      unset($swapLocale);
+      $swapLocale = empty($row->context['locale']) ? NULL : \CRM_Utils_AutoClean::swapLocale($row->context['locale']);
+
       /** @var int $contactId */
       $contactId = $row->context['contactId'];
       if (empty($row->context['contact'])) {
@@ -129,8 +156,19 @@ class TokenCompatSubscriber implements EventSubscriberInterface {
     }
 
     if ($useSmarty) {
-      $smarty = \CRM_Core_Smarty::singleton();
-      $e->string = $smarty->fetch("string:" . $e->string);
+      $smartyVars = [];
+      foreach ($e->context['smartyTokenAlias'] ?? [] as $smartyName => $tokenName) {
+        // Note: $e->row->tokens resolves event-based tokens (eg CRM_*_Tokens). But if the target token relies on the
+        // above bits (replaceGreetingTokens=>replaceContactTokens=>replaceHookTokens) then this lookup isn't sufficient.
+        $smartyVars[$smartyName] = \CRM_Utils_Array::pathGet($e->row->tokens, explode('.', $tokenName));
+      }
+      \CRM_Core_Smarty::singleton()->pushScope($smartyVars);
+      try {
+        $e->string = \CRM_Utils_String::parseOneOffStringThroughSmarty($e->string);
+      }
+      finally {
+        \CRM_Core_Smarty::singleton()->popScope();
+      }
     }
   }
 

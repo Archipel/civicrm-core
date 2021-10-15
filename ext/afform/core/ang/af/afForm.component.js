@@ -4,9 +4,10 @@
     bindings: {
       ctrl: '@'
     },
-    controller: function($scope, $routeParams, $timeout, crmApi4, crmStatus, $window, $location) {
+    controller: function($scope, $element, $timeout, crmApi4, crmStatus, $window, $location, FileUploader) {
       var schema = {},
         data = {},
+        status,
         ctrl = this;
 
       this.$onInit = function() {
@@ -35,14 +36,15 @@
         return $scope.$parent.meta;
       };
       this.loadData = function() {
-        var toLoad = 0;
+        var toLoad = 0,
+          args = $scope.$parent.routeParams || {};
         _.each(schema, function(entity, entityName) {
-          if ($routeParams[entityName] || entity.autofill) {
+          if (args[entityName] || entity.autofill) {
             toLoad++;
           }
         });
         if (toLoad) {
-          crmApi4('Afform', 'prefill', {name: ctrl.getFormMeta().name, args: $routeParams})
+          crmApi4('Afform', 'prefill', {name: ctrl.getFormMeta().name, args: args})
             .then(function(result) {
               _.each(result, function(item) {
                 data[item.name] = data[item.name] || {};
@@ -52,21 +54,57 @@
         }
       };
 
-      this.submit = function submit() {
-        var submission = crmApi4('Afform', 'submit', {name: ctrl.getFormMeta().name, args: $routeParams, values: data});
-        var metaData = ctrl.getFormMeta();
-        if (metaData.redirect) {
-          submission.then(function() {
-            var url = metaData.redirect;
-            if (url.indexOf('civicrm/') === 0) {
-              url = CRM.url(url);
-            } else if (url.indexOf('/') === 0) {
-              url = $location.protocol() + '://' + $location.host() + url;
-            }
-            $window.location.href = url;
-          });
+      // Used when submitting file fields
+      this.fileUploader = new FileUploader({
+        url: CRM.url('civicrm/ajax/api4/Afform/submitFile'),
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        onCompleteAll: postProcess,
+        onBeforeUploadItem: function(item) {
+          status.resolve();
+          status = CRM.status({start: ts('Uploading %1', {1: item.file.name})});
         }
-        return crmStatus({start: ts('Saving'), success: ts('Saved')}, submission);
+      });
+
+      // Called after form is submitted and files are uploaded
+      function postProcess() {
+        var metaData = ctrl.getFormMeta();
+
+        if (metaData.redirect) {
+          var url = metaData.redirect;
+          if (url.indexOf('civicrm/') === 0) {
+            url = CRM.url(url);
+          } else if (url.indexOf('/') === 0) {
+            url = $location.protocol() + '://' + $location.host() + url;
+          }
+          $window.location.href = url;
+        }
+        status.resolve();
+        $element.unblock();
+      }
+
+      this.submit = function() {
+        status = CRM.status({});
+        $element.block();
+
+        crmApi4('Afform', 'submit', {
+          name: ctrl.getFormMeta().name,
+          args: $scope.$parent.routeParams || {},
+          values: data}
+        ).then(function(response) {
+          if (ctrl.fileUploader.getNotUploadedItems().length) {
+            _.each(ctrl.fileUploader.getNotUploadedItems(), function(file) {
+              file.formData.push({
+                params: JSON.stringify(_.extend({
+                  token: response[0].token,
+                  name: ctrl.getFormMeta().name
+                }, file.crmApiParams()))
+              });
+            });
+            ctrl.fileUploader.uploadAll();
+          } else {
+            postProcess();
+          }
+        });
       };
     }
   });

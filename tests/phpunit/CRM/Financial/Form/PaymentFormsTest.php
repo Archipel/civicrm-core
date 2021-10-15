@@ -60,7 +60,7 @@ class CRM_Financial_Form_PaymentFormsTest extends CiviUnitTestCase {
     ];
     $genericParams = [
       'credit_card_number' => 4111111111111111,
-      'processor_id' => $processors[0],
+      'payment_processor_id' => $processors[0],
       'cvv2' => '123',
       'credit_card_exp_date' => [
         'M' => '1',
@@ -92,9 +92,14 @@ class CRM_Financial_Form_PaymentFormsTest extends CiviUnitTestCase {
         $form->postProcess();
         $qfKey = $form->controller->_key;
       }
-      $this->callAPISuccessGetSingle('Participant', ['participant_status_id' => 'Registered']);
-      $this->assertRequestValid(['x_city' => 'The+Shire', 'x_state' => 'IL', 'x_amount' => 1.0]);
     }
+    $participant = \Civi\Api4\Participant::get(FALSE)
+      ->addWhere('status_id:name', '=', 'Registered')
+      ->execute()
+      ->first();
+    $this->assertEquals($cart->id, $participant['cart_id']);
+    $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Event_BAO_Participant', 'status_id', 'Registered'), $participant['status_id']);
+    $this->assertRequestValid(['x_city' => 'The+Shire', 'x_state' => 'IL', 'x_amount' => 1.0]);
   }
 
 }

@@ -18,6 +18,8 @@
  */
 class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
 
+  use CRMTraits_Custom_CustomDataTrait;
+
   protected $_individualId;
 
   protected $_docTypes;
@@ -42,12 +44,16 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
   /**
    * Clean up after each test.
    *
+   * @throws \API_Exception
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   public function tearDown(): void {
+    CRM_Utils_Token::$_tokens['contribution'] = NULL;
     $this->quickCleanUpFinancialEntities();
-    $this->quickCleanup(['civicrm_uf_match']);
+    $this->quickCleanup(['civicrm_uf_match', 'civicrm_campaign'], TRUE);
     CRM_Utils_Hook::singleton()->reset();
+    parent::tearDown();
   }
 
   /**
@@ -100,7 +106,7 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
       $form->postProcess();
     }
     catch (CRM_Core_Exception_PrematureExitException $e) {
-      $this->assertContains('USD, USD * $ 60.00, $ 70.00 * January 1st, 2021  1:21 PM, February 1st, 2021  2:21 AM', $e->errorData['html']);
+      $this->assertStringContainsString('USD, USD * $ 60.00, $ 70.00 * January 1st, 2021  1:21 PM, February 1st, 2021  2:21 AM', $e->errorData['html']);
     }
   }
 
@@ -152,7 +158,8 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
       ],
     ];
 
-    [$contributions, $contacts] = CRM_Contribute_Form_Task_PDFLetterCommon::buildContributionArray('contact_id', $contributionIDs, $returnProperties, TRUE, TRUE, $messageToken, 'test', '**', FALSE);
+    $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter');
+    [$contributions, $contacts] = $form->buildContributionArray('contact_id', $contributionIDs, $returnProperties, TRUE, TRUE, $messageToken, 'test', '**', FALSE);
 
     $this->assertEquals('Anthony', $contacts[$this->_individualId]['first_name']);
     $this->assertEquals('emo', $contacts[$this->_individualId]['favourite_emoticon']);
@@ -189,8 +196,7 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
    * @throws \CRM_Core_Exception
    */
   public function testPostProcess(): void {
-    $this->createLoggedInUser();
-    $this->_individualId = $this->individualCreate();
+    $this->createLoggedInUser();;
     foreach (['docx', 'odt'] as $docType) {
       $formValues = [
         'is_unit_test' => TRUE,
@@ -201,21 +207,15 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
         ],
       ];
 
-      $contributionParams = [
-        'contact_id' => $this->_individualId,
-        'total_amount' => 100,
-        'financial_type_id' => 'Donation',
-      ];
-      $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
-      $contributionId = $contribution['id'];
+      $contributionId = $this->createContribution();
       /* @var $form CRM_Contribute_Form_Task_PDFLetter */
-      $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter');
+      $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter', $formValues);
       $form->setContributionIds([$contributionId]);
       $format = Civi::settings()->get('dateformatFull');
       $date = CRM_Utils_Date::getToday();
       $displayDate = CRM_Utils_Date::customFormat($date, $format);
 
-      $html = CRM_Contribute_Form_Task_PDFLetterCommon::postProcess($form, $formValues);
+      $html = $form->postProcess();
       $expectedValues = [
         'Hello Anthony',
         '$ 100.00',
@@ -228,6 +228,148 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
         $this->assertTrue(strpos($html[$contributionId], $val) !== 0);
       }
     }
+  }
+
+  /**
+   * Test that no notice or errors occur if no contribution tokens are requested.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function testNoContributionTokens(): void {
+    $this->createLoggedInUser();
+    $formValues = [
+      'html_message' => '{contact.display_name}',
+      'document_type' => 'pdf',
+    ];
+    /* @var $form CRM_Contribute_Form_Task_PDFLetter */
+    $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter', $formValues);
+    $form->setContributionIds([$this->createContribution()]);
+    try {
+      $form->postProcess();
+    }
+    catch (CRM_Core_Exception_PrematureExitException $e) {
+      $html = $e->errorData['html'];
+    }
+    $this->assertStringContainsString('Mr. Anthony Anderson II', $html);
+  }
+
+  /**
+   * Test all contribution tokens.
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testAllContributionTokens(): void {
+    $this->createLoggedInUser();
+    $this->createCustomGroupWithFieldsOfAllTypes(['extends' => 'Contribution']);
+    $this->campaignCreate(['name' => 'Big one', 'title' => 'Big one']);
+    $tokens = $this->getAllContributionTokens();
+    $formValues = [
+      'document_type' => 'pdf',
+      'html_message' => '',
+    ];
+    foreach (array_keys($this->getAllContributionTokens()) as $token) {
+      $formValues['html_message'] .= "$token : {contribution.$token}\n";
+    }
+    /* @var $form CRM_Contribute_Form_Task_PDFLetter */
+    $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter', $formValues);
+    $form->setContributionIds([$this->createContribution(array_merge(['campaign_id' => $tokens['campaign']], $tokens))]);
+    try {
+      $form->postProcess();
+    }
+    catch (CRM_Core_Exception_PrematureExitException $e) {
+      $html = $e->errorData['html'];
+    }
+    $this->assertEquals('
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <style>@page { margin: 0.75in 0.75in 0.75in 0.75in; }</style>
+    <style type="text/css">@import url(' . CRM_Core_Config::singleton()->userFrameworkResourceURL . 'css/print.css);</style>
+' . "    \n" . '  </head>
+  <body>
+    <div id="crm-container">
+contribution_id : 1
+total_amount : € 9,999.99
+fee_amount : € 1,111.11
+net_amount : € 7,777.78
+non_deductible_amount : € 2,222.22
+receive_date : July 20th, 2018 12:00 AM
+payment_instrument : Check
+trxn_id : 1234
+invoice_id : 568
+currency : EUR
+cancel_date : 2019-12-30 00:00:00
+cancel_reason : Contribution Cancel Reason
+receipt_date : October 30th, 2019 12:00 AM
+thankyou_date : 2019-11-30 00:00:00
+contribution_source : Contribution Source
+amount_level : Amount Level
+contribution_status_id : 2
+check_number : 6789
+campaign : Big one
+' . $this->getCustomFieldName('text') . ' : Bobsled
+' . $this->getCustomFieldName('select_string') . ' : Red
+' . $this->getCustomFieldName('select_date') . ' : 01/20/2021 12:00AM
+' . $this->getCustomFieldName('int') . ' : 999
+' . $this->getCustomFieldName('link') . ' : <a href="http://civicrm.org" target="_blank">http://civicrm.org</a>
+' . $this->getCustomFieldName('country') . ' : New Zealand
+' . $this->getCustomFieldName('multi_country') . ' : France, Canada
+' . $this->getCustomFieldName('contact_reference') . ' : Mr. Spider Man II
+' . $this->getCustomFieldName('state') . ' : Queensland
+' . $this->getCustomFieldName('multi_state') . ' : Victoria, New South Wales
+' . $this->getCustomFieldName('boolean') . ' : Yes
+' . $this->getCustomFieldName('checkbox') . ' : Purple
+    </div>
+  </body>
+</html>', $html);
+  }
+
+  /**
+   * Get all the tokens available to contributions.
+   *
+   * @return array
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function getAllContributionTokens(): array {
+    return [
+      'contribution_id' => '',
+      'total_amount' => '9999.99',
+      'fee_amount' => '1111.11',
+      'net_amount' => '7777.78',
+      'non_deductible_amount' => '2222.22',
+      'receive_date' => '2018-07-20',
+      'payment_instrument' => 'Check',
+      'trxn_id' => '1234',
+      'invoice_id' => '568',
+      'currency' => 'EUR',
+      'cancel_date' => '2019-12-30',
+      'cancel_reason' => 'Contribution Cancel Reason',
+      'receipt_date' => '2019-10-30',
+      'thankyou_date' => '2019-11-30',
+      'contribution_source' => 'Contribution Source',
+      'amount_level' => 'Amount Level',
+      'contribution_status_id' => 'Pending',
+      'check_number' => '6789',
+      'campaign' => 'Big one',
+      $this->getCustomFieldName('text') => 'Bobsled',
+      $this->getCustomFieldName('select_string') => 'R',
+      $this->getCustomFieldName('select_date') => '2021-01-20',
+      $this->getCustomFieldName('int') => 999,
+      $this->getCustomFieldName('link') => 'http://civicrm.org',
+      $this->getCustomFieldName('country') => 'New Zealand',
+      $this->getCustomFieldName('multi_country') => ['France', 'Canada'],
+      $this->getCustomFieldName('contact_reference') => $this->individualCreate(['first_name' => 'Spider', 'last_name' => 'Man']),
+      $this->getCustomFieldName('state') => 'Queensland',
+      $this->getCustomFieldName('multi_state') => ['Victoria', 'New South Wales'],
+      $this->getCustomFieldName('boolean') => TRUE,
+      $this->getCustomFieldName('checkbox') => 'P',
+      $this->getCustomFieldName('contact_reference') => $this->individualCreate(['first_name' => 'Spider', 'last_name' => 'Man']),
+
+    ];
   }
 
   /**
@@ -282,10 +424,10 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
     $contributionIDs[] = $contribution['id'];
 
     /* @var \CRM_Contribute_Form_Task_PDFLetter $form */
-    $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter');
+    $form = $this->getFormObject('CRM_Contribute_Form_Task_PDFLetter', $formValues);
     $form->setContributionIds($contributionIDs);
 
-    $html = CRM_Contribute_Form_Task_PDFLetterCommon::postProcess($form, $formValues);
+    $html = $form->postProcess();
     $this->assertEquals("<table border='1' cellpadding='2' cellspacing='0' class='table'>
   <tbody>
   <tr>
@@ -303,7 +445,7 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
     <td></td>
   </tr>
   <!--
-    -->
+  -->
   <tr>
     <td><strong>Total</strong></td>
     <td><strong>$ 100.00</strong></td>
@@ -321,7 +463,7 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
     <th>Source</th>
   </tr>
   <!--
-    -->
+   -->
   <tr>
     <td>25 December 2016</td>
     <td>$ 10.00</td>
@@ -353,7 +495,9 @@ class CRM_Contribute_Form_Task_PDFLetterCommonTest extends CiviUnitTestCase {
     $this->assertEquals($html[2], $activities['values'][1]['details']);
     // Checking it is not called multiple times.
     // once for each contact create + once for the activities.
-    $this->assertEquals(3, $this->hookTokensCalled);
+    // & once for the token processor, for now.
+    // By calling the cached function we can get this down to 1
+    $this->assertEquals(4, $this->hookTokensCalled);
     $this->mut->checkAllMailLog($html);
 
   }
@@ -435,7 +579,7 @@ value=$contact_aggregate+$contribution.total_amount}
    */
   public function testIsHtmlTokenInTableCell($token, $entity, $textToSearch, $expected) {
     $this->assertEquals($expected,
-      CRM_Contribute_Form_Task_PDFLetterCommon::isHtmlTokenInTableCell($token, $entity, $textToSearch)
+      CRM_Contribute_Form_Task_PDFLetter::isHtmlTokenInTableCell($token, $entity, $textToSearch)
     );
   }
 
@@ -510,6 +654,20 @@ value=$contact_aggregate+$contribution.total_amount}
     foreach ($entities as $entityID) {
       $_SESSION['_' . $form->controller->_name . '_container']['values']['Search']['mark_x_' . $entityID] = TRUE;
     }
+  }
+
+  /**
+   * @return mixed
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   */
+  protected function createContribution($contributionParams = []) {
+    $contributionParams = array_merge([
+      'contact_id' => $this->individualCreate(),
+      'total_amount' => 100,
+      'financial_type_id' => 'Donation',
+    ], $contributionParams);
+    return $this->callAPISuccess('Contribution', 'create', $contributionParams)['id'];
   }
 
 }

@@ -66,6 +66,8 @@ AND    {$this->_componentClause}";
     parent::setContactIDs();
     CRM_Utils_System::appendBreadCrumb($breadCrumb);
     CRM_Utils_System::setTitle(ts('Print Contribution Receipts'));
+    // Ajax submit would interfere with pdf file download
+    $this->preventAjaxSubmit();
   }
 
   /**
@@ -191,7 +193,7 @@ AND    {$this->_componentClause}";
 
     if ($elements['createPdf']) {
       CRM_Utils_PDF_Utils::html2pdf($message,
-        'civicrmContributionReceipt.pdf',
+        'receipt.pdf',
         FALSE,
         $elements['params']['pdf_format_id']
       );

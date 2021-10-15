@@ -25,6 +25,16 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   protected $_apiversion = 3;
 
   /**
+   * Do not check financial entities in this test class.
+   *
+   * The class uses lots of crud to do things by-passing
+   * BAO logic & entities are often not valid as a result.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = FALSE;
+
+  /**
    * @var array
    * e.g. $this->deletes['CRM_Contact_DAO_Contact'][] = $contactID;
    */
@@ -788,7 +798,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   public function testNotImplemented_get($Entity) {
     $result = civicrm_api($Entity, 'Get', ['version' => 3]);
     $this->assertEquals(1, $result['is_error']);
-    // $this->assertContains("API ($Entity, Get) does not exist", $result['error_message']);
+    // $this->assertStringContainsString("API ($Entity, Get) does not exist", $result['error_message']);
     $this->assertRegExp('/API (.*) does not exist/', $result['error_message']);
   }
 
@@ -820,7 +830,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     }
     $result = civicrm_api($Entity, 'Get', []);
     $this->assertEquals(1, $result['is_error']);
-    $this->assertContains("Unknown api version", $result['error_message']);
+    $this->assertStringContainsString("Unknown api version", $result['error_message']);
   }
 
   /**
@@ -836,9 +846,9 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     $result = civicrm_api($Entity, 'Get', ['version' => 3]);
     // @TODO: list the get that have mandatory params
     if ($result['is_error']) {
-      $this->assertContains("Mandatory key(s) missing from params array", $result['error_message']);
+      $this->assertStringContainsString("Mandatory key(s) missing from params array", $result['error_message']);
       // either id or contact_id or entity_id is one of the field missing
-      $this->assertContains("id", $result['error_message']);
+      $this->assertStringContainsString("id", $result['error_message']);
     }
     else {
       $this->assertEquals(3, $result['version']);
@@ -861,9 +871,11 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
 
     $entitiesWithNamingIssues = [
       'SmsProvider' => 'Provider',
-      'AclRole' => 'EntityRole',
+      'AclRole' => 'ACLEntityRole',
       'MailingEventQueue' => 'Queue',
       'Dedupe' => 'PrevNextCache',
+      'Exception' => 'DedupeException',
+      'RuleGroup' => 'DedupeRuleGroup',
     ];
 
     $usableName = !empty($entitiesWithNamingIssues[$entityName]) ? $entitiesWithNamingIssues[$entityName] : $entityName;
@@ -1236,15 +1248,15 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
   public function testNotImplemented_create($Entity) {
     $result = civicrm_api($Entity, 'Create', ['version' => 3]);
     $this->assertEquals(1, $result['is_error']);
-    $this->assertContains(strtolower("API ($Entity, Create) does not exist"), strtolower($result['error_message']));
+    $this->assertStringContainsString(strtolower("API ($Entity, Create) does not exist"), strtolower($result['error_message']));
   }
 
   /**
    * @dataProvider entities
-   * @expectedException CiviCRM_API3_Exception
    * @param $Entity
    */
   public function testWithoutParam_create($Entity) {
+    $this->expectException(CiviCRM_API3_Exception::class);
     if ($Entity === 'Setting') {
       $this->markTestSkipped('It seems OK for setting to skip here as it silently sips invalid params');
     }
@@ -1564,7 +1576,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     $nonExistantID = 151416349;
     $result = civicrm_api($Entity, 'Delete', ['version' => 3, 'id' => $nonExistantID]);
     $this->assertEquals(1, $result['is_error']);
-    $this->assertContains(strtolower("API ($Entity, Delete) does not exist"), strtolower($result['error_message']));
+    $this->assertStringContainsString(strtolower("API ($Entity, Delete) does not exist"), strtolower($result['error_message']));
   }
 
   /**
@@ -1578,7 +1590,7 @@ class api_v3_SyntaxConformanceTest extends CiviUnitTestCase {
     }
     $result = civicrm_api($Entity, 'Delete', []);
     $this->assertEquals(1, $result['is_error']);
-    $this->assertContains("Unknown api version", $result['error_message']);
+    $this->assertStringContainsString("Unknown api version", $result['error_message']);
   }
 
   /**

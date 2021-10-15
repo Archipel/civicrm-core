@@ -20,6 +20,7 @@
 namespace api\v4\Action;
 
 use Civi\Api4\Contact;
+use Civi\Api4\Relationship;
 
 /**
  * @group headless
@@ -96,7 +97,7 @@ class ContactGetTest extends \api\v4\UnitTestCase {
       $msg = $e->getMessage();
     }
     $this->assertRegExp(';Expected to find one Contact record;', $msg);
-    $limit1 = Contact::get(FALSE)->setLimit(1)->execute();
+    $limit1 = Contact::get(FALSE)->addWhere('last_name', '=', $last_name)->setLimit(1)->execute();
     $this->assertCount(1, (array) $limit1);
     $this->assertCount(1, $limit1);
     $this->assertTrue(!empty($limit1->single()['sort_name']));
@@ -116,9 +117,11 @@ class ContactGetTest extends \api\v4\UnitTestCase {
       \CRM_Core_DAO::executeQuery("
         ALTER TABLE civicrm_contact MODIFY COLUMN
         `first_name` VARCHAR(64) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'First Name.',
-        CHARSET utf8
+        CHARSET utf8 COLLATE utf8_unicode_ci
       ");
+      \Civi::$statics['CRM_Core_BAO_SchemaHandler'] = [];
     }
+    \Civi::$statics['CRM_Core_BAO_SchemaHandler'] = [];
     Contact::get()
       ->setDebug(TRUE)
       ->addWhere('first_name', '=', '🦉Claire')
@@ -127,7 +130,7 @@ class ContactGetTest extends \api\v4\UnitTestCase {
       \CRM_Core_DAO::executeQuery("
         ALTER TABLE civicrm_contact MODIFY COLUMN
         `first_name` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'First Name.',
-        CHARSET utf8mb4
+        CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci
       ");
     }
   }
@@ -192,6 +195,80 @@ class ContactGetTest extends \api\v4\UnitTestCase {
       ->execute()->indexBy('id');
     $this->assertCount(1, $result);
     $this->assertArrayHasKey($jan['id'], (array) $result);
+  }
+
+  public function testGetRelatedWithSubType() {
+    $org = Contact::create(FALSE)
+      ->addValue('contact_type', 'Organization')
+      ->addValue('organization_name', 'Run Amok')
+      ->execute()->single()['id'];
+
+    $ind = Contact::create(FALSE)
+      ->addValue('first_name', 'Guy')
+      ->addValue('last_name', 'Amok')
+      ->addValue('contact_sub_type', ['Student'])
+      ->addChain('relationship', Relationship::create()
+        ->addValue('contact_id_a', '$id')
+        ->addValue('contact_id_b', $org)
+        ->addValue("relationship_type_id:name", "Employee of")
+      )
+      ->execute()->single()['id'];
+
+    // We can retrieve contact sub-type directly
+    $result = Contact::get()
+      ->addSelect('contact_sub_type:label')
+      ->addWhere('id', '=', $ind)
+      ->execute()->single();
+    $this->assertEquals(['Student'], $result['contact_sub_type:label']);
+
+    // Ensure we can also retrieve it indirectly via join
+    $params = [
+      'select' => [
+        'id',
+        'display_name',
+        'contact_type',
+        'Contact_RelationshipCache_Contact_01.id',
+        'Contact_RelationshipCache_Contact_01.far_relation:label',
+        'Contact_RelationshipCache_Contact_01.display_name',
+        'Contact_RelationshipCache_Contact_01.contact_sub_type:label',
+        'Contact_RelationshipCache_Contact_01.contact_type',
+      ],
+      'where' => [
+        ['contact_type:name', '=', 'Organization'],
+        ['Contact_RelationshipCache_Contact_01.contact_sub_type:name', 'CONTAINS', 'Student'],
+        ['id', '=', $org],
+      ],
+      'join' => [
+        [
+          'Contact AS Contact_RelationshipCache_Contact_01',
+          'INNER',
+          'RelationshipCache',
+          ['id', '=', 'Contact_RelationshipCache_Contact_01.far_contact_id'],
+          ['Contact_RelationshipCache_Contact_01.near_relation:name', 'IN', ['Employee of']],
+        ],
+      ],
+      'checkPermissions' => TRUE,
+      'limit' => 50,
+      'offset' => 0,
+      'debug' => TRUE,
+    ];
+
+    $results = civicrm_api4('Contact', 'get', $params);
+    $result = $results->single();
+    $this->assertEquals('Run Amok', $result['display_name']);
+    $this->assertEquals('Guy Amok', $result['Contact_RelationshipCache_Contact_01.display_name']);
+    $this->assertEquals('Employer of', $result['Contact_RelationshipCache_Contact_01.far_relation:label']);
+    $this->assertEquals(['Student'], $result['Contact_RelationshipCache_Contact_01.contact_sub_type:label']);
+  }
+
+  /**
+   * @throws \API_Exception
+   */
+  public function testOrClause(): void {
+    Contact::get()
+      ->addClause('OR', ['first_name', '=', '🚂'], ['last_name', '=', '🚂'])
+      ->setCheckPermissions(FALSE)
+      ->execute();
   }
 
 }

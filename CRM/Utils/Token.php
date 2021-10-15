@@ -182,16 +182,16 @@ class CRM_Utils_Token {
   }
 
   /**
-   * Get< the regex for token replacement
+   * Get the regex for token replacement
    *
    * @param string $token_type
    *   A string indicating the the type of token to be used in the expression.
    *
    * @return string
-   *   regular expression sutiable for using in preg_replace
+   *   regular expression suitable for using in preg_replace
    */
-  private static function tokenRegex($token_type) {
-    return '/(?<!\{|\\\\)\{' . $token_type . '\.([\w]+(\-[\w\s]+)?)\}(?!\})/';
+  private static function tokenRegex(string $token_type) {
+    return '/(?<!\{|\\\\)\{' . $token_type . '\.([\w]+(:|\.)?\w*(\-[\w\s]+)?)\}(?!\})/';
   }
 
   /**
@@ -781,10 +781,13 @@ class CRM_Utils_Token {
   public static function &replaceHookTokens(
     $str,
     &$contact,
-    &$categories,
+    $categories = NULL,
     $html = FALSE,
     $escapeSmarty = FALSE
   ) {
+    if (!$categories) {
+      $categories = self::getTokenCategories();
+    }
     foreach ($categories as $key) {
       $str = preg_replace_callback(
         self::tokenRegex($key),
@@ -795,6 +798,20 @@ class CRM_Utils_Token {
       );
     }
     return $str;
+  }
+
+  /**
+   * Get the categories required for rendering tokens.
+   *
+   * @return array
+   */
+  public static function getTokenCategories(): array {
+    if (!isset(\Civi::$statics[__CLASS__]['token_categories'])) {
+      $tokens = [];
+      \CRM_Utils_Hook::tokens($tokens);
+      \Civi::$statics[__CLASS__]['token_categories'] = array_keys($tokens);
+    }
+    return \Civi::$statics[__CLASS__]['token_categories'];
   }
 
   /**
@@ -1085,7 +1102,7 @@ class CRM_Utils_Token {
   public static function getTokens($string) {
     $matches = [];
     $tokens = [];
-    preg_match_all('/(?<!\{|\\\\)\{(\w+\.\w+)\}(?!\})/',
+    preg_match_all('/(?<!\{|\\\\)\{(\w+\.\w+(:|.)?\w*)\}(?!\})/',
       $string,
       $matches,
       PREG_PATTERN_ORDER
@@ -1093,12 +1110,15 @@ class CRM_Utils_Token {
 
     if ($matches[1]) {
       foreach ($matches[1] as $token) {
-        [$type, $name] = preg_split('/\./', $token, 2);
+        $parts = explode('.', $token, 3);
+        $type = $parts[0];
+        $name = $parts[1];
+        $suffix = !empty($parts[2]) ? ('.' . $parts[2]) : '';
         if ($name && $type) {
           if (!isset($tokens[$type])) {
             $tokens[$type] = [];
           }
-          $tokens[$type][] = $name;
+          $tokens[$type][] = $name . $suffix;
         }
       }
     }
@@ -1541,12 +1561,22 @@ class CRM_Utils_Token {
 
   protected static function _buildContributionTokens() {
     $key = 'contribution';
-    if (self::$_tokens[$key] == NULL) {
-      self::$_tokens[$key] = array_keys(array_merge(CRM_Contribute_BAO_Contribution::exportableFields('All'),
-        ['campaign', 'financial_type'],
-        self::getCustomFieldTokens('Contribution')
-      ));
+
+    if (!isset(Civi::$statics[__CLASS__][__FUNCTION__][$key])) {
+      $processor = new CRM_Contribute_Tokens();
+      $tokens = array_merge(CRM_Contribute_BAO_Contribution::exportableFields('All'),
+        ['campaign' => [], 'financial_type' => [], 'payment_instrument' => []],
+        self::getCustomFieldTokens('Contribution'),
+        $processor->getPseudoTokens()
+      );
+      foreach ($tokens as $token) {
+        if (!empty($token['name'])) {
+          $tokens[$token['name']] = [];
+        }
+      }
+      Civi::$statics[__CLASS__][__FUNCTION__][$key] = array_keys($tokens);
     }
+    self::$_tokens[$key] = Civi::$statics[__CLASS__][__FUNCTION__][$key];
   }
 
   /**
@@ -1603,9 +1633,12 @@ class CRM_Utils_Token {
    * @return string
    * @throws \CiviCRM_API3_Exception
    */
-  public static function replaceCaseTokens($caseId, $str, $knownTokens = [], $escapeSmarty = FALSE) {
-    if (!$knownTokens || empty($knownTokens['case'])) {
+  public static function replaceCaseTokens($caseId, $str, $knownTokens = NULL, $escapeSmarty = FALSE): string {
+    if (strpos($str, '{case.') === FALSE) {
       return $str;
+    }
+    if (!$knownTokens) {
+      $knownTokens = self::getTokens($str);
     }
     $case = civicrm_api3('case', 'getsingle', ['id' => $caseId]);
     return self::replaceEntityTokens('case', $case, $str, $knownTokens, $escapeSmarty);
@@ -1663,7 +1696,6 @@ class CRM_Utils_Token {
       //early return
       return $str;
     }
-    self::_buildContributionTokens();
 
     // here we intersect with the list of pre-configured valid tokens
     // so that we remove anything we do not recognize
@@ -1902,6 +1934,21 @@ class CRM_Utils_Token {
       $value = CRM_Utils_Date::customFormat($value);
     }
     return $value;
+  }
+
+  /**
+   * Get token deprecation information.
+   *
+   * @return array
+   */
+  public static function getTokenDeprecations(): array {
+    return [
+      'WorkFlowMessageTemplates' => [
+        'contribution_invoice_receipt' => [
+          '$display_name' => 'contact.display_name',
+        ],
+      ],
+    ];
   }
 
 }

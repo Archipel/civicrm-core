@@ -20,8 +20,10 @@
 namespace api\v4\Action;
 
 use Civi\Api4\Address;
+use Civi\Api4\Campaign;
 use Civi\Api4\Contact;
 use Civi\Api4\Activity;
+use Civi\Api4\Contribution;
 use Civi\Api4\CustomField;
 use Civi\Api4\CustomGroup;
 use Civi\Api4\Email;
@@ -170,7 +172,6 @@ class PseudoconstantTest extends BaseCustomValueTest {
 
     $fields = Contact::getFields()
       ->setLoadOptions(array_keys($technicolor[0]))
-      ->setIncludeCustom(TRUE)
       ->execute()
       ->indexBy('name');
 
@@ -235,26 +236,26 @@ class PseudoconstantTest extends BaseCustomValueTest {
       ->execute()->first()['id'];
 
     $emails = Email::get()
-      ->addSelect('location_type_id:name', 'contact.gender_id:label', 'email', 'contact_id')
+      ->addSelect('location_type_id:name', 'contact_id.gender_id:label', 'email', 'contact_id')
       ->addWhere('contact_id', 'IN', [$cid1, $cid2, $cid3])
-      ->addWhere('contact.gender_id:label', 'IN', ['Male', 'Female'])
+      ->addWhere('contact_id.gender_id:label', 'IN', ['Male', 'Female'])
       ->execute()->indexBy('contact_id');
     $this->assertCount(2, $emails);
     $this->assertEquals('Work', $emails[$cid1]['location_type_id:name']);
     $this->assertEquals('Home', $emails[$cid2]['location_type_id:name']);
-    $this->assertEquals('Male', $emails[$cid1]['contact.gender_id:label']);
-    $this->assertEquals('Female', $emails[$cid2]['contact.gender_id:label']);
+    $this->assertEquals('Male', $emails[$cid1]['contact_id.gender_id:label']);
+    $this->assertEquals('Female', $emails[$cid2]['contact_id.gender_id:label']);
 
     $emails = Email::get()
-      ->addSelect('location_type_id:name', 'contact.gender_id:label', 'email', 'contact_id')
+      ->addSelect('location_type_id:name', 'contact_id.gender_id:label', 'email', 'contact_id')
       ->addWhere('contact_id', 'IN', [$cid1, $cid2, $cid3])
       ->addWhere('location_type_id:name', 'IN', ['Home'])
       ->execute()->indexBy('contact_id');
     $this->assertCount(2, $emails);
     $this->assertEquals('Home', $emails[$cid2]['location_type_id:name']);
     $this->assertEquals('Home', $emails[$cid3]['location_type_id:name']);
-    $this->assertEquals('Female', $emails[$cid2]['contact.gender_id:label']);
-    $this->assertNull($emails[$cid3]['contact.gender_id:label']);
+    $this->assertEquals('Female', $emails[$cid2]['contact_id.gender_id:label']);
+    $this->assertNull($emails[$cid3]['contact_id.gender_id:label']);
   }
 
   public function testTagOptions() {
@@ -297,6 +298,44 @@ class PseudoconstantTest extends BaseCustomValueTest {
       ->execute()->indexBy('id');
 
     $this->assertArrayNotHasKey($participant['id'], (array) $search2);
+  }
+
+  public function testPreloadFalse() {
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviContribute');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviCampaign');
+
+    $contact = $this->createEntity(['type' => 'Individual']);
+
+    $campaignTitle = uniqid('Test ');
+
+    $campaignId = Campaign::create(FALSE)
+      ->addValue('title', $campaignTitle)
+      ->addValue('campaign_type_id', 1)
+      ->execute()->first()['id'];
+
+    $contributionId = Contribution::create(FALSE)
+      ->addValue('campaign_id', $campaignId)
+      ->addValue('contact_id', $contact['id'])
+      ->addValue('financial_type_id', 1)
+      ->addValue('total_amount', .01)
+      ->execute()->first()['id'];
+
+    // Even though the option list of campaigns is not available (prefetch = false)
+    // We should still be able to get the title of the campaign as :label
+    $result = Contribution::get(FALSE)
+      ->addWhere('id', '=', $contributionId)
+      ->addSelect('campaign_id:label')
+      ->execute()->single();
+
+    $this->assertEquals($campaignTitle, $result['campaign_id:label']);
+
+    // Fetching the title via join ought to work too
+    $result = Contribution::get(FALSE)
+      ->addWhere('id', '=', $contributionId)
+      ->addSelect('campaign_id.title')
+      ->execute()->single();
+
+    $this->assertEquals($campaignTitle, $result['campaign_id.title']);
   }
 
 }

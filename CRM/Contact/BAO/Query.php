@@ -1076,7 +1076,7 @@ class CRM_Contact_BAO_Query {
           $elementCmpName = 'phone';
         }
 
-        if (in_array($elementCmpName, array_keys($addressCustomFields))) {
+        if (array_key_exists($elementCmpName, $addressCustomFields)) {
           if ($cfID = CRM_Core_BAO_CustomField::getKeyID($elementCmpName)) {
             $addressCustomFieldIds[$cfID][$name] = 1;
           }
@@ -3130,7 +3130,7 @@ class CRM_Contact_BAO_Query {
    * @return string WHERE clause component for smart group criteria.
    * @throws \CRM_Core_Exception
    */
-  public function addGroupContactCache($groups, $tableAlias, $joinTable = "contact_a", $op, $joinColumn = 'id') {
+  public function addGroupContactCache($groups, $tableAlias, $joinTable, $op, $joinColumn = 'id') {
     $isNullOp = (strpos($op, 'NULL') !== FALSE);
     $groupsIds = $groups;
 
@@ -3305,12 +3305,6 @@ WHERE  $smartGroupClause
     if (!empty($value)) {
       $value = CRM_Utils_Type::validate($value, 'CommaSeparatedIntegers');
     }
-
-    // implode array, then remove all spaces and validate CommaSeparatedIntegers
-    $value = CRM_Utils_Type::validate(
-      str_replace(' ', '', implode(',', (array) $value)),
-      'CommaSeparatedIntegers'
-    );
 
     $useAllTagTypes = $this->getWhereValues('all_tag_types', $grouping);
     $tagTypesText = $this->getWhereValues('tag_types_text', $grouping);
@@ -3990,7 +3984,7 @@ WHERE  $smartGroupClause
    */
   public function modifiedDates($values) {
     $this->_useDistinct = TRUE;
-
+    CRM_Core_Error::deprecatedWarning('function should not be reachable');
     // CRM-11281, default to added date if not set
     $fieldTitle = ts('Added Date');
     $fieldName = 'created_date';
@@ -4457,7 +4451,6 @@ civicrm_relationship.start_date > {$today}
 
       if (empty(self::$_defaultReturnProperties[$mode])) {
         self::$_defaultReturnProperties[$mode] = [
-          'home_URL' => 1,
           'image_URL' => 1,
           'legal_identifier' => 1,
           'external_identifier' => 1,
@@ -5675,7 +5668,10 @@ civicrm_relationship.start_date > {$today}
           }
           throw new CRM_Core_Exception(ts('Failed to interpret input for search'));
         }
-
+        $emojiWhere = CRM_Utils_SQL::handleEmojiInQuery($value);
+        if ($emojiWhere === '0 = 1') {
+          $value = $emojiWhere;
+        }
         $value = CRM_Utils_Type::escape($value, $dataType);
         // if we don't have a dataType we should assume
         if ($dataType == 'String' || $dataType == 'Text') {
@@ -5912,7 +5908,7 @@ AND   displayRelType.is_active = 1
     $op,
     $value,
     $grouping,
-    $daoName = NULL,
+    $daoName,
     $field,
     $label,
     $dataType = 'String'
@@ -6333,7 +6329,7 @@ AND   displayRelType.is_active = 1
       $value = $formValues[$element] ?? NULL;
       if ($value) {
         if (is_array($value)) {
-          if (in_array($element, array_keys($changeNames))) {
+          if (array_key_exists($element, $changeNames)) {
             unset($formValues[$element]);
             $element = $changeNames[$element];
           }

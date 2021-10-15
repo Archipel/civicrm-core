@@ -37,19 +37,15 @@ class CRM_Core_BAO_CustomValueTable {
     $VS = CRM_Core_DAO::VALUE_SEPARATOR;
 
     foreach ($customParams as $tableName => $tables) {
-      foreach ($tables as $index => $fields) {
-        $sqlOP = NULL;
+      foreach ($tables as $fields) {
         $hookID = NULL;
-        $hookOP = NULL;
         $entityID = NULL;
-        $isMultiple = FALSE;
         $set = [];
         $params = [];
         $count = 1;
 
         $firstField = reset($fields);
-        $entityID = $firstField['entity_id'];
-        $hookID = $firstField['custom_group_id'];
+        $entityID = (int) $firstField['entity_id'];
         $isMultiple = $firstField['is_multiple'];
         if (array_key_exists('id', $firstField)) {
           $sqlOP = "UPDATE $tableName ";
@@ -64,8 +60,9 @@ class CRM_Core_BAO_CustomValueTable {
           $hookOP = 'create';
         }
 
-        CRM_Utils_Hook::customPre($hookOP,
-          $hookID,
+        CRM_Utils_Hook::customPre(
+          $hookOP,
+          (int) $firstField['custom_group_id'],
           $entityID,
           $fields
         );
@@ -158,7 +155,8 @@ class CRM_Core_BAO_CustomValueTable {
 
             case 'File':
               if (!$field['file_id']) {
-                throw new CRM_Core_Exception('Missing parameter file_id');
+                $value = 'null';
+                break;
               }
 
               // need to add/update civicrm_entity_file
@@ -237,11 +235,11 @@ class CRM_Core_BAO_CustomValueTable {
 
           $fieldExtends = $field['extends'] ?? NULL;
           if (
-            CRM_Utils_Array::value('entity_table', $field) == 'civicrm_contact'
-            || $fieldExtends == 'Contact'
-            || $fieldExtends == 'Individual'
-            || $fieldExtends == 'Organization'
-            || $fieldExtends == 'Household'
+            CRM_Utils_Array::value('entity_table', $field) === 'civicrm_contact'
+            || $fieldExtends === 'Contact'
+            || $fieldExtends === 'Individual'
+            || $fieldExtends === 'Organization'
+            || $fieldExtends === 'Household'
           ) {
             $paramFieldsExtendContactForEntities[$entityID]['custom_' . CRM_Utils_Array::value('custom_field_id', $field)] = $field['custom_field_id'] ?? NULL;
           }
@@ -273,7 +271,7 @@ class CRM_Core_BAO_CustomValueTable {
           CRM_Core_DAO::executeQuery($query, $params);
 
           CRM_Utils_Hook::custom($hookOP,
-            $hookID,
+            (int) $firstField['custom_group_id'],
             $entityID,
             $fields
           );
@@ -398,15 +396,16 @@ class CRM_Core_BAO_CustomValueTable {
    * @param $entityTable
    * @param int $entityID
    * @param $customFieldExtends
+   * @param $parentOperation
    */
-  public static function postProcess(&$params, $entityTable, $entityID, $customFieldExtends) {
+  public static function postProcess(&$params, $entityTable, $entityID, $customFieldExtends, $parentOperation = NULL) {
     $customData = CRM_Core_BAO_CustomField::postProcess($params,
       $entityID,
       $customFieldExtends
     );
 
     if (!empty($customData)) {
-      self::store($customData, $entityTable, $entityID);
+      self::store($customData, $entityTable, $entityID, $parentOperation);
     }
   }
 

@@ -42,6 +42,35 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
   protected $_snippet;
 
   /**
+   * Get the active UFGroups (profiles) on this form
+   * Many forms load one or more UFGroups (profiles).
+   * This provides a standard function to retrieve the IDs of those profiles from the form
+   * so that you can implement things such as "is is_captcha field set on any of the active profiles on this form?"
+   *
+   * NOT SUPPORTED FOR USE OUTSIDE CORE EXTENSIONS - Added for reCAPTCHA core extension.
+   *
+   * @return array
+   */
+  public function getUFGroupIDs() {
+    $ufGroupIDs = [];
+    if (!empty($this->_values['custom_pre_id'])) {
+      $ufGroupIDs[] = $this->_values['custom_pre_id'];
+    }
+    if (!empty($this->_values['custom_post_id'])) {
+      // custom_post_id can be an array (because we can have multiple for events).
+      // It is handled as array for contribution page as well though they don't support multiple profiles.
+      if (!is_array($this->_values['custom_post_id'])) {
+        $ufGroupIDs[] = $this->_values['custom_post_id'];
+      }
+      else {
+        $ufGroupIDs = array_merge($ufGroupIDs, $this->_values['custom_post_id']);
+      }
+    }
+
+    return $ufGroupIDs;
+  }
+
+  /**
    * Set variables up before form is built.
    */
   public function preProcess() {
@@ -290,12 +319,9 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
       $this->buildComponentForm($this->_id, $this);
     }
 
-    if (count($this->_paymentProcessors) >= 1 && !$this->get_template_vars("isCaptcha") && $this->hasToAddForcefully()) {
+    if (\Civi::settings()->get('forceRecaptcha')) {
       if (!$this->_userID) {
-        $this->enableCaptchaOnForm();
-      }
-      else {
-        $this->displayCaptchaWarning();
+        CRM_Utils_ReCAPTCHA::enableCaptchaOnForm($this);
       }
     }
 
@@ -730,17 +756,6 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
       ]));
     }
 
-    $form->add('checkbox', 'is_recur', ts('I want to contribute this amount'), NULL);
-
-    if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
-      $form->add('text', 'frequency_interval', ts('Every'), $attributes['frequency_interval'] + ['aria-label' => ts('Every')]);
-      $form->addRule('frequency_interval', ts('Frequency must be a whole number (EXAMPLE: Every 3 months).'), 'integer');
-    }
-    else {
-      // make sure frequency_interval is submitted as 1 if given no choice to user.
-      $form->add('hidden', 'frequency_interval', 1);
-    }
-
     $frUnits = $form->_values['recur_frequency_unit'] ?? NULL;
     if (empty($frUnits) &&
       $className == 'CRM_Contribute_Form_Contribution'
@@ -752,31 +767,6 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
 
     $unitVals = explode(CRM_Core_DAO::VALUE_SEPARATOR, $frUnits);
 
-    // CRM 10860, display text instead of a dropdown if there's only 1 frequency unit
-    if (count($unitVals) == 1) {
-      $form->assign('one_frequency_unit', TRUE);
-      $unit = $unitVals[0];
-      $form->add('hidden', 'frequency_unit', $unit);
-      if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
-        $unit .= "(s)";
-      }
-      $form->assign('frequency_unit', $unit);
-    }
-    else {
-      $form->assign('one_frequency_unit', FALSE);
-      $units = [];
-      $frequencyUnits = CRM_Core_OptionGroup::values('recur_frequency_units', FALSE, FALSE, TRUE);
-      foreach ($unitVals as $key => $val) {
-        if (array_key_exists($val, $frequencyUnits)) {
-          $units[$val] = $frequencyUnits[$val];
-          if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
-            $units[$val] = "{$frequencyUnits[$val]}(s)";
-          }
-        }
-      }
-      $frequencyUnit = &$form->addElement('select', 'frequency_unit', NULL, $units, ['aria-label' => ts('Frequency Unit')]);
-    }
-
     // FIXME: Ideally we should freeze select box if there is only
     // one option but looks there is some problem /w QF freeze.
     //if ( count( $units ) == 1 ) {
@@ -787,6 +777,51 @@ class CRM_Contribute_Form_Contribution_Main extends CRM_Contribute_Form_Contribu
       $attributes['installments']
     );
     $form->addRule('installments', ts('Number of installments must be a whole number.'), 'integer');
+
+    $is_recur_label = ts('I want to contribute this amount every');
+
+    // CRM 10860, display text instead of a dropdown if there's only 1 frequency unit
+    if (count($unitVals) == 1) {
+      $form->assign('one_frequency_unit', TRUE);
+      $unit = $unitVals[0];
+      $form->add('hidden', 'frequency_unit', $unit);
+      if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
+        $unit .= "(s)";
+        $form->assign('frequency_unit', $unit);
+      }
+      else {
+        $is_recur_label = ts('I want to contribute this amount every %1',
+          [1 => $unit]
+        );
+        $form->assign('all_text_recur', TRUE);
+      }
+    }
+    else {
+      $form->assign('one_frequency_unit', FALSE);
+      $units = [];
+      $frequencyUnits = CRM_Core_OptionGroup::values('recur_frequency_units', FALSE, FALSE, TRUE);
+      foreach ($unitVals as $key => $val) {
+        if (array_key_exists($val, $frequencyUnits)) {
+          $units[$val] = $frequencyUnits[$val];
+          if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
+            $units[$val] = "{$frequencyUnits[$val]}(s)";
+            $unit = ts('Every');
+          }
+        }
+      }
+      $frequencyUnit = &$form->addElement('select', 'frequency_unit', NULL, $units, ['aria-label' => ts('Frequency Unit')]);
+    }
+
+    if (!empty($form->_values['is_recur_interval']) || $className == 'CRM_Contribute_Form_Contribution') {
+      $form->add('text', 'frequency_interval', $unit, $attributes['frequency_interval'] + ['aria-label' => ts('Every')]);
+      $form->addRule('frequency_interval', ts('Frequency must be a whole number (EXAMPLE: Every 3 months).'), 'integer');
+    }
+    else {
+      // make sure frequency_interval is submitted as 1 if given no choice to user.
+      $form->add('hidden', 'frequency_interval', 1);
+    }
+
+    $form->add('checkbox', 'is_recur', $is_recur_label, NULL);
   }
 
   /**

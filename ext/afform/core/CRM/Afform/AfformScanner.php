@@ -164,7 +164,7 @@ class CRM_Afform_AfformScanner {
   public function addComputedFields(&$record) {
     $name = $record['name'];
     // Ex: $allPaths['viewIndividual'][0] == '/var/www/foo/afform/view-individual'].
-    $allPaths = $this->findFilePaths()[$name];
+    $allPaths = $this->findFilePaths()[$name] ?? [];
     // $activeLayoutPath = $this->findFilePath($name, self::LAYOUT_FILE);
     // $activeMetaPath = $this->findFilePath($name, self::METADATA_FILE);
     $localLayoutPath = $this->createSiteLocalPath($name, self::LAYOUT_FILE);
@@ -231,7 +231,7 @@ class CRM_Afform_AfformScanner {
    * @return mixed|string
    *   Ex: '/var/www/sites/default/files/civicrm/afform'.
    */
-  private function getSiteLocalPath() {
+  public function getSiteLocalPath() {
     // TODO Allow a setting override.
     // return Civi::paths()->getPath(Civi::settings()->get('afformPath'));
     return Civi::paths()->getPath('[civicrm.files]/ang');

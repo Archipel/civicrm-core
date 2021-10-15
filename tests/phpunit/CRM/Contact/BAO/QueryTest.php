@@ -445,39 +445,39 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
    */
   public function testSearchBuilderActivityType() {
     $queryObj = new CRM_Contact_BAO_Query([['activity_type', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.activity_type_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.activity_type_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Activity Type = Email', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_type_id', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.activity_type_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.activity_type_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Activity Type ID = Email', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_status', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.status_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.status_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Activity Status = Cancelled', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_status_id', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.status_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.status_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Activity Status = Cancelled', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_engagement_level', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.engagement_level = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.engagement_level = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Engagement Index = 3', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_id', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Activity ID = 3', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_campaign_id', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.campaign_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.campaign_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Campaign ID = 3', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_priority_id', '=', '3', 1, 0]]);
-    $this->assertContains('WHERE  (  ( civicrm_activity.priority_id = 3 )', $queryObj->getSearchSQL());
+    $this->assertStringContainsString('WHERE  (  ( civicrm_activity.priority_id = 3 )', $queryObj->getSearchSQL());
     $this->assertEquals('Priority = Low', $queryObj->_qill[1][0]);
 
     $queryObj = new CRM_Contact_BAO_Query([['activity_subject', '=', '3', 1, 0]]);
-    $this->assertContains("WHERE  (  ( civicrm_activity.subject = '3' )", $queryObj->getSearchSQL());
+    $this->assertStringContainsString("WHERE  (  ( civicrm_activity.subject = '3' )", $queryObj->getSearchSQL());
     $this->assertEquals("Subject = '3'", $queryObj->_qill[1][0]);
   }
 
@@ -543,7 +543,7 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
     // the group & could generate invalid sql if a bug were introduced.
     $groupParams = ['title' => 'postal codes', 'formValues' => $params, 'is_active' => 1];
     $group = CRM_Contact_BAO_Group::createSmartGroup($groupParams);
-    CRM_Contact_BAO_GroupContactCache::load($group, TRUE);
+    CRM_Contact_BAO_GroupContactCache::load($group);
   }
 
   /**
@@ -834,7 +834,7 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
       ],
     ];
     $sql = CRM_Contact_BAO_Query::getQuery($params);
-    $this->assertContains('INNER JOIN civicrm_tmp_e', $sql, 'Query appears to use temporary table of compiled relationships?', TRUE);
+    $this->assertStringContainsStringIgnoringCase('INNER JOIN civicrm_tmp_e', $sql, 'Query appears to use temporary table of compiled relationships?');
   }
 
   /**
@@ -845,7 +845,7 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
   public function testRelationshipPermissionClause() {
     $params = [['relation_type_id', 'IN', ['1_b_a'], 0, 0], ['relation_permission', 'IN', [2], 0, 0]];
     $sql = CRM_Contact_BAO_Query::getQuery($params);
-    $this->assertContains('(civicrm_relationship.is_permission_a_b IN (2))', $sql);
+    $this->assertStringContainsString('(civicrm_relationship.is_permission_a_b IN (2))', $sql);
   }
 
   /**
@@ -987,7 +987,7 @@ civicrm_relationship.is_active = 1 AND
     $this->callAPISuccess('GroupContact', 'create', ['group_id' => $groupID, 'contact_id' => $householdID, 'status' => 'Added']);
 
     // Refresh the cache for test purposes. It would be better to alter to alter the GroupContact add function to add contacts to the cache.
-    CRM_Contact_BAO_GroupContactCache::clearGroupContactCache($groupID);
+    CRM_Contact_BAO_GroupContactCache::invalidateGroupContactCache($groupID);
 
     $sql = CRM_Contact_BAO_Query::getQuery(
       [['group', 'IN', [$groupID], 0, 0]],
@@ -1007,7 +1007,7 @@ civicrm_relationship.is_active = 1 AND
     $this->assertEquals(3, $dao->N);
     $this->assertFalse(strstr($sql, ' OR '), 'Query does not include or');
     while ($dao->fetch()) {
-      $this->assertTrue(($dao->groups == $groupID || $dao->groups == ',' . $groupID), $dao->groups . ' includes ' . $groupID);
+      $this->assertTrue(($dao->groups == $groupID || $dao->groups == ',' . $groupID || $dao->groups == $groupID . ',' . $groupID), $dao->groups . ' includes ' . $groupID);
     }
   }
 
@@ -1315,6 +1315,55 @@ civicrm_relationship.is_active = 1 AND
     $query = new CRM_Contact_BAO_Query([['world_region', '=', 3, 0]]);
     $this->assertEquals('civicrm_worldregion.id = 3', $query->_where[0][0]);
     $this->assertEquals('World Region = Middle East and North Africa', $query->_qill[0][0]);
+  }
+
+  /**
+   * Tests the advanced search query by searching on related contacts and contact type same time.
+   *
+   * Preparation:
+   *   Create an individual contact Contact A
+   *   Create an organization contact Contact B
+   *   Create an "Employer of" relationship between them.
+   *
+   * Searching:
+   *   Go to advanced search
+   *   Click on View contact as related contact
+   *   Select Employee of as relationship type
+   *   Select "Organization" as contact type
+   *
+   * Expected results
+   *   We expect to find contact A.
+   *
+   * @throws \Exception
+   */
+  public function testAdvancedSearchWithDisplayRelationshipsAndContactType(): void {
+    $employeeRelationshipTypeId = $this->callAPISuccess('RelationshipType', 'getvalue', ['return' => 'id', 'name_a_b' => 'Employee of']);
+    $indContactID = $this->individualCreate(['first_name' => 'John', 'last_name' => 'Smith']);
+    $orgContactID = $this->organizationCreate(['contact_type' => 'Organization', 'organization_name' => 'Healthy Planet Fund']);
+    $this->callAPISuccess('Relationship', 'create', ['contact_id_a' => $indContactID, 'contact_id_b' => $orgContactID, 'relationship_type_id' => $employeeRelationshipTypeId]);
+
+    // Search setup
+    $formValues = ['display_relationship_type' => $employeeRelationshipTypeId . '_a_b', 'contact_type' => 'Organization'];
+    $params = CRM_Contact_BAO_Query::convertFormValues($formValues, 0, FALSE, NULL, []);
+    $isDeleted = FALSE;
+    $selector = new CRM_Contact_Selector(
+      'CRM_Contact_Selector',
+      $formValues,
+      $params,
+      NULL,
+      CRM_Core_Action::NONE,
+      NULL,
+      FALSE,
+      'advanced'
+    );
+    $queryObject = $selector->getQueryObject();
+    $sql = $queryObject->query(FALSE, FALSE, FALSE, $isDeleted);
+    // Run the search
+    $rows = CRM_Core_DAO::executeQuery(implode(' ', $sql))->fetchAll();
+    // Check expected results.
+    $this->assertCount(1, $rows);
+    $this->assertEquals('John', $rows[0]['first_name']);
+    $this->assertEquals('Smith', $rows[0]['last_name']);
   }
 
 }

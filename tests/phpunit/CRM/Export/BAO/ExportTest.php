@@ -204,6 +204,7 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    * @throws \League\Csv\Exception
+   * @throws \API_Exception
    */
   public function testExportComponentsMembership(): void {
     $this->setUpMembershipExportData();
@@ -305,7 +306,7 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
       'Membership Start Date' => $membership['start_date'],
       'Membership Expiration Date' => $membership['end_date'],
       'Source' => 'Payment',
-      'Membership Status' => 'New',
+      'Membership Status' => 'Pending',
       'Membership ID' => '2',
       'Primary Member ID' => '',
       'Max Related' => '',
@@ -420,7 +421,7 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
    * Set up some data for us to do testing on.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
+   * @throws \API_Exception
    */
   public function setUpMembershipExportData(): void {
     $this->setUpContactExportData();
@@ -472,9 +473,6 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
 
   /**
    * Set up some data for us to do testing on.
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function setUpContactExportData(): void {
     $this->contactIDs[] = $contactA = $this->individualCreate(['gender_id' => 'Female']);
@@ -2555,7 +2553,7 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
       'image_url' => '`image_url` longtext',
       'preferred_communication_method' => '`preferred_communication_method` varchar(255)',
       'preferred_language' => '`preferred_language` varchar(5)',
-      'preferred_mail_format' => '`preferred_mail_format` varchar(8)',
+      'preferred_mail_format' => '`preferred_mail_format` text(16)',
       'hash' => '`hash` varchar(32)',
       'contact_source' => '`contact_source` varchar(255)',
       'first_name' => '`first_name` varchar(64)',
@@ -2743,7 +2741,7 @@ class CRM_Export_BAO_ExportTest extends CiviUnitTestCase {
       'image_url' => '`image_url` longtext',
       'preferred_communication_method' => '`preferred_communication_method` varchar(255)',
       'preferred_language' => '`preferred_language` varchar(5)',
-      'preferred_mail_format' => '`preferred_mail_format` varchar(8)',
+      'preferred_mail_format' => '`preferred_mail_format` text(16)',
       'hash' => '`hash` varchar(32)',
       'contact_source' => '`contact_source` varchar(255)',
       'first_name' => '`first_name` varchar(64)',

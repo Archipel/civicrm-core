@@ -28,7 +28,11 @@ use Civi\Api4\Email;
  */
 class SavedSearchTest extends UnitTestCase {
 
-  public function testContactSmartGroup() {
+  /**
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\NotImplementedException
+   */
+  public function testContactSmartGroup(): void {
     $in = Contact::create(FALSE)->addValue('first_name', 'yes')->addValue('do_not_phone', TRUE)->execute()->first();
     $out = Contact::create(FALSE)->addValue('first_name', 'no')->addValue('do_not_phone', FALSE)->execute()->first();
 
@@ -47,11 +51,17 @@ class SavedSearchTest extends UnitTestCase {
       ],
     ])->first();
 
-    // Oops we don't have an api4 syntax yet for selecting contacts in a group.
-    $ins = civicrm_api3('Contact', 'get', ['group' => $savedSearch['group']['name'], 'options' => ['limit' => 0]]);
-    $this->assertEquals(1, count($ins['values']));
-    $this->assertArrayHasKey($in['id'], $ins['values']);
-    $this->assertArrayNotHasKey($out['id'], $ins['values']);
+    $ins = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertCount(1, $ins);
+    $this->assertArrayHasKey($in['id'], (array) $ins);
+
+    $outs = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'NOT IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertArrayHasKey($out['id'], (array) $outs);
+    $this->assertArrayNotHasKey($in['id'], (array) $outs);
   }
 
   public function testEmailSmartGroup() {
@@ -76,11 +86,17 @@ class SavedSearchTest extends UnitTestCase {
       ],
     ])->first();
 
-    // Oops we don't have an api4 syntax yet for selecting contacts in a group.
-    $ins = civicrm_api3('Contact', 'get', ['group' => $savedSearch['group']['name'], 'options' => ['limit' => 0]]);
-    $this->assertEquals(1, count($ins['values']));
-    $this->assertArrayHasKey($in['id'], $ins['values']);
-    $this->assertArrayNotHasKey($out['id'], $ins['values']);
+    $ins = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertCount(1, $ins);
+    $this->assertArrayHasKey($in['id'], (array) $ins);
+
+    $outs = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'NOT IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertArrayHasKey($out['id'], (array) $outs);
+    $this->assertArrayNotHasKey($in['id'], (array) $outs);
   }
 
   public function testSmartGroupWithHaving() {
@@ -107,12 +123,87 @@ class SavedSearchTest extends UnitTestCase {
       ],
     ])->first();
 
-    // Oops we don't have an api4 syntax yet for selecting contacts in a group.
-    $ins = civicrm_api3('Contact', 'get', ['group' => $savedSearch['group']['name'], 'options' => ['limit' => 0]]);
-    $this->assertCount(2, $ins['values']);
-    $this->assertArrayHasKey($in['id'], $ins['values']);
-    $this->assertArrayHasKey($in2['id'], $ins['values']);
-    $this->assertArrayNotHasKey($out['id'], $ins['values']);
+    $ins = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertCount(2, $ins);
+    $this->assertArrayHasKey($in['id'], (array) $ins);
+    $this->assertArrayHasKey($in2['id'], (array) $ins);
+
+    $outs = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'NOT IN', [$savedSearch['group']['id']]]],
+    ])->indexBy('id');
+    $this->assertArrayHasKey($out['id'], (array) $outs);
+    $this->assertArrayNotHasKey($in['id'], (array) $outs);
+    $this->assertArrayNotHasKey($in2['id'], (array) $outs);
+  }
+
+  public function testMultipleSmartGroups() {
+    $inGroup = $outGroup = [];
+    $inName = uniqid('inGroup');
+    $outName = uniqid('outGroup');
+    for ($i = 0; $i < 10; ++$i) {
+      $inGroup[] = Contact::create(FALSE)
+        ->setValues(['first_name' => "$i", 'last_name' => $inName])
+        ->execute()->first()['id'];
+      $outGroup[] = Contact::create(FALSE)
+        ->setValues(['first_name' => "$i", 'last_name' => $outName])
+        ->execute()->first()['id'];
+    }
+
+    $parentGroupId = \Civi\Api4\Group::create(FALSE)
+      ->setValues(['title' => uniqid()])
+      ->execute()->first()['id'];
+
+    $savedSearchA = civicrm_api4('SavedSearch', 'create', [
+      'values' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'where' => [
+            ['last_name', '=', $inName],
+          ],
+        ],
+      ],
+      'chain' => [
+        'group' => ['Group', 'create', ['values' => ['parents' => [$parentGroupId], 'title' => 'In A Test', 'saved_search_id' => '$id']], 0],
+      ],
+    ])->first();
+
+    $savedSearchB = civicrm_api4('SavedSearch', 'create', [
+      'values' => [
+        'api_entity' => 'Contact',
+        'api_params' => [
+          'version' => 4,
+          'where' => [
+            ['last_name', 'IN', [$inName, $outName]],
+            ['first_name', '>', '4'],
+          ],
+        ],
+      ],
+      'chain' => [
+        'group' => ['Group', 'create', ['values' => ['parents' => [$parentGroupId], 'title' => 'In B Test', 'saved_search_id' => '$id']], 0],
+      ],
+    ])->first();
+
+    $bothGroups = civicrm_api4('Contact', 'get', [
+      'where' => [['groups:name', 'IN', [$savedSearchA['group']['name'], $savedSearchB['group']['name']]]],
+    ]);
+    $this->assertCount(15, $bothGroups);
+
+    // Parent group includes both groups a & b so should give the same results as above
+    $parentGroup = civicrm_api4('Contact', 'get', [
+      'where' => [['groups', 'IN', [$parentGroupId]]],
+    ]);
+    $this->assertCount(15, $parentGroup);
+
+    $aNotB = civicrm_api4('Contact', 'get', [
+      'where' => [
+        ['groups:name', 'IN', [$savedSearchA['group']['name']]],
+        ['groups:name', 'NOT IN', [$savedSearchB['group']['name']]],
+      ],
+    ]);
+    $this->assertCount(5, $aNotB);
   }
 
 }

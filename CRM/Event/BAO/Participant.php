@@ -242,7 +242,7 @@ class CRM_Event_BAO_Participant extends CRM_Event_DAO_Participant {
         CRM_Core_BAO_Note::add($noteParams, $noteIDs);
       }
       elseif ($noteId && $hasNoteField) {
-        CRM_Core_BAO_Note::del($noteId, FALSE);
+        CRM_Core_BAO_Note::deleteRecord(['id' => $noteId]);
       }
     }
 
@@ -652,7 +652,7 @@ INNER JOIN  civicrm_price_field field       ON ( value.price_field_id = field.id
           'contact_type' => $contactType,
           'used' => 'Unsupervised',
         ];
-        $fieldsArray = CRM_Dedupe_BAO_Rule::dedupeRuleFields($ruleParams);
+        $fieldsArray = CRM_Dedupe_BAO_DedupeRule::dedupeRuleFields($ruleParams);
 
         if (is_array($fieldsArray)) {
           foreach ($fieldsArray as $value) {
@@ -867,7 +867,7 @@ WHERE  civicrm_participant.id = {$participantId}
     $note = CRM_Core_BAO_Note::getNote($id, 'civicrm_participant');
     $noteId = key($note);
     if ($noteId) {
-      CRM_Core_BAO_Note::del($noteId, FALSE);
+      CRM_Core_BAO_Note::deleteRecord(['id' => $noteId]);
     }
 
     $participant->delete();
@@ -875,14 +875,6 @@ WHERE  civicrm_participant.id = {$participantId}
     $transaction->commit();
 
     CRM_Utils_Hook::post('delete', 'Participant', $participant->id, $participant);
-
-    // delete the recently created Participant
-    $participantRecent = [
-      'id' => $id,
-      'type' => 'Participant',
-    ];
-
-    CRM_Utils_Recent::del($participantRecent);
 
     return $participant;
   }

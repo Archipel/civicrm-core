@@ -9,6 +9,7 @@
  +--------------------------------------------------------------------+
  */
 use Civi\Api4\Activity;
+use Civi\Api4\Contribution;
 use Civi\Api4\PledgePayment;
 
 /**
@@ -19,6 +20,13 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
 
   use CRMTraits_Financial_FinancialACLTrait;
   use CRMTraits_Financial_PriceSetTrait;
+
+  /**
+   * Should financials be checked after the test but before tear down.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = TRUE;
 
   /**
    * Clean up after tests.
@@ -305,9 +313,9 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
     $this->createLoggedInUserWithFinancialACL();
     $permittedFinancialType = CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'financial_type_id', 'Donation');
     $sql = CRM_Contribute_BAO_Contribution::getAnnualQuery([1, 2, 3]);
-    $this->assertContains('SUM(total_amount) as amount,', $sql);
-    $this->assertContains('WHERE b.contact_id IN (1,2,3)', $sql);
-    $this->assertContains('b.financial_type_id IN (' . $permittedFinancialType . ')', $sql);
+    $this->assertStringContainsString('SUM(total_amount) as amount,', $sql);
+    $this->assertStringContainsString('WHERE b.contact_id IN (1,2,3)', $sql);
+    $this->assertStringContainsString('b.financial_type_id IN (' . $permittedFinancialType . ')', $sql);
 
     // Run it to make sure it's not bad sql.
     CRM_Core_DAO::executeQuery($sql);
@@ -317,7 +325,7 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
   /**
    * Test the annual query returns a correct result when multiple line items are present.
    */
-  public function testAnnualWithMultipleLineItems() {
+  public function testAnnualWithMultipleLineItems(): void {
     $contactID = $this->createLoggedInUserWithFinancialACL();
     $this->createContributionWithTwoLineItemsAgainstPriceSet([
       'contact_id' => $contactID,
@@ -337,9 +345,9 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
    */
   public function testAnnualQueryWithFinancialACLsDisabled() {
     $sql = CRM_Contribute_BAO_Contribution::getAnnualQuery([1, 2, 3]);
-    $this->assertContains('SUM(total_amount) as amount,', $sql);
-    $this->assertContains('WHERE b.contact_id IN (1,2,3)', $sql);
-    $this->assertNotContains('b.financial_type_id', $sql);
+    $this->assertStringContainsString('SUM(total_amount) as amount,', $sql);
+    $this->assertStringContainsString('WHERE b.contact_id IN (1,2,3)', $sql);
+    $this->assertStringNotContainsString('b.financial_type_id', $sql);
     //$this->assertNotContains('line_item', $sql);
     // Run it to make sure it's not bad sql.
     CRM_Core_DAO::executeQuery($sql);
@@ -351,10 +359,10 @@ class CRM_Contribute_BAO_ContributionTest extends CiviUnitTestCase {
   public function testAnnualQueryWithFinancialHook() {
     $this->hookClass->setHook('civicrm_selectWhereClause', [$this, 'aclIdNoZero']);
     $sql = CRM_Contribute_BAO_Contribution::getAnnualQuery([1, 2, 3]);
-    $this->assertContains('SUM(total_amount) as amount,', $sql);
-    $this->assertContains('WHERE b.contact_id IN (1,2,3)', $sql);
-    $this->assertContains('b.id NOT IN (0)', $sql);
-    $this->assertNotContains('b.financial_type_id', $sql);
+    $this->assertStringContainsString('SUM(total_amount) as amount,', $sql);
+    $this->assertStringContainsString('WHERE b.contact_id IN (1,2,3)', $sql);
+    $this->assertStringContainsString('b.id NOT IN (0)', $sql);
+    $this->assertStringNotContainsString('b.financial_type_id', $sql);
     CRM_Core_DAO::executeQuery($sql);
   }
 
@@ -666,7 +674,9 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
-  public function testAssignProportionalLineItems() {
+  public function testAssignProportionalLineItems(): void {
+    // This test doesn't seem to manage financials properly, possibly by design
+    $this->isValidateFinancialsOnPostAssert = FALSE;
     $contribution = $this->addParticipantWithContribution();
     // Delete existing financial_trxns. This is because we are testing a code flow we
     // want to deprecate & remove & the test relies on bad data asa starting point.
@@ -739,7 +749,6 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       'contact_id' => $this->_contactId,
       'financial_type_id' => 4,
       'contribution_status_id' => 'Pending',
-      'contribution_mode' => 'participant',
       'participant_id' => $participant->id,
       'sequential' => TRUE,
       'api.Payment.create' => ['total_amount' => 150],
@@ -771,120 +780,6 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
     $contributionObject->find(TRUE);
 
     return $contributionObject;
-  }
-
-  /**
-   * checkLineItems() check if total amount matches the sum of line total
-   */
-  public function testcheckLineItems() {
-    $params = [
-      'contact_id' => 202,
-      'receive_date' => '2010-01-20',
-      'total_amount' => 100,
-      'financial_type_id' => 3,
-      'line_items' => [
-        [
-          'line_item' => [
-            [
-              'entity_table' => 'civicrm_contribution',
-              'price_field_id' => 8,
-              'price_field_value_id' => 16,
-              'label' => 'test 1',
-              'qty' => 1,
-              'unit_price' => 100,
-              'line_total' => 100,
-            ],
-            [
-              'entity_table' => 'civicrm_contribution',
-              'price_field_id' => 8,
-              'price_field_value_id' => 17,
-              'label' => 'Test 2',
-              'qty' => 1,
-              'unit_price' => 200,
-              'line_total' => 200,
-              'financial_type_id' => 1,
-            ],
-          ],
-          'params' => [],
-        ],
-      ],
-    ];
-
-    try {
-      CRM_Contribute_BAO_Contribution::checkLineItems($params);
-      $this->fail("Missed expected exception");
-    }
-    catch (CRM_Contribute_Exception_CheckLineItemsException $e) {
-      $this->assertEquals(
-        CRM_Contribute_Exception_CheckLineItemsException::LINE_ITEM_DIFFERRING_TOTAL_EXCEPTON_MSG,
-        $e->getMessage()
-      );
-    }
-
-    $this->assertEquals(3, $params['line_items'][0]['line_item'][0]['financial_type_id']);
-    $params['total_amount'] = 300;
-
-    CRM_Contribute_BAO_Contribution::checkLineItems($params);
-  }
-
-  /**
-   * Tests CRM_Contribute_BAO_Contribution::checkLineItems() method works with
-   * floating point values.
-   */
-  public function testCheckLineItemsWithFloatingPointValues() {
-    $params = [
-      'contact_id' => 202,
-      'receive_date' => date('Y-m-d'),
-      'total_amount' => 16.67,
-      'financial_type_id' => 3,
-      'line_items' => [
-        [
-          'line_item' => [
-            [
-              'entity_table' => 'civicrm_contribution',
-              'price_field_id' => 8,
-              'price_field_value_id' => 16,
-              'label' => 'test 1',
-              'qty' => 1,
-              'unit_price' => 14.85,
-              'line_total' => 14.85,
-            ],
-            [
-              'entity_table' => 'civicrm_contribution',
-              'price_field_id' => 8,
-              'price_field_value_id' => 17,
-              'label' => 'Test 2',
-              'qty' => 1,
-              'unit_price' => 1.66,
-              'line_total' => 1.66,
-              'financial_type_id' => 1,
-            ],
-            [
-              'entity_table' => 'civicrm_contribution',
-              'price_field_id' => 8,
-              'price_field_value_id' => 17,
-              'label' => 'Test 2',
-              'qty' => 1,
-              'unit_price' => 0.16,
-              'line_total' => 0.16,
-              'financial_type_id' => 1,
-            ],
-          ],
-          'params' => [],
-        ],
-      ],
-    ];
-
-    $foundException = FALSE;
-
-    try {
-      CRM_Contribute_BAO_Contribution::checkLineItems($params);
-    }
-    catch (CRM_Contribute_Exception_CheckLineItemsException $e) {
-      $foundException = TRUE;
-    }
-
-    $this->assertFalse($foundException);
   }
 
   /**
@@ -1123,6 +1018,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       'receipt_date' => '20080522000000',
       'total_amount' => '20,000.00',
       'api.Payment.create' => ['total_amount' => '8,000.00'],
+      'skipCleanMoney' => FALSE,
     ];
 
     $contribution = $this->callAPISuccess('Order', 'create', $params);
@@ -1162,7 +1058,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    */
   public function testCreateProportionalEntry($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
-    list($contribution, $financialAccount) = $this->createContributionWithTax();
+    [$contribution, $financialAccount] = $this->createContributionWithTax();
     $params = [
       'total_amount' => 55,
       'to_financial_account_id' => $financialAccount->financial_account_id,
@@ -1196,11 +1092,13 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    * @param string $thousandSeparator
    *   punctuation used to refer to thousands.
    *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    * @dataProvider getThousandSeparators
    */
-  public function testCreateProportionalEntryZeroAmount($thousandSeparator) {
+  public function testCreateProportionalEntryZeroAmount(string $thousandSeparator): void {
     $this->setCurrencySeparators($thousandSeparator);
-    list($contribution, $financialAccount) = $this->createContributionWithTax(['total_amount' => 0]);
+    [$contribution, $financialAccount] = $this->createContributionWithTax(['total_amount' => 0]);
     $params = [
       'total_amount' => 0,
       'to_financial_account_id' => $financialAccount->financial_account_id,
@@ -1232,8 +1130,8 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    * Test for function getLastFinancialItemIds().
    */
   public function testgetLastFinancialItemIds() {
-    list($contribution, $financialAccount) = $this->createContributionWithTax();
-    list($ftIds, $taxItems) = CRM_Contribute_BAO_Contribution::getLastFinancialItemIds($contribution['id']);
+    [$contribution, $financialAccount] = $this->createContributionWithTax();
+    [$ftIds, $taxItems] = CRM_Contribute_BAO_Contribution::getLastFinancialItemIds($contribution['id']);
     $this->assertEquals(count($ftIds), 1, 'Invalid count.');
     $this->assertEquals(count($taxItems), 1, 'Invalid count.');
     foreach ($taxItems as $value) {
@@ -1250,8 +1148,8 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    * to the original payment - ie. .0909 of the $110 is 10 & that * 50 is $4.54 (note the rounding seems wrong as it should be
    * saved un-rounded).
    */
-  public function testCreateProportionalFinancialEntriesViaPaymentCreate() {
-    list($contribution, $financialAccount) = $this->createContributionWithTax([], FALSE);
+  public function testCreateProportionalFinancialEntriesViaPaymentCreate(): void {
+    [$contribution, $financialAccount] = $this->createContributionWithTax([], FALSE);
     $params = [
       'total_amount' => 50,
       'to_financial_account_id' => $financialAccount->financial_account_id,
@@ -1267,7 +1165,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       'financial_trxn_id' => $financialTrxn['id'],
     ];
     $entityFinancialTrxn = $this->callAPISuccess('EntityFinancialTrxn', 'Get', $eftParams);
-    $this->assertEquals($entityFinancialTrxn['count'], 2, 'Invalid count.');
+    $this->assertEquals(2, $entityFinancialTrxn['count'], 'Invalid count.');
     $testAmount = [4.55, 45.45];
     foreach ($entityFinancialTrxn['values'] as $value) {
       $this->assertEquals(array_pop($testAmount), $value['amount'], 'Invalid amount stored in civicrm_entity_financial_trxn.');
@@ -1278,7 +1176,7 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
    * Test to check if amount is proportionally asigned for PI change.
    */
   public function testProportionallyAssignedForPIChange() {
-    list($contribution, $financialAccount) = $this->createContributionWithTax();
+    [$contribution, $financialAccount] = $this->createContributionWithTax();
     $params = [
       'id' => $contribution['id'],
       'payment_instrument_id' => 3,
@@ -1407,9 +1305,13 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
 
   /**
    * Test for replaceContributionTokens.
-   *   This function tests whether the contribution tokens are replaced with values from contribution.
+   *
+   * This function tests whether the contribution tokens are replaced with
+   * values from contribution.
+   *
+   * @throws \CiviCRM_API3_Exception
    */
-  public function testReplaceContributionTokens() {
+  public function testReplaceContributionTokens(): void {
     $customGroup = $this->customGroupCreate(['extends' => 'Contribution', 'title' => 'contribution stuff']);
     $customField = $this->customFieldOptionValueCreate($customGroup, 'myCustomField');
     $contactId1 = $this->individualCreate();
@@ -1441,12 +1343,13 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
     $contribution2 = $this->contributionCreate($params);
     $ids = [$contribution1, $contribution2];
 
-    $subject = "This is a test for contribution ID: {contribution.contribution_id}";
-    $text = "Contribution Amount: {contribution.total_amount}";
+    $subject = 'This is a test for contribution ID: {contribution.contribution_id}';
+    $text = 'Contribution Amount: {contribution.total_amount}';
     $html = "<p>Contribution Source: {contribution.contribution_source}</p></br>
       <p>Contribution Invoice ID: {contribution.invoice_id}</p></br>
       <p>Contribution Receive Date: {contribution.receive_date}</p></br>
-      <p>Contribution Custom Field: {contribution.custom_{$customField['id']}}</p></br>";
+      <p>Contribution Custom Field: {contribution.custom_{$customField['id']}}</p></br>
+      {contribution.contribution_status_id:name}";
 
     $subjectToken = CRM_Utils_Token::getTokens($subject);
     $messageToken = CRM_Utils_Token::getTokens($text);
@@ -1462,11 +1365,12 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
       TRUE
     );
 
-    $this->assertEquals("Contribution Amount: € 100.00", $contributionDetails[$contactId1]['text'], "The text does not match");
-    $this->assertEquals("<p>Contribution Source: ABC</p></br>
+    $this->assertEquals('Contribution Amount: € 100.00', $contributionDetails[$contactId1]['text'], "The text does not match");
+    $this->assertEquals('<p>Contribution Source: ABC</p></br>
       <p>Contribution Invoice ID: 12345</p></br>
       <p>Contribution Receive Date: May 11th, 2015 12:00 AM</p></br>
-      <p>Contribution Custom Field: Label2</p></br>", $contributionDetails[$contactId2]['html'], "The html does not match");
+      <p>Contribution Custom Field: Label2</p></br>
+      Completed', $contributionDetails[$contactId2]['html'], 'The html does not match');
   }
 
   /**
@@ -1897,6 +1801,56 @@ WHERE eft.entity_id = %1 AND ft.to_financial_account_id <> %2";
     $activityContact = $this->callAPISuccessGetSingle('ActivityContact', $activityContactParams);
 
     $this->assertEquals($activityContact['contact_id'], $contactId_2, 'Check target contact ID matches the second contact');
+  }
+
+  /**
+   * Test status updates triggering activity creation and value propagation
+   *
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testContributionStatusUpdateActivityPropagation() {
+    $contactId = $this->individualCreate();
+    $campaignId = $this->campaignCreate();
+    $contribution = Contribution::create()
+      ->addValue('contact_id', $contactId)
+      ->addValue('campaign_id', $campaignId)
+      ->addValue('financial_type_id:name', 'Donation')
+      ->addValue('total_amount', 50)
+      ->addValue('contribution_status_id:name', 'Pending')
+      ->execute()
+      ->first();
+    $activityWhere = [
+      ['source_record_id', '=', $contribution['id']],
+      ['activity_type_id:name', '=', 'Contribution'],
+    ];
+    $activity = Activity::get()->setWhere($activityWhere)->execute()->first();
+    $this->assertNull($activity, 'Should not create contribution activity for pending contribution');
+
+    Contribution::update()
+      ->addWhere('id', '=', $contribution['id'])
+      ->addValue('contribution_status_id:name', 'Completed')
+      ->execute();
+
+    $activity = Activity::get()->setWhere($activityWhere)->execute()->first();
+    $this->assertEquals($campaignId, $activity['campaign_id'], 'Should have created contribution activity with campaign');
+
+    $newCampaignId = $this->campaignCreate();
+    Contribution::update()
+      ->addWhere('id', '=', $contribution['id'])
+      ->addValue('campaign_id', $newCampaignId)
+      ->execute();
+
+    $activity = Activity::get()->setWhere($activityWhere)->execute()->first();
+    $this->assertEquals($newCampaignId, $activity['campaign_id'], 'Should have updated contribution activity to new campaign');
+
+    Contribution::update()
+      ->addWhere('id', '=', $contribution['id'])
+      ->addValue('campaign_id', NULL)
+      ->execute();
+
+    $activity = Activity::get()->setWhere($activityWhere)->execute()->first();
+    $this->assertNull($activity['campaign_id'], 'Should have removed campaign from contribution activity');
   }
 
 }

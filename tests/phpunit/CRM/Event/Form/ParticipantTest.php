@@ -8,6 +8,7 @@
  */
 class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
 
+  use CRMTraits_Financial_OrderTrait;
   /**
    * Options on the from Email address array.
    *
@@ -21,17 +22,11 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
   }
 
   /**
-   * CHeck that all tests that have created payments have created them with the right financial entities.
+   * Should financials be checked after the test but before tear down.
    *
-   * Ideally this would be on CiviUnitTestCase but many classes would still fail. Also, it might
-   * be good if it only ran on tests that created at least one contribution.
-   *
-   * @throws \CRM_Core_Exception
+   * @var bool
    */
-  protected function assertPostConditions() {
-    $this->validateAllPayments();
-    $this->validateAllContributions();
-  }
+  protected $isValidateFinancialsOnPostAssert = TRUE;
 
   /**
    * Initial test of submit function.
@@ -526,9 +521,10 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
       'register_date' => date('Ymd'),
       'status_id' => 1,
       'role_id' => 1,
+      $this->getPriceFieldKey() => $this->getPriceFieldValueID(),
+      'priceSetId' => $this->getPriceSetID(),
       'event_id' => $this->getEventID(),
       'record_contribution' => TRUE,
-      'amount' => 100,
       'amount_level' => 'blah',
       'financial_type_id' => 1,
     ]);
@@ -717,7 +713,7 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
       'contact_id' => $this->getContactID(),
       'amount' => 1550.55,
       'currency' => 'USD',
-      'status_id' => CRM_Core_PseudoConstant::getKey('CRM_Financial_BAO_FinancialItem', 'status_id', 'Unpaid'),
+      'status_id' => CRM_Core_PseudoConstant::getKey('CRM_Financial_BAO_FinancialItem', 'status_id', 'Partially paid'),
       'entity_table' => 'civicrm_line_item',
       'entity_id' => $lineItem['id'],
       'financial_account_id' => 4,
@@ -823,13 +819,13 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
-  public function testTransferParticipantRegistration() {
+  public function testTransferParticipantRegistration(): void {
     //Register a contact to a sample event.
-    $this->createParticipantRecordsFromTwoFieldPriceSet();
-    $contribution = $this->callAPISuccessGetSingle('Contribution', []);
+    $this->createEventOrder();
+    $contribution = $this->callAPISuccessGetSingle('Contribution', ['return' => 'id']);
     //Check line item count of the contribution id before transfer.
     $lineItems = CRM_Price_BAO_LineItem::getLineItemsByContributionID($contribution['id']);
-    $this->assertEquals(count($lineItems), 2);
+    $this->assertCount(2, $lineItems);
     $participantId = CRM_Core_DAO::getFieldValue('CRM_Event_BAO_ParticipantPayment', $contribution['id'], 'participant_id', 'contribution_id');
     /* @var CRM_Event_Form_SelfSvcTransfer $form */
     $form = $this->getFormObject('CRM_Event_Form_SelfSvcTransfer');
@@ -838,7 +834,7 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
 
     //Assert participant is transferred to $toContactId.
     $participant = $this->callAPISuccess('Participant', 'getsingle', [
-      'return' => ["transferred_to_contact_id"],
+      'return' => ['transferred_to_contact_id'],
       'id' => $participantId,
     ]);
     $this->assertEquals($participant['transferred_to_contact_id'], $toContactId);
@@ -851,7 +847,12 @@ class CRM_Event_Form_ParticipantTest extends CiviUnitTestCase {
 
     //Check line item count of the contribution id remains the same.
     $lineItems = CRM_Price_BAO_LineItem::getLineItemsByContributionID($contribution['id']);
-    $this->assertEquals(count($lineItems), 2);
+    $this->assertCount(2, $lineItems);
+    // There should be 2 participant payments on the contribution & 0 others existing.
+    $this->callAPISuccessGetCount('ParticipantPayment', ['contribution_id' => $contribution['id']], 2);
+    $this->callAPISuccessGetCount('ParticipantPayment', [], 2);
+    $this->callAPISuccessGetCount('ParticipantPayment', ['participant_id' => $toParticipant['id']], 1);
+    $this->callAPISuccessGetCount('ParticipantPayment', ['participant_id' => $participantId], 0);
   }
 
   /**

@@ -36,7 +36,7 @@ class CRM_Admin_Form_Setting_UF extends CRM_Admin_Form_Setting {
       $this->_settings['wpBasePage'] = CRM_Core_BAO_Setting::SYSTEM_PREFERENCES_NAME;
     }
 
-    CRM_Utils_System::setTitle(
+    $this->setTitle(
       ts('Settings - %1 Integration', [1 => $this->_uf])
     );
 
@@ -45,7 +45,13 @@ class CRM_Admin_Form_Setting_UF extends CRM_Admin_Form_Setting {
     }
 
     // find out if drupal has its database prefixed
-    global $databases;
+    if ($this->_uf == 'Drupal8') {
+      $databases['default'] = Drupal\Core\Database\Database::getConnectionInfo('default');
+    }
+    else {
+      global $databases;
+    }
+
     $drupal_prefix = '';
     if (isset($databases['default']['default']['prefix'])) {
       if (is_array($databases['default']['default']['prefix'])) {
@@ -65,9 +71,9 @@ class CRM_Admin_Form_Setting_UF extends CRM_Admin_Form_Setting {
       $dsnArray = DB::parseDSN($dsn);
       $tableNames = CRM_Core_DAO::getTableNames();
       asort($tableNames);
-      $tablePrefixes = '$databases[\'default\'][\'default\'][\'prefix\']= array(';
+      $tablePrefixes = '$databases[\'default\'][\'default\'][\'prefix\']= [';
       if ($config->userFramework === 'Backdrop') {
-        $tablePrefixes = '$database_prefix = array(';
+        $tablePrefixes = '$database_prefix = [';
       }
       // add default prefix: the drupal database prefix
       $tablePrefixes .= "\n  'default' => '$drupal_prefix',";
@@ -81,7 +87,7 @@ class CRM_Admin_Form_Setting_UF extends CRM_Admin_Form_Setting {
       foreach ($tableNames as $tableName) {
         $tablePrefixes .= "\n  '" . str_pad($tableName . "'", 41) . " => '{$prefix}',";
       }
-      $tablePrefixes .= "\n);";
+      $tablePrefixes .= "\n];";
       $this->assign('tablePrefixes', $tablePrefixes);
     }
 

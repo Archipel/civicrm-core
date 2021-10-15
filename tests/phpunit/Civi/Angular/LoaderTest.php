@@ -46,10 +46,16 @@ class LoaderTest extends \CiviUnitTestCase {
    * @param $expectedPermissions
    */
   public function testSettingFactory($module, $expectedSettingCount, $expectedCallbackCount, $expectedPermissions) {
-    (new \Civi\Angular\AngularLoader())
-      ->setModules([$module])
-      ->useApp()
-      ->load();
+    $loader = \Civi::service('angularjs.loader');
+    $loader->addModules([$module]);
+    $loader->useApp();
+
+    // Load angular resources.
+    //
+    // It seems like calling something like
+    //   \CRM_Core_Region::instance('html-header')->render('');
+    // would be more realistic but then the test fails. Maybe a future todo.
+    \Civi::dispatcher()->dispatch('civi.region.render', \Civi\Core\Event\GenericHookEvent::create(['region' => \CRM_Core_Region::instance('html-header')]));
 
     // Run factory callbacks
     $actual = \Civi::resources()->getSettings();

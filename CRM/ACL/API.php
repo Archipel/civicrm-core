@@ -38,8 +38,11 @@ class CRM_ACL_API {
    *
    * @return bool
    *   true if yes, else false
+   *
+   * @deprecated
    */
   public static function check($str, $contactID = NULL) {
+    \CRM_Core_Error::deprecatedWarning(__CLASS__ . '::' . __FUNCTION__ . ' is deprecated.');
     if ($contactID == NULL) {
       $contactID = CRM_Core_Session::getLoggedInContactID();
     }
@@ -153,12 +156,7 @@ class CRM_ACL_API {
       $contactID = CRM_Core_Session::getLoggedInContactID();
     }
 
-    if (!$contactID) {
-      // anonymous user
-      $contactID = 0;
-    }
-
-    return CRM_ACL_BAO_ACL::group($type, $contactID, $tableName, $allGroups, $includedGroups);
+    return CRM_ACL_BAO_ACL::group($type, (int) $contactID, $tableName, $allGroups, $includedGroups);
   }
 
   /**

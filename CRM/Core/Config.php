@@ -281,6 +281,8 @@ class CRM_Core_Config extends CRM_Core_Config_MagicMerge {
     // clear all caches
     self::clearDBCache();
     Civi::cache('session')->clear();
+    Civi::cache('metadata')->clear();
+    CRM_Core_DAO_AllCoreTables::reinitializeCache();
     CRM_Utils_System::flushCache();
 
     if ($sessionReset) {
@@ -426,18 +428,6 @@ class CRM_Core_Config extends CRM_Core_Config_MagicMerge {
 
     if ($path && preg_match('/^civicrm\/upgrade(\/.*)?$/', $path)) {
       return TRUE;
-    }
-
-    if ($path && preg_match('/^civicrm\/ajax\/l10n-js/', $path)
-      && !empty($_SERVER['HTTP_REFERER'])
-    ) {
-      $ref = parse_url($_SERVER['HTTP_REFERER']);
-      if (
-        (!empty($ref['path']) && preg_match('/civicrm\/upgrade/', $ref['path'])) ||
-        (!empty($ref['query']) && preg_match('/civicrm\/upgrade/', urldecode($ref['query'])))
-      ) {
-        return TRUE;
-      }
     }
 
     return FALSE;

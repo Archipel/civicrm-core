@@ -19,17 +19,28 @@
 
 namespace api\v4\Entity;
 
+use api\v4\Traits\CheckAccessTrait;
+use api\v4\Traits\OptionCleanupTrait;
+use api\v4\Traits\TableDropperTrait;
+use Civi\API\Exception\UnauthorizedException;
+use Civi\Api4\CustomField;
+use Civi\Api4\CustomGroup;
 use Civi\Api4\Entity;
 use api\v4\UnitTestCase;
+use Civi\Api4\Event\ValidateValuesEvent;
+use Civi\Api4\Service\Spec\CustomFieldSpec;
+use Civi\Api4\Service\Spec\FieldSpec;
 use Civi\Api4\Utils\CoreUtil;
+use Civi\Test\HookInterface;
 
 /**
  * @group headless
  */
-class ConformanceTest extends UnitTestCase {
+class ConformanceTest extends UnitTestCase implements HookInterface {
 
-  use \api\v4\Traits\TableDropperTrait;
-  use \api\v4\Traits\OptionCleanupTrait {
+  use CheckAccessTrait;
+  use TableDropperTrait;
+  use OptionCleanupTrait {
     setUp as setUpOptionCleanup;
   }
 
@@ -42,20 +53,31 @@ class ConformanceTest extends UnitTestCase {
    * Set up baseline for testing
    */
   public function setUp(): void {
-    $tablesToTruncate = [
-      'civicrm_case_type',
-      'civicrm_custom_group',
-      'civicrm_custom_field',
-      'civicrm_group',
-      'civicrm_event',
-      'civicrm_participant',
-    ];
-    $this->dropByPrefix('civicrm_value_myfavorite');
-    $this->cleanup(['tablesToTruncate' => $tablesToTruncate]);
     $this->setUpOptionCleanup();
+    $this->loadDataSet('CaseType');
     $this->loadDataSet('ConformanceTest');
     $this->creationParamProvider = \Civi::container()->get('test.param_provider');
     parent::setUp();
+    $this->resetCheckAccess();
+  }
+
+  /**
+   * @throws \API_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function tearDown(): void {
+    CustomField::delete()->addWhere('id', '>', 0)->execute();
+    CustomGroup::delete()->addWhere('id', '>', 0)->execute();
+    $tablesToTruncate = [
+      'civicrm_case_type',
+      'civicrm_group',
+      'civicrm_event',
+      'civicrm_participant',
+      'civicrm_batch',
+      'civicrm_product',
+    ];
+    $this->cleanup(['tablesToTruncate' => $tablesToTruncate]);
+    parent::tearDown();
   }
 
   /**
@@ -123,7 +145,7 @@ class ConformanceTest extends UnitTestCase {
    *
    * @throws \API_Exception
    */
-  public function testConformance($entity): void {
+  public function testConformance(string $entity): void {
     $entityClass = CoreUtil::getApiClass($entity);
 
     $this->checkEntityInfo($entityClass);
@@ -135,13 +157,16 @@ class ConformanceTest extends UnitTestCase {
     }
 
     $this->checkFields($entityClass, $entity);
+    $this->checkCreationDenied($entity, $entityClass);
     $id = $this->checkCreation($entity, $entityClass);
     $this->checkGet($entityClass, $id, $entity);
+    $this->checkGetAllowed($entityClass, $id, $entity);
     $this->checkGetCount($entityClass, $id, $entity);
     $this->checkUpdateFailsFromCreate($entityClass, $id);
     $this->checkWrongParamType($entityClass);
     $this->checkDeleteWithNoId($entityClass);
-    $this->checkDeletion($entityClass, $id);
+    $this->checkDeletionDenied($entityClass, $id, $entity);
+    $this->checkDeletionAllowed($entityClass, $id, $entity);
     $this->checkPostDelete($entityClass, $id, $entity);
   }
 
@@ -155,6 +180,14 @@ class ConformanceTest extends UnitTestCase {
     $this->assertNotEmpty($info['title_plural']);
     $this->assertNotEmpty($info['type']);
     $this->assertNotEmpty($info['description']);
+    $this->assertIsArray($info['primary_key']);
+    $this->assertNotEmpty($info['primary_key']);
+    $this->assertRegExp(';^\d\.\d+$;', $info['since']);
+    $this->assertContains($info['searchable'], ['primary', 'secondary', 'bridge', 'none']);
+    // Bridge must be between exactly 2 entities
+    if (in_array('EntityBridge', $info['type'], TRUE)) {
+      $this->assertCount(2, $info['bridge']);
+    }
   }
 
   /**
@@ -165,14 +198,28 @@ class ConformanceTest extends UnitTestCase {
    */
   protected function checkFields($entityClass, $entity) {
     $fields = $entityClass::getFields(FALSE)
-      ->setIncludeCustom(FALSE)
+      ->addWhere('type', '=', 'Field')
       ->execute()
       ->indexBy('name');
 
     $errMsg = sprintf('%s is missing required ID field', $entity);
     $subset = ['data_type' => 'Integer'];
 
-    $this->assertArraySubset($subset, $fields['id'], $errMsg);
+    $this->assertArrayHasKey('data_type', $fields['id'], $errMsg);
+    $this->assertEquals('Integer', $fields['id']['data_type']);
+
+    // Ensure that the getFields (FieldSpec) format is generally consistent.
+    foreach ($fields as $field) {
+      $isNotNull = function($v) {
+        return $v !== NULL;
+      };
+      $class = empty($field['custom_field_id']) ? FieldSpec::class : CustomFieldSpec::class;
+      $spec = (new $class($field['name'], $field['entity']))->loadArray($field, TRUE);
+      $this->assertEquals(
+        array_filter($field, $isNotNull),
+        array_filter($spec->toArray(), $isNotNull)
+      );
+    }
   }
 
   /**
@@ -198,19 +245,67 @@ class ConformanceTest extends UnitTestCase {
    * @return mixed
    */
   protected function checkCreation($entity, $entityClass) {
+    $isReadOnly = $this->isReadOnly($entityClass);
+
+    $hookLog = [];
+    $onValidate = function(ValidateValuesEvent $e) use (&$hookLog) {
+      $hookLog[$e->getEntityName()][$e->getActionName()] = 1 + ($hookLog[$e->getEntityName()][$e->getActionName()] ?? 0);
+    };
+    \Civi::dispatcher()->addListener('civi.api4.validate', $onValidate);
+    \Civi::dispatcher()->addListener('civi.api4.validate::' . $entity, $onValidate);
+
+    $this->setCheckAccessGrants(["{$entity}::create" => TRUE]);
+    $this->assertEquals(0, $this->checkAccessCounts["{$entity}::create"]);
+
     $requiredParams = $this->creationParamProvider->getRequired($entity);
     $createResult = $entityClass::create()
       ->setValues($requiredParams)
-      ->setCheckPermissions(FALSE)
+      ->setCheckPermissions(!$isReadOnly)
       ->execute()
       ->first();
 
     $this->assertArrayHasKey('id', $createResult, "create missing ID");
     $id = $createResult['id'];
-
     $this->assertGreaterThanOrEqual(1, $id, "$entity ID not positive");
+    if (!$isReadOnly) {
+      $this->assertEquals(1, $this->checkAccessCounts["{$entity}::create"]);
+    }
+    $this->resetCheckAccess();
+
+    $this->assertEquals(2, $hookLog[$entity]['create']);
+    \Civi::dispatcher()->removeListener('civi.api4.validate', $onValidate);
+    \Civi::dispatcher()->removeListener('civi.api4.validate::' . $entity, $onValidate);
 
     return $id;
+  }
+
+  /**
+   * @param string $entity
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
+   *
+   * @return mixed
+   */
+  protected function checkCreationDenied($entity, $entityClass) {
+    $this->setCheckAccessGrants(["{$entity}::create" => FALSE]);
+    $this->assertEquals(0, $this->checkAccessCounts["{$entity}::create"]);
+
+    $requiredParams = $this->creationParamProvider->getRequired($entity);
+
+    try {
+      $entityClass::create()
+        ->setValues($requiredParams)
+        ->setCheckPermissions(TRUE)
+        ->execute()
+        ->first();
+      $this->fail("{$entityClass}::create() should throw an authorization failure.");
+    }
+    catch (UnauthorizedException $e) {
+      // OK, expected exception
+    }
+    if (!$this->isReadOnly($entityClass)) {
+      $this->assertEquals(1, $this->checkAccessCounts["{$entity}::create"]);
+    }
+    $this->resetCheckAccess();
   }
 
   /**
@@ -227,7 +322,7 @@ class ConformanceTest extends UnitTestCase {
     catch (\API_Exception $e) {
       $exceptionThrown = $e->getMessage();
     }
-    $this->assertContains('id', $exceptionThrown);
+    $this->assertStringContainsString('id', $exceptionThrown);
   }
 
   /**
@@ -246,6 +341,26 @@ class ConformanceTest extends UnitTestCase {
   }
 
   /**
+   * Use a permissioned request for `get()`, with access grnted
+   * via checkAccess event.
+   *
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
+   * @param int $id
+   * @param string $entity
+   */
+  protected function checkGetAllowed($entityClass, $id, $entity) {
+    $this->setCheckAccessGrants(["{$entity}::get" => TRUE]);
+    $getResult = $entityClass::get()
+      ->addWhere('id', '=', $id)
+      ->execute();
+
+    $errMsg = sprintf('Failed to fetch a %s after creation', $entity);
+    $this->assertEquals($id, $getResult->first()['id'], $errMsg);
+    $this->assertEquals(1, $getResult->count(), $errMsg);
+    $this->resetCheckAccess();
+  }
+
+  /**
    * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    * @param int $id
    * @param string $entity
@@ -261,7 +376,6 @@ class ConformanceTest extends UnitTestCase {
     $getResult = $entityClass::get(FALSE)
       ->selectRowCount()
       ->execute();
-    $errMsg = sprintf('%s getCount failed', $entity);
     $this->assertGreaterThanOrEqual(1, $getResult->count(), $errMsg);
   }
 
@@ -269,15 +383,14 @@ class ConformanceTest extends UnitTestCase {
    * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    */
   protected function checkDeleteWithNoId($entityClass) {
-    $exceptionThrown = '';
     try {
       $entityClass::delete()
         ->execute();
+      $this->fail("$entityClass should require ID to delete.");
     }
     catch (\API_Exception $e) {
-      $exceptionThrown = $e->getMessage();
+      // OK
     }
-    $this->assertContains('required', $exceptionThrown);
   }
 
   /**
@@ -293,21 +406,60 @@ class ConformanceTest extends UnitTestCase {
     catch (\API_Exception $e) {
       $exceptionThrown = $e->getMessage();
     }
-    $this->assertContains('debug', $exceptionThrown);
-    $this->assertContains('type', $exceptionThrown);
+    $this->assertStringContainsString('debug', $exceptionThrown);
+    $this->assertStringContainsString('type', $exceptionThrown);
   }
 
   /**
+   * Delete an entity - while having a targeted grant (hook_civirm_checkAccess).
+   *
    * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    * @param int $id
+   * @param string $entity
    */
-  protected function checkDeletion($entityClass, $id) {
-    $deleteResult = $entityClass::delete(FALSE)
+  protected function checkDeletionAllowed($entityClass, $id, $entity) {
+    $this->setCheckAccessGrants(["{$entity}::delete" => TRUE]);
+    $this->assertEquals(0, $this->checkAccessCounts["{$entity}::delete"]);
+    $isReadOnly = $this->isReadOnly($entityClass);
+
+    $deleteResult = $entityClass::delete()
+      ->setCheckPermissions(!$isReadOnly)
       ->addWhere('id', '=', $id)
       ->execute();
 
     // should get back an array of deleted id
     $this->assertEquals([['id' => $id]], (array) $deleteResult);
+    if (!$isReadOnly) {
+      $this->assertEquals(1, $this->checkAccessCounts["{$entity}::delete"]);
+    }
+    $this->resetCheckAccess();
+  }
+
+  /**
+   * Attempt to delete an entity while having explicitly denied permission (hook_civicrm_checkAccess).
+   *
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
+   * @param int $id
+   * @param string $entity
+   */
+  protected function checkDeletionDenied($entityClass, $id, $entity) {
+    $this->setCheckAccessGrants(["{$entity}::delete" => FALSE]);
+    $this->assertEquals(0, $this->checkAccessCounts["{$entity}::delete"]);
+
+    try {
+      $entityClass::delete()
+        ->addWhere('id', '=', $id)
+        ->execute();
+      $this->fail("{$entity}::delete should throw an authorization failure.");
+    }
+    catch (UnauthorizedException $e) {
+      // OK
+    }
+
+    if (!$this->isReadOnly($entityClass)) {
+      $this->assertEquals(1, $this->checkAccessCounts["{$entity}::delete"]);
+    }
+    $this->resetCheckAccess();
   }
 
   /**
@@ -340,6 +492,14 @@ class ConformanceTest extends UnitTestCase {
       $result[$name] = [$name];
     }
     return $result;
+  }
+
+  /**
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
+   * @return bool
+   */
+  protected function isReadOnly($entityClass) {
+    return in_array('ReadOnly', $entityClass::getInfo()['type'], TRUE);
   }
 
 }

@@ -22,6 +22,7 @@ namespace api\v4\Action;
 use Civi\Api4\Contact;
 use Civi\Api4\CustomField;
 use Civi\Api4\CustomGroup;
+use Civi\Api4\OptionGroup;
 use Civi\Api4\Relationship;
 use Civi\Api4\RelationshipCache;
 
@@ -30,8 +31,10 @@ use Civi\Api4\RelationshipCache;
  */
 class BasicCustomFieldTest extends BaseCustomValueTest {
 
-  public function testWithSingleField() {
-
+  /**
+   * @throws \API_Exception
+   */
+  public function testWithSingleField(): void {
     $customGroup = CustomGroup::create(FALSE)
       ->addValue('name', 'MyIndividualFields')
       ->addValue('extends', 'Individual')
@@ -47,7 +50,7 @@ class BasicCustomFieldTest extends BaseCustomValueTest {
 
     // Individual fields should show up when contact_type = null|Individual but not other contact types
     $getFields = Contact::getFields(FALSE);
-    $this->assertContains('MyIndividualFields.FavColor', $getFields->execute()->column('name'));
+    $this->assertEquals('Custom', $getFields->execute()->indexBy('name')['MyIndividualFields.FavColor']['type']);
     $this->assertContains('MyIndividualFields.FavColor', $getFields->setValues(['contact_type' => 'Individual'])->execute()->column('name'));
     $this->assertNotContains('MyIndividualFields.FavColor', $getFields->setValues(['contact_type' => 'Household'])->execute()->column('name'));
 
@@ -84,6 +87,7 @@ class BasicCustomFieldTest extends BaseCustomValueTest {
   }
 
   public function testWithTwoFields() {
+    $optionGroupCount = OptionGroup::get(FALSE)->selectRowCount()->execute()->count();
 
     // First custom set
     CustomGroup::create(FALSE)
@@ -116,6 +120,9 @@ class BasicCustomFieldTest extends BaseCustomValueTest {
         ->addValue('html_type', 'Text')
         ->addValue('data_type', 'String'))
       ->execute();
+
+    // Test that no new option groups have been created (these are text fields with no options)
+    $this->assertEquals($optionGroupCount, OptionGroup::get(FALSE)->selectRowCount()->execute()->count());
 
     $contactId1 = Contact::create(FALSE)
       ->addValue('first_name', 'Johann')
@@ -268,6 +275,87 @@ class BasicCustomFieldTest extends BaseCustomValueTest {
 
     $this->assertCount(2, $results);
     $this->assertEquals('Buddy', $results[0]["$cgName.PetName"]);
+  }
+
+  public function testMultipleJoinsToCustomTable() {
+    $cgName = uniqid('My');
+
+    CustomGroup::create(FALSE)
+      ->addValue('name', $cgName)
+      ->addValue('extends', 'Contact')
+      ->addChain('field1', CustomField::create()
+        ->addValue('label', 'FavColor')
+        ->addValue('custom_group_id', '$id')
+        ->addValue('html_type', 'Text')
+        ->addValue('data_type', 'String'))
+      ->execute();
+
+    $parent = Contact::create(FALSE)
+      ->addValue('first_name', 'Parent')
+      ->addValue('last_name', 'Tester')
+      ->addValue("$cgName.FavColor", 'Purple')
+      ->execute()
+      ->first()['id'];
+
+    $child = Contact::create(FALSE)
+      ->addValue('first_name', 'Child')
+      ->addValue('last_name', 'Tester')
+      ->addValue("$cgName.FavColor", 'Cyan')
+      ->execute()
+      ->first()['id'];
+
+    Relationship::create(FALSE)
+      ->addValue('contact_id_a', $parent)
+      ->addValue('contact_id_b', $child)
+      ->addValue('relationship_type_id', 1)
+      ->execute();
+
+    $results = Contact::get(FALSE)
+      ->addSelect('first_name', 'child.first_name', "$cgName.FavColor", "child.$cgName.FavColor")
+      ->addWhere('id', '=', $parent)
+      ->addJoin('Contact AS child', 'INNER', 'RelationshipCache', ['id', '=', 'child.far_contact_id'])
+      ->execute();
+
+    $this->assertCount(1, $results);
+    $this->assertEquals('Parent', $results[0]['first_name']);
+    $this->assertEquals('Child', $results[0]['child.first_name']);
+    $this->assertEquals('Purple', $results[0]["$cgName.FavColor"]);
+    $this->assertEquals('Cyan', $results[0]["child.$cgName.FavColor"]);
+  }
+
+  /**
+   * Some types are creating a dummy option group even if we don't have
+   * any option values.
+   * @throws \API_Exception
+   */
+  public function testUndesiredOptionGroupCreation(): void {
+    $optionGroupCount = OptionGroup::get(FALSE)->selectRowCount()->execute()->count();
+
+    $customGroup = CustomGroup::create(FALSE)
+      ->addValue('name', 'MyIndividualFields')
+      ->addValue('extends', 'Individual')
+      ->execute()
+      ->first();
+
+    // This one doesn't make sense to have an option group.
+    CustomField::create(FALSE)
+      ->addValue('label', 'FavColor')
+      ->addValue('custom_group_id', $customGroup['id'])
+      ->addValue('html_type', 'Number')
+      ->addValue('data_type', 'Money')
+      ->execute();
+
+    // This one might be ok if we planned to then use the autocreated option
+    // group, but if we go on to create our own after then we have an extra
+    // unused group.
+    CustomField::create(FALSE)
+      ->addValue('label', 'FavMovie')
+      ->addValue('custom_group_id', $customGroup['id'])
+      ->addValue('html_type', 'Select')
+      ->addValue('data_type', 'String')
+      ->execute();
+
+    $this->assertEquals($optionGroupCount, OptionGroup::get(FALSE)->selectRowCount()->execute()->count());
   }
 
 }

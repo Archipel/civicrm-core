@@ -31,7 +31,13 @@ class SchemaMapperTest extends UnitTestCase {
 
   public function testWillHaveNoPathWithNoTables() {
     $map = new SchemaMap();
-    $this->assertEmpty($map->getPath('foo', 'bar'));
+    try {
+      $map->getLink('foo', 'bar');
+    }
+    catch (\API_Exception $e) {
+      $exception = $e;
+    }
+    $this->assertStringContainsString('not found', $exception->getMessage());
   }
 
   public function testWillHavePathWithSingleJump() {
@@ -43,35 +49,7 @@ class SchemaMapperTest extends UnitTestCase {
     $map = new SchemaMap();
     $map->addTables([$phoneTable, $locationTable]);
 
-    $this->assertNotEmpty($map->getPath('civicrm_phone', 'location'));
-  }
-
-  public function testWillHavePathWithDoubleJump() {
-    $activity = new Table('activity');
-    $activityContact = new Table('activity_contact');
-    $middleLink = new Joinable('activity_contact', 'activity_id');
-    $contactLink = new Joinable('contact', 'id');
-    $activity->addTableLink('id', $middleLink);
-    $activityContact->addTableLink('contact_id', $contactLink);
-
-    $map = new SchemaMap();
-    $map->addTables([$activity, $activityContact]);
-
-    $this->assertNotEmpty($map->getPath('activity', 'contact'));
-  }
-
-  public function testPathWithTripleJoin() {
-    $first = new Table('first');
-    $second = new Table('second');
-    $third = new Table('third');
-    $first->addTableLink('id', new Joinable('second', 'id'));
-    $second->addTableLink('id', new Joinable('third', 'id'));
-    $third->addTableLink('id', new Joinable('fourth', 'id'));
-
-    $map = new SchemaMap();
-    $map->addTables([$first, $second, $third]);
-
-    $this->assertNotEmpty($map->getPath('first', 'fourth'));
+    $this->assertNotEmpty($map->getLink('civicrm_phone', 'location'));
   }
 
   public function testCircularReferenceWillNotBreakIt() {
@@ -85,7 +63,7 @@ class SchemaMapperTest extends UnitTestCase {
     $map = new SchemaMap();
     $map->addTables([$contactTable, $carTable]);
 
-    $this->assertEmpty($map->getPath('contact', 'foo'));
+    $this->assertEmpty($map->getLink('contact', 'foo'));
   }
 
   public function testCannotGoOverJoinLimit() {
@@ -101,7 +79,7 @@ class SchemaMapperTest extends UnitTestCase {
     $map = new SchemaMap();
     $map->addTables([$first, $second, $third, $fourth]);
 
-    $this->assertEmpty($map->getPath('first', 'fifth'));
+    $this->assertEmpty($map->getLink('first', 'fifth'));
   }
 
 }

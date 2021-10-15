@@ -232,6 +232,23 @@ class CRM_Upgrade_Incremental_MessageTemplates {
           ['name' => 'contribution_invoice_receipt', 'type' => 'html'],
         ],
       ],
+      [
+        'version' => '5.38.alpha1',
+        'upgrade_descriptor' => ts('Fix Petition Confirmation email having a blank space at the end of url'),
+        'templates' => [
+          ['name' => 'petition_confirmation_needed', 'type' => 'html'],
+        ],
+      ],
+      [
+        'version' => '5.38.alpha1',
+        'upgrade_descriptor' => ts('Fix Pledge and PCP urls to go to the front end site rather than backend site'),
+        'templates' => [
+          ['name' => 'pcp_notify', 'type' => 'html'],
+          ['name' => 'pcp_notify', 'type' => 'text'],
+          ['name' => 'pledge_reminder', 'type' => 'html'],
+          ['name' => 'pledge_reminder', 'type' => 'text'],
+        ],
+      ],
     ];
   }
 
@@ -251,6 +268,42 @@ class CRM_Upgrade_Incremental_MessageTemplates {
       }
     }
     return $return;
+  }
+
+  /**
+   * Replace a token with the new preferred option.
+   *
+   * @param string $workflowName
+   * @param string $old
+   * @param string $new
+   */
+  public function replaceTokenInTemplate(string $workflowName, string $old, string $new): void {
+    $oldToken = '{' . $old . '}';
+    $newToken = '{' . $new . '}';
+    CRM_Core_DAO::executeQuery("UPDATE civicrm_msg_template
+      SET
+        msg_text = REPLACE(msg_text, '$oldToken', '$newToken'),
+        msg_subject = REPLACE(msg_subject, '$oldToken', '$newToken'),
+        msg_html = REPLACE(msg_html, '$oldToken', '$newToken')
+      WHERE workflow_name = '$workflowName'
+    ");
+  }
+
+  /**
+   * Replace a token with the new preferred option.
+   *
+   * @param string $old
+   * @param string $new
+   */
+  public function replaceTokenInActionSchedule(string $old, string $new): void {
+    $oldToken = '{' . $old . '}';
+    $newToken = '{' . $new . '}';
+    CRM_Core_DAO::executeQuery("UPDATE civicrm_action_schedule
+      SET
+        body_text = REPLACE(body_text, '$oldToken', '$newToken'),
+        subject = REPLACE(subject, '$oldToken', '$newToken'),
+        body_html = REPLACE(body_html, '$oldToken', '$newToken')
+    ");
   }
 
   /**

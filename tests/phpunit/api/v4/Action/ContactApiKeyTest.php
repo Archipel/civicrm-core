@@ -57,10 +57,10 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
 
     // Can also be fetched via join
     $email = Email::get()
-      ->addSelect('contact.api_key')
+      ->addSelect('contact_id.api_key')
       ->addWhere('id', '=', $contact['email']['id'])
       ->execute()->first();
-    $this->assertEquals($key, $email['contact.api_key']);
+    $this->assertEquals($key, $email['contact_id.api_key']);
     $this->assertFalse($isSafe($email), "Should reveal secret details ($key): " . var_export($email, 1));
 
     // Remove permission and we should not see the key
@@ -70,18 +70,18 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
       ->addSelect('api_key')
       ->setDebug(TRUE)
       ->execute();
-    $this->assertContains('api_key', $result->debug['undefined_fields']);
+    $this->assertContains('api_key', $result->debug['unauthorized_fields']);
     $this->assertArrayNotHasKey('api_key', $result[0]);
     $this->assertTrue($isSafe($result[0]), "Should NOT reveal secret details ($key): " . var_export($result[0], 1));
 
     // Also not available via join
     $email = Email::get()
-      ->addSelect('contact.api_key')
+      ->addSelect('contact_id.api_key')
       ->addWhere('id', '=', $contact['email']['id'])
       ->setDebug(TRUE)
       ->execute();
-    $this->assertContains('contact.api_key', $email->debug['undefined_fields']);
-    $this->assertArrayNotHasKey('contact.api_key', $email[0]);
+    $this->assertContains('contact_id.api_key', $email->debug['unauthorized_fields']);
+    $this->assertArrayNotHasKey('contact_id.api_key', $email[0]);
     $this->assertTrue($isSafe($email[0]), "Should NOT reveal secret details ($key): " . var_export($email[0], 1));
 
     $result = Contact::get()
@@ -90,6 +90,84 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
       ->first();
     $this->assertArrayNotHasKey('api_key', $result);
     $this->assertTrue($isSafe($result), "Should NOT reveal secret details ($key): " . var_export($result, 1));
+  }
+
+  public function testApiKeyInWhereAndOrderBy() {
+    \CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviCRM', 'add contacts', 'edit api keys', 'view all contacts', 'edit all contacts'];
+    $keyA = 'a' . \CRM_Utils_String::createRandom(15, \CRM_Utils_String::ALPHANUMERIC);
+    $keyB = 'b' . \CRM_Utils_String::createRandom(15, \CRM_Utils_String::ALPHANUMERIC);
+
+    $firstName = uniqid('name');
+
+    $contactA = Contact::create()
+      ->addValue('first_name', $firstName)
+      ->addValue('last_name', 'KeyA')
+      ->addValue('api_key', $keyA)
+      ->execute()
+      ->first();
+
+    $contactB = Contact::create()
+      ->addValue('first_name', $firstName)
+      ->addValue('last_name', 'KeyB')
+      ->addValue('api_key', $keyB)
+      ->execute()
+      ->first();
+
+    // With sufficient permission we can ORDER BY the key
+    $result = Contact::get()
+      ->addSelect('id')
+      ->addWhere('first_name', '=', $firstName)
+      ->addOrderBy('api_key', 'DESC')
+      ->addOrderBy('id', 'ASC')
+      ->execute();
+    $this->assertEquals($contactB['id'], $result[0]['id']);
+
+    // We can also use the key in WHERE clause
+    $result = Contact::get()
+      ->addSelect('id')
+      ->addWhere('api_key', '=', $keyB)
+      ->execute();
+    $this->assertEquals($contactB['id'], $result->single()['id']);
+
+    // We can also use the key in HAVING clause
+    $result = Contact::get()
+      ->addSelect('id', 'api_key')
+      ->addHaving('api_key', '=', $keyA)
+      ->execute();
+    $this->assertEquals($contactA['id'], $result->single()['id']);
+
+    // Remove permission
+    \CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviCRM', 'view debug output', 'view all contacts'];
+
+    // Assert we cannot ORDER BY the key
+    $result = Contact::get()
+      ->addSelect('id')
+      ->addWhere('first_name', '=', $firstName)
+      ->addOrderBy('api_key', 'DESC')
+      ->addOrderBy('id', 'ASC')
+      ->setDebug(TRUE)
+      ->execute();
+    $this->assertEquals($contactA['id'], $result[0]['id']);
+    $this->assertContains('api_key', $result->debug['unauthorized_fields']);
+
+    // Assert we cannot use the key in WHERE clause
+    $result = Contact::get()
+      ->addSelect('id')
+      ->addWhere('api_key', '=', $keyB)
+      ->setDebug(TRUE)
+      ->execute();
+    $this->assertGreaterThan(1, $result->count());
+    $this->assertContains('api_key', $result->debug['unauthorized_fields']);
+
+    // Assert we cannot use the key in HAVING clause
+    $result = Contact::get()
+      ->addSelect('id', 'api_key')
+      ->addHaving('api_key', '=', $keyA)
+      ->setDebug(TRUE)
+      ->execute();
+    $this->assertGreaterThan(1, $result->count());
+    $this->assertContains('api_key', $result->debug['unauthorized_fields']);
+
   }
 
   public function testCreateWithInsufficientPermissions() {
@@ -108,7 +186,7 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
     catch (\Exception $e) {
       $error = $e->getMessage();
     }
-    $this->assertContains('key', $error);
+    $this->assertStringContainsString('key', $error);
   }
 
   public function testGetApiKeyViaJoin() {
@@ -137,14 +215,14 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
     $result = Email::get(FALSE)
       ->addWhere('contact_id', '=', $contact['id'])
       ->addSelect('email')
-      ->addSelect('contact.api_key')
+      ->addSelect('contact_id.api_key')
       ->execute()
       ->first();
     $this->assertFalse($isSafe($result), "Should reveal secret details ($key): " . var_export($result, 1));
 
     $result = Email::get(TRUE)
       ->addWhere('contact_id', '=', $contact['id'])
-      ->addSelect('contact.api_key')
+      ->addSelect('contact_id.api_key')
       ->execute()
       ->first();
     $this->assertTrue($isSafe($result), "Should NOT reveal secret details ($key): " . var_export($result, 1));
@@ -179,7 +257,7 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
       ->execute()
       ->first();
 
-    $this->assertContains('key', $error);
+    $this->assertStringContainsString('key', $error);
 
     // Assert key is still the same
     $this->assertEquals($result['api_key'], $key);
@@ -225,7 +303,7 @@ class ContactApiKeyTest extends \api\v4\UnitTestCase {
       $error = $e->getMessage();
     }
 
-    $this->assertContains('key', $error);
+    $this->assertStringContainsString('key', $error);
 
     $result = Contact::get(FALSE)
       ->addWhere('id', '=', $contact['id'])

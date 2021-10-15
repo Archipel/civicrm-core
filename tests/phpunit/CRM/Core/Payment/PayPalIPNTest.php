@@ -24,6 +24,16 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
   protected $_customFieldID;
 
   /**
+   * Should financials be checked after the test but before tear down.
+   *
+   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
+   * are some test data issues and some real bugs currently blockinng.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = TRUE;
+
+  /**
    * Set up function.
    */
   public function setUp(): void {
@@ -55,7 +65,7 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function testInvoiceSentOnIPNPaymentSuccess() {
+  public function testInvoiceSentOnIPNPaymentSuccess(): void {
     $this->enableTaxAndInvoicing();
 
     $pendingStatusID = CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Pending');
@@ -97,12 +107,18 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test IPN response updates contribution_recur & contribution for first & second contribution.
+   * Test IPN response updates contribution_recur & contribution for first &
+   * second contribution.
    *
-   * The scenario is that a pending contribution exists and the first call will update it to completed.
-   * The second will create a new contribution.
+   * The scenario is that a pending contribution exists and the first call will
+   * update it to completed. The second will create a new contribution.
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function testIPNPaymentRecurSuccess() {
+  public function testIPNPaymentRecurSuccess(): void {
     $this->setupRecurringPaymentProcessorTransaction([], ['total_amount' => '15.00']);
     $mut = new CiviMailUtils($this, TRUE);
     $paypalIPN = new CRM_Core_Payment_PayPalIPN($this->getPaypalRecurTransaction());
@@ -113,7 +129,7 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
     $this->assertEquals(1, $contribution1['contribution_status_id']);
     $this->assertEquals('8XA571746W2698126', $contribution1['trxn_id']);
     // source gets set by processor
-    $this->assertTrue(substr($contribution1['contribution_source'], 0, 20) === 'Online Contribution:');
+    $this->assertEquals('Online Contribution:', substr($contribution1['contribution_source'], 0, 20));
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'getsingle', ['id' => $this->_contributionRecurID]);
     $this->assertEquals(5, $contributionRecur['contribution_status_id']);
     $paypalIPN = new CRM_Core_Payment_PayPalIPN($this->getPaypalRecurSubsequentTransaction());
@@ -140,12 +156,14 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test IPN response updates contribution_recur & contribution for first & second contribution.
+   * Test IPN response updates contribution_recur & contribution for first &
+   * second contribution.
    *
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
+   * @throws \API_Exception
    */
-  public function testIPNPaymentMembershipRecurSuccess() {
+  public function testIPNPaymentMembershipRecurSuccess(): void {
     $durationUnit = 'year';
     $this->setupMembershipRecurringPaymentProcessorTransaction(['duration_unit' => $durationUnit, 'frequency_unit' => $durationUnit]);
     $this->callAPISuccessGetSingle('membership_payment', []);
@@ -191,7 +209,7 @@ class CRM_Core_Payment_PayPalIPNTest extends CiviUnitTestCase {
    * @throws \CRM_Core_Exception
    * @throws \CiviCRM_API3_Exception
    */
-  public function testIPNPaymentInputMembershipRecurSuccess() {
+  public function testIPNPaymentInputMembershipRecurSuccess(): void {
     $durationUnit = 'year';
     $this->setupMembershipRecurringPaymentProcessorTransaction(['duration_unit' => $durationUnit, 'frequency_unit' => $durationUnit]);
     $membershipPayment = $this->callAPISuccessGetSingle('membership_payment', []);

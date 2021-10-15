@@ -43,7 +43,17 @@ class CRM_Utils_QueryFormatterTest extends CiviUnitTestCase {
     }
   }
 
-  public static function tearDownAfterClass() {
+  public function tearDown(): void {
+    parent::tearDown();
+    $idx = new CRM_Core_InnoDBIndexer(FALSE, [
+      'civicrm_contact' => [
+        ['first_name', 'last_name'],
+      ],
+    ]);
+    $idx->fixSchemaDifferences();
+  }
+
+  public static function tearDownAfterClass(): void {
     CRM_Core_DAO::executeQuery('DROP TABLE IF EXISTS civicrm_fts_example');
     parent::tearDownAfterClass();
   }

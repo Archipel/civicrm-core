@@ -10,6 +10,17 @@ class CRM_Event_Form_Registration_ConfirmTest extends CiviUnitTestCase {
 
   use CRMTraits_Profile_ProfileTrait;
 
+
+  /**
+   * Should financials be checked after the test but before tear down.
+   *
+   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
+   * are some test data issues and some real bugs currently blocking.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = TRUE;
+
   public function setUp(): void {
     $this->useTransaction(TRUE);
     parent::setUp();
@@ -95,6 +106,8 @@ class CRM_Event_Form_Registration_ConfirmTest extends CiviUnitTestCase {
    * @dataProvider getThousandSeparators
    */
   public function testPaidSubmit($thousandSeparator) {
+    // @todo - figure out why this doesn't pass validate financials
+    $this->isValidateFinancialsOnPostAssert = FALSE;
     $this->setCurrencySeparators($thousandSeparator);
     $mut = new CiviMailUtils($this);
     $paymentProcessorID = $this->processorCreate();
@@ -222,6 +235,8 @@ class CRM_Event_Form_Registration_ConfirmTest extends CiviUnitTestCase {
    * @throws \Exception
    */
   public function testTaxMultipleParticipant() {
+    // @todo - figure out why this doesn't pass validate financials
+    $this->isValidateFinancialsOnPostAssert = FALSE;
     $mut = new CiviMailUtils($this);
     $params = ['is_monetary' => 1, 'financial_type_id' => 1];
     $event = $this->eventCreate($params);
@@ -299,19 +314,19 @@ class CRM_Event_Form_Registration_ConfirmTest extends CiviUnitTestCase {
     $this->assertEquals($contribution['total_amount'], 440, 'Invalid Tax amount.');
     $mailSent = $mut->getAllMessages();
     $this->assertCount(3, $mailSent, 'Three mails should have been sent to the 3 participants.');
-    $this->assertContains('contactID:::' . $contribution['contact_id'], $mailSent[0]);
-    $this->assertContains('contactID:::' . ($contribution['contact_id'] + 1), $mailSent[1]);
+    $this->assertStringContainsString('contactID:::' . $contribution['contact_id'], $mailSent[0]);
+    $this->assertStringContainsString('contactID:::' . ($contribution['contact_id'] + 1), $mailSent[1]);
 
     $this->callAPISuccess('Payment', 'create', ['total_amount' => 100, 'payment_type_id' => 'Cash', 'contribution_id' => $contribution['id']]);
     $mailSent = $mut->getAllMessages();
     $this->assertCount(6, $mailSent);
 
-    $this->assertContains('participant_status:::Registered', $mailSent[3]);
-    $this->assertContains('Dear Participant2', $mailSent[3]);
+    $this->assertStringContainsString('participant_status:::Registered', $mailSent[3]);
+    $this->assertStringContainsString('Dear Participant2', $mailSent[3]);
 
-    $this->assertContains('contactID:::' . ($contribution['contact_id'] + 1), $mailSent[3]);
-    $this->assertContains('contactID:::' . ($contribution['contact_id'] + 2), $mailSent[4]);
-    $this->assertContains('contactID:::' . $contribution['contact_id'], $mailSent[5]);
+    $this->assertStringContainsString('contactID:::' . ($contribution['contact_id'] + 1), $mailSent[3]);
+    $this->assertStringContainsString('contactID:::' . ($contribution['contact_id'] + 2), $mailSent[4]);
+    $this->assertStringContainsString('contactID:::' . $contribution['contact_id'], $mailSent[5]);
     $this->revertTemplateToReservedTemplate('event_online_receipt', 'text');
   }
 
@@ -349,6 +364,7 @@ class CRM_Event_Form_Registration_ConfirmTest extends CiviUnitTestCase {
       'id' => $event['id'],
       'contributeMode' => 'direct',
       'registerByID' => $this->createLoggedInUser(),
+      'totalAmount' => 0,
       'params' => [
         [
           'qfKey' => 'e6eb2903eae63d4c5c6cc70bfdda8741_2801',

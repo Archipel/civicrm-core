@@ -417,6 +417,7 @@
   </index>
   <field>
     <name>campaign_id</name>
+    <component>CiviCampaign</component>
     <uniqueName>contribution_campaign_id</uniqueName>
     <type>int unsigned</type>
     <title>Campaign ID</title>
@@ -424,9 +425,15 @@
     <comment>The campaign for which this contribution has been triggered.</comment>
     <add>4.1</add>
     <html>
-      <type>Select</type>
+      <type>EntityRef</type>
       <label>Campaign</label>
     </html>
+    <pseudoconstant>
+      <table>civicrm_campaign</table>
+      <keyColumn>id</keyColumn>
+      <labelColumn>title</labelColumn>
+      <prefetch>FALSE</prefetch>
+    </pseudoconstant>
   </field>
   <foreignKey>
     <name>campaign_id</name>

@@ -133,7 +133,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  protected function assertPostConditions() {
+  protected function assertPostConditions(): void {
     $this->validateAllPayments();
   }
 
@@ -142,9 +142,12 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
    *
    * @param string $thousandSeparator
    *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\Payment\Exception\PaymentProcessorException
    * @dataProvider getThousandSeparators
    */
-  public function testSubmit($thousandSeparator) {
+  public function testSubmit(string $thousandSeparator): void {
     $this->setCurrencySeparators($thousandSeparator);
     $form = new CRM_Contribute_Form_Contribution();
     $form->testSubmit([
@@ -162,8 +165,11 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function on the contribution page.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
-  public function testSubmitCreditCard() {
+  public function testSubmitCreditCard(): void {
     $form = new CRM_Contribute_Form_Contribution();
     $form->testSubmit([
       'total_amount' => 50,
@@ -180,8 +186,11 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function on the contribution page.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
-  public function testSubmitCreditCardPayPal() {
+  public function testSubmitCreditCardPayPal(): void {
     $mut = new CiviMailUtils($this, TRUE);
     $mut->clearMessages();
     $form = new CRM_Contribute_Form_Contribution();
@@ -236,8 +245,8 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
       ]),
     ]);
 
-    $this->assertEquals(1, $contribution["count"], "Contribution count should be one.");
-    $this->assertTrue(!empty($contribution["values"][$contribution["id"]]["receipt_date"]), "Receipt date should not be blank.");
+    $this->assertEquals(1, $contribution['count'], 'Contribution count should be one.');
+    $this->assertNotTrue(empty($contribution['values'][$contribution['id']]['receipt_date']), 'Receipt date should not be blank.');
 
     $contact = $this->callAPISuccessGetSingle('Contact', ['id' => $this->_individualId]);
     $this->assertTrue(empty($contact['source']));
@@ -251,6 +260,8 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function on the contribution page
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testSubmitCreditCardWithEmailReceipt() {
     $mut = new CiviMailUtils($this, TRUE);
@@ -374,7 +385,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
    */
   public function testSubmitCreditCardFee() {
     $form = new CRM_Contribute_Form_Contribution();
-    $this->paymentProcessor->setDoDirectPaymentResult(['is_error' => 0, 'trxn_id' => 'tx', 'fee_amount' => .08]);
+    $this->paymentProcessor->setDoDirectPaymentResult(['payment_status_id' => 1, 'is_error' => 0, 'trxn_id' => 'tx', 'fee_amount' => .08]);
     $form->_mode = 'Live';
     $form->testSubmit([
       'total_amount' => 50,
@@ -907,9 +918,13 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    *
    * @param string $thousandSeparator
    *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\Payment\Exception\PaymentProcessorException
+   *
    * @dataProvider getThousandSeparators
    */
-  public function testSubmitUpdate($thousandSeparator) {
+  public function testSubmitUpdate(string $thousandSeparator): void {
     $this->setCurrencySeparators($thousandSeparator);
     $form = new CRM_Contribute_Form_Contribution();
 
@@ -983,7 +998,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     $financialTransactions = $this->callAPISuccess('FinancialTrxn', 'get', ['sequential' => TRUE]);
     $this->assertEquals(3, $financialTransactions['count']);
 
-    list($oldTrxn, $reversedTrxn, $latestTrxn) = $financialTransactions['values'];
+    [$oldTrxn, $reversedTrxn, $latestTrxn] = $financialTransactions['values'];
 
     $this->assertEquals(1200.55, $oldTrxn['total_amount']);
     $this->assertEquals('123AX', $oldTrxn['check_number']);
@@ -1141,7 +1156,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
       ]
     );
     $this->assertEquals(100, $contribution['total_amount']);
-    $this->assertEquals(NULL, $contribution['tax_amount']);
+    $this->assertEquals(0, (float) $contribution['tax_amount']);
     $this->callAPISuccessGetCount('FinancialTrxn', [], 1);
     $this->callAPISuccessGetCount('FinancialItem', [], 1);
     $lineItem = $this->callAPISuccessGetSingle('LineItem', [
@@ -1356,10 +1371,10 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    * @throws \CRM_Core_Exception
    * @throws \CRM_Contribute_Exception_InactiveContributionPageException
    */
-  public function testContributionBasePreProcess() {
+  public function testContributionBasePreProcess(): void {
     //Create contribution page with only pay later enabled.
     $params = [
-      'title' => "Test Contribution Page",
+      'title' => 'Test Contribution Page',
       'financial_type_id' => 1,
       'currency' => 'NZD',
       'goal_amount' => 100,
@@ -1372,7 +1387,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
       'receipt_from_name' => 'Ego Freud',
     ];
 
-    $page1 = $this->callAPISuccess("contribution_page", 'create', $params);
+    $page1 = $this->callAPISuccess('ContributionPage', 'create', $params);
 
     //Execute CRM_Contribute_Form_ContributionBase preProcess
     //and check the assignment of payment processors
@@ -1382,25 +1397,18 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     $_REQUEST['id'] = $page1['id'];
 
     $form->preProcess();
-    $this->assertEquals($form->_paymentProcessor['name'], 'pay_later');
+    $this->assertEquals('pay_later', $form->_paymentProcessor['name']);
 
     //Disable all the payment processor for the contribution page.
     $params['is_pay_later'] = 0;
-    $page2 = $this->callAPISuccess("contribution_page", 'create', $params);
+    $page2 = $this->callAPISuccess('ContributionPage', 'create', $params);
 
     //Assert an exception is thrown on loading the contribution page.
     $form = new CRM_Contribute_Form_ContributionBase();
     $form->controller = new CRM_Core_Controller();
     $_REQUEST['id'] = $page2['id'];
     $form->set('id', $page2['id']);
-    try {
-      $form->preProcess();
-    }
-    catch (CRM_Core_Exception $e) {
-      $this->assertContains("A payment processor configured for this page might be disabled (contact the site administrator for assistance).", $e->getMessage());
-      return;
-    }
-    $this->fail('Exception was expected');
+    $form->preProcess();
   }
 
   /**
@@ -1459,61 +1467,65 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   }
 
   /**
-   * CRM-21711 Test that custom fields on relevant memberships get updated wehn updating multiple memberships
+   * CRM-21711 Test that custom fields on relevant memberships get updated wehn
+   * updating multiple memberships
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function testCustomFieldsOnMembershipGetUpdated() {
+  public function testCustomFieldsOnMembershipGetUpdated(): void {
     $contactID = $this->individualCreate();
     $contactID1 = $this->organizationCreate();
     $contactID2 = $this->organizationCreate();
 
     // create membership types
-    $membershipTypeOne = civicrm_api3('membership_type', 'create', [
+    $membershipTypeOne = civicrm_api3('MembershipType', 'create', [
       'domain_id' => 1,
-      'name' => "One",
+      'name' => 'One',
       'member_of_contact_id' => $contactID1,
-      'duration_unit' => "year",
+      'duration_unit' => 'year',
       'minimum_fee' => 50,
       'duration_interval' => 1,
-      'period_type' => "fixed",
-      'fixed_period_start_day' => "101",
-      'fixed_period_rollover_day' => "1231",
+      'period_type' => 'fixed',
+      'fixed_period_start_day' => '101',
+      'fixed_period_rollover_day' => '1231',
       'financial_type_id' => 1,
       'weight' => 50,
       'is_active' => 1,
-      'visibility' => "Public",
+      'visibility' => 'Public',
     ]);
 
-    $membershipTypeTwo = civicrm_api3('membership_type', 'create', [
+    $membershipTypeTwo = civicrm_api3('MembershipType', 'create', [
       'domain_id' => 1,
-      'name' => "Two",
+      'name' => 'Two',
       'member_of_contact_id' => $contactID2,
-      'duration_unit' => "year",
+      'duration_unit' => 'year',
       'minimum_fee' => 50,
       'duration_interval' => 1,
-      'period_type' => "fixed",
-      'fixed_period_start_day' => "101",
-      'fixed_period_rollover_day' => "1231",
+      'period_type' => 'fixed',
+      'fixed_period_start_day' => '101',
+      'fixed_period_rollover_day' => '1231',
       'financial_type_id' => 1,
       'weight' => 51,
       'is_active' => 1,
-      'visibility' => "Public",
+      'visibility' => 'Public',
     ]);
 
     //create custom Fields
     $membershipCustomFieldsGroup = civicrm_api3('CustomGroup', 'create', [
-      'title' => "Custom Fields on Membership",
-      'extends' => "Membership",
+      'title' => 'Custom Fields on Membership',
+      'extends' => 'Membership',
     ]);
 
     $membershipCustomField = civicrm_api3('CustomField', 'create', [
-      "custom_group_id" => $membershipCustomFieldsGroup['id'],
-      "name" => "my_membership_custom_field",
-      "label" => "Membership Custom Field",
-      "data_type" => "String",
-      "html_type" => "Text",
-      "is_active" => "1",
-      "is_view" => "0",
-      "text_length" => "255",
+      'custom_group_id' => $membershipCustomFieldsGroup['id'],
+      'name' => 'my_membership_custom_field',
+      'label' => 'Membership Custom Field',
+      'data_type' => 'String',
+      'html_type' => 'Text',
+      'is_active' => TRUE,
+      'text_length' => 255,
     ]);
 
     // create profile
@@ -1529,7 +1541,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     ]);
 
     // add custom fields to profile
-    $membershipCustomFieldsProfileFields = civicrm_api3('UFField', 'create', [
+    civicrm_api3('UFField', 'create', [
       "uf_group_id" => $membershipCustomFieldsProfile['id'],
       "field_name" => "custom_" . $membershipCustomField['id'],
       "is_active" => "1",
@@ -1554,7 +1566,6 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
       "is_pay_later" => "1",
       "pay_later_text" => "I will send payment by check",
       "is_partial_payment" => "0",
-      "is_allow_other_amount" => "0",
       "is_email_receipt" => "0",
       "is_active" => "1",
       "amount_block_is_active" => "0",
@@ -1574,14 +1585,12 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
       'extends' => "CiviMember",
       'is_active' => 1,
       "financial_type_id" => "1",
-      "is_quick_config" => "0",
-      "is_reserved" => "0",
-      "entity" => ["civicrm_contribution_page" => [$contribPage1]],
     ]);
+    CRM_Core_DAO::executeQuery("INSERT INTO civicrm_price_set_entity (entity_table, entity_id, price_set_id) VALUES('civicrm_contribution_page', $contribPage1, {$priceSet['id']})");
 
     $priceField = civicrm_api3('PriceField', 'create', [
-      "price_set_id" => $priceSet['id'],
-      "name" => "mt",
+      'price_set_id' => $priceSet['id'],
+      'name' => 'mt',
       "label" => "Membership Types",
       "html_type" => "CheckBox",
       "is_enter_qty" => "0",
@@ -1624,7 +1633,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     ]);
 
     // assign profile with custom fields to contribution page
-    $profile = civicrm_api3('UFJoin', 'create', [
+    civicrm_api3('UFJoin', 'create', [
       'module' => "CiviContribute",
       'weight' => "1",
       'uf_group_id' => $membershipCustomFieldsProfile['id'],
@@ -1635,14 +1644,13 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     $form = new CRM_Contribute_Form_Contribution_Confirm();
     $form->_params = [
       'id' => $contribPage1,
-      "qfKey" => "donotcare",
+      'qfKey' => "donotcare",
       "custom_{$membershipCustomField['id']}" => "Hello",
-      "email-5" => "admin@example.com",
       "priceSetId" => $priceSet['id'],
       'price_set_id' => $priceSet['id'],
       "price_" . $priceField['id'] => [$priceFieldOption1['id'] => 1, $priceFieldOption2['id'] => 1],
-      "invoiceID" => "9a6f7b49358dc31c3604e463b225c5be",
-      "email" => "admin@example.com",
+      'invoiceID' => "9a6f7b49358dc31c3604e463b225c5be",
+      'email' => "admin@example.com",
       "currencyID" => "USD",
       'description' => "Membership Contribution",
       'contact_id' => $contactID,
@@ -1776,7 +1784,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
 
     // The page contents load later by ajax, so there's just the surrounding
     // html available now, but we can check at least one thing while we're here.
-    $this->assertContains("mainTabContainer", $contents);
+    $this->assertStringContainsString("mainTabContainer", $contents);
   }
 
   /**
@@ -2105,7 +2113,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
     ];
 
     $form = new CRM_Contribute_Form_Contribution();
-    $this->assertSame([], $form->formRule($fields, [], $form));
+    $this->assertSame([], $form::formRule($fields, [], $form));
   }
 
   /**

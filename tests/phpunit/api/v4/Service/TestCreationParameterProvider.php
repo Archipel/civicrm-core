@@ -20,6 +20,7 @@
 namespace api\v4\Service;
 
 use Civi\Api4\Service\Spec\FieldSpec;
+use Civi\Api4\Service\Spec\Provider\FinancialItemCreationSpecProvider;
 use Civi\Api4\Service\Spec\SpecGatherer;
 
 class TestCreationParameterProvider {
@@ -45,20 +46,26 @@ class TestCreationParameterProvider {
     $createSpec = $this->gatherer->getSpec($entity, 'create', FALSE);
     $requiredFields = array_merge($createSpec->getRequiredFields(), $createSpec->getConditionalRequiredFields());
 
-    if ($entity === 'Case') {
-      $requiredFields[] = $createSpec->getFieldByName('creator_id');
-    }
-
     $requiredParams = [];
     foreach ($requiredFields as $requiredField) {
-      $value = $this->getRequiredValue($requiredField);
-      if ($entity === 'UFField' && $requiredField->getName() === 'field_name') {
-        // This is a ruthless hack to avoid a unique constraint - but
-        // it's also a test class & hard to care enough to do something
-        // better
-        $value = 'activity_campaign_id';
-      }
-      $requiredParams[$requiredField->getName()] = $value;
+      $requiredParams[$requiredField->getName()] = $this->getRequiredValue($requiredField);
+    }
+
+    // This is a ruthless hack to avoid peculiar constraints - but
+    // it's also a test class & hard to care enough to do something
+    // better
+    $overrides = [];
+    $overrides['UFField'] = [
+      'field_name' => 'activity_campaign_id',
+    ];
+    $overrides['Translation'] = [
+      'entity_table' => 'civicrm_event',
+      'entity_field' => 'description',
+      'entity_id' => \CRM_Core_DAO::singleValueQuery('SELECT min(id) FROM civicrm_event'),
+    ];
+
+    if (isset($overrides[$entity])) {
+      $requiredParams = array_merge($requiredParams, $overrides[$entity]);
     }
 
     unset($requiredParams['id']);
@@ -80,14 +87,24 @@ class TestCreationParameterProvider {
     if ($field->getOptions()) {
       return $this->getOption($field);
     }
-    elseif ($field->getDefaultValue()) {
-      return $field->getDefaultValue();
-    }
     elseif ($field->getFkEntity()) {
       return $this->getFkID($field, $field->getFkEntity());
     }
-    elseif (in_array($field->getName(), ['entity_id', 'contact_id'])) {
+    elseif ($field->getDefaultValue()) {
+      return $field->getDefaultValue();
+    }
+    elseif ($field->getName() === 'contact_id') {
       return $this->getFkID($field, 'Contact');
+    }
+    elseif ($field->getName() === 'entity_id') {
+      // What could possibly go wrong with this?
+      switch ($field->getTableName()) {
+        case 'civicrm_financial_item':
+          return $this->getFkID($field, FinancialItemCreationSpecProvider::DEFAULT_ENTITY);
+
+        default:
+          return $this->getFkID($field, 'Contact');
+      }
     }
 
     $randomValue = $this->getRandomValue($field->getDataType());

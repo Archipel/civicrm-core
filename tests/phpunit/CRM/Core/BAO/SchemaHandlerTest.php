@@ -306,7 +306,7 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
     //Check if both indices are deleted.
     $indices = CRM_Core_BAO_SchemaHandler::getIndexes($tables);
     foreach ($tables as $index => $tableName) {
-      $this->assertFalse(in_array($index, array_keys($indices[$tableName])));
+      $this->assertFalse(array_key_exists($index, $indices[$tableName]));
     }
     //Drop false index and create again.
     CRM_Core_BAO_SchemaHandler::createMissingIndices($missingIndices);
@@ -336,13 +336,12 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
   /**
    * Test that columns are dropped
    */
-  public function testDropColumn() {
+  public function testDropColumn(): void {
     CRM_Core_DAO::executeQuery('DROP TABLE IF EXISTS `civicrm_test_drop_column`');
     CRM_Core_DAO::executeQuery('CREATE TABLE `civicrm_test_drop_column` (`id` int(10), `col1` varchar(255), `col2` varchar(255))');
 
     // test with logging enabled to ensure log triggers don't break anything
-    $schema = new CRM_Logging_Schema();
-    $schema->enableLogging();
+    Civi::settings()->set('logging', TRUE);
 
     $alterParams = [
       'table_name' => 'civicrm_test_drop_column',
@@ -358,8 +357,8 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
 
     $create_table = CRM_Core_DAO::executeQuery('SHOW CREATE TABLE civicrm_test_drop_column');
     while ($create_table->fetch()) {
-      $this->assertNotContains('col1', $create_table->Create_Table);
-      $this->assertContains('col2', $create_table->Create_Table);
+      $this->assertStringNotContainsString('col1', $create_table->Create_Table);
+      $this->assertStringContainsString('col2', $create_table->Create_Table);
     }
 
     // drop col2
@@ -368,7 +367,7 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
 
     $create_table = CRM_Core_DAO::executeQuery('SHOW CREATE TABLE civicrm_test_drop_column');
     while ($create_table->fetch()) {
-      $this->assertNotContains('col2', $create_table->Create_Table);
+      $this->assertStringNotContainsString('col2', $create_table->Create_Table);
     }
   }
 

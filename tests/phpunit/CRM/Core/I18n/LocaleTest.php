@@ -82,9 +82,40 @@ class CRM_Core_I18n_LocaleTest extends CiviUnitTestCase {
       }
     }
 
+    \CRM_Core_DAO::executeQuery('UPDATE civicrm_option_value SET label_fr_CA = \'Planifié\' WHERE name = \'Scheduled\'',
+      [], TRUE, NULL, FALSE, FALSE);
+
+    // If you switch back and forth among these languages, labels should follow suit.
+    for ($trial = 0; $trial < 3; $trial++) {
+      \CRM_Core_I18n::singleton()->setLocale('en_US');
+      $this->assertEquals('Scheduled', \CRM_Core_PseudoConstant::getLabel("CRM_Activity_BAO_Activity", "status_id", 1));
+
+      \CRM_Core_I18n::singleton()->setLocale('fr_CA');
+      $this->assertEquals('Planifié', \CRM_Core_PseudoConstant::getLabel("CRM_Activity_BAO_Activity", "status_id", 1));
+    }
+
     CRM_Core_I18n::singleton()->setLocale('en_US');
     CRM_Core_I18n_Schema::makeSinglelingual('en_US');
     Civi::$statics['CRM_Core_I18n']['singleton'] = [];
+  }
+
+  /**
+   * Quirk in strtolower does not handle "I" as expected, compared to mb_strtolower.
+   * I think setting locale messes up something that I don't know how to reset,
+   * so see if these help:
+   * @runInSeparateProcess
+   * @preserveGlobalState disabled
+   */
+  public function testInsertTurkish() {
+    CRM_Core_DAO::executeQuery("DROP TABLE IF EXISTS foo");
+    CRM_Core_DAO::executeQuery("CREATE TABLE foo ( bar varchar(32) )");
+    // Change locale - assert it actually changed.
+    $this->assertEquals('tr_TR.utf8', setlocale(LC_ALL, 'tr_TR.utf8'));
+    $dao = new CRM_Core_DAO();
+    // When query() uses strtolower this returns NULL instead
+    $this->assertEquals(1, $dao->query("INSERT INTO foo VALUES ('Turkish Delight')"));
+    setlocale(LC_ALL, 'en_US');
+    CRM_Core_DAO::executeQuery("DROP TABLE foo");
   }
 
 }

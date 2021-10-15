@@ -1,5 +1,8 @@
 <?php
 
+use Civi\Api4\ActionSchedule;
+use Civi\Api4\MessageTemplate;
+
 /**
  * Class CRM_UF_Page_ProfileEditorTest
  * @group headless
@@ -8,14 +11,15 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
   use CRMTraits_Custom_CustomDataTrait;
 
   public function tearDown(): void {
-    $this->quickCleanup(['civicrm_saved_search']);
+    $this->quickCleanup(['civicrm_saved_search', 'civicrm_action_schedule']);
+    parent::tearDown();
   }
 
   /**
    * Test message upgrade process.
    */
-  public function testMessageTemplateUpgrade() {
-    $workFlowID = civicrm_api3('OptionValue', 'getvalue', ['return' => 'id', 'name' => 'membership_online_receipt', 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
+  public function testMessageTemplateUpgrade(): void {
+    $workFlowID = $this->callAPISuccessGetValue('OptionValue', ['return' => 'id', 'name' => 'membership_online_receipt', 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
 
     $templates = $this->callAPISuccess('MessageTemplate', 'get', ['workflow_id' => $workFlowID])['values'];
     foreach ($templates as $template) {
@@ -29,11 +33,64 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
 
     foreach ($templates as $template) {
       $msg_text = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_text']);
-      $this->assertContains('{assign var="greeting" value="{contact.email_greeting}"}{if $greeting}{$greeting},{/if}', $msg_text);
+      $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting}"}{if $greeting}{$greeting},{/if}', $msg_text);
       if ($msg_text !== $originalText) {
         // Reset value for future tests.
         $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => $originalText, 'id' => $template['id']]);
       }
+    }
+  }
+
+  /**
+   * Test that a string replacement in a message template can be done.
+   *
+   * @throws \API_Exception
+   */
+  public function testMessageTemplateStringReplace(): void {
+    MessageTemplate::update()->setValues(['msg_html' => '{$display_name}'])->addWhere(
+      'workflow_name', '=', 'contribution_invoice_receipt'
+    )->execute();
+    $upgrader = new CRM_Upgrade_Incremental_MessageTemplates('5.41.0');
+    $check = new CRM_Utils_Check_Component_Tokens();
+    $message = $check->checkTokens()[0];
+    $this->assertEquals('<p>You are using tokens that have been removed or deprecated.</p><ul><li>Please review your contribution_invoice_receipt message template and remove references to the token {$display_name} as it has been replaced by {contact.display_name}</li></ul></p>', $message->getMessage());
+    $upgrader->replaceTokenInTemplate('contribution_invoice_receipt', '$display_name', 'contact.display_name');
+    $templates = MessageTemplate::get()->addSelect('msg_html')
+      ->addWhere(
+        'workflow_name', '=', 'contribution_invoice_receipt'
+      )->execute();
+    foreach ($templates as $template) {
+      $this->assertEquals('{contact.display_name}', $template['msg_html']);
+    }
+    $messages = $check->checkTokens();
+    $this->assertEmpty($messages);
+    $this->revertTemplateToReservedTemplate('contribution_invoice_receipt');
+  }
+
+  /**
+   * Test that a $this->string replacement in a message template can be done.
+   *
+   * @throws \API_Exception
+   */
+  public function testActionScheduleStringReplace(): void {
+    ActionSchedule::create(FALSE)->setValues([
+      'title' => 'schedule',
+      'absolute_date' => '2021-01-01',
+      'start_action_date' => '2021-01-01',
+      'mapping_id' => 1,
+      'entity_value' => 1,
+      'body_text' => 'blah {contribution.status}',
+      'body_html' => 'blah {contribution.status}',
+      'subject' => 'blah {contribution.status}',
+    ])->execute();
+
+    $upgrader = new CRM_Upgrade_Incremental_MessageTemplates('5.41.0');
+    $upgrader->replaceTokenInActionSchedule('contribution.status', 'contribution.contribution_status_id:label');
+    $templates = ActionSchedule::get()->addSelect('body_html', 'subject', 'body_text')->execute();
+    foreach ($templates as $template) {
+      $this->assertEquals('blah {contribution.contribution_status_id:label}', $template['body_html']);
+      $this->assertEquals('blah {contribution.contribution_status_id:label}', $template['body_text']);
+      $this->assertEquals('blah {contribution.contribution_status_id:label}', $template['subject']);
     }
   }
 
@@ -59,7 +116,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
     foreach ($templates as $template) {
       $msg_text = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_text']);
       if ($template['is_reserved']) {
-        $this->assertContains('{assign var="greeting" value="{contact.email_greeting}"}{if $greeting}{$greeting},{/if}', $msg_text);
+        $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting}"}{if $greeting}{$greeting},{/if}', $msg_text);
       }
       else {
         $this->assertEquals('great what a silly sausage you are', $msg_text);

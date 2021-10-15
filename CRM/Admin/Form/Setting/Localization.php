@@ -45,7 +45,7 @@ class CRM_Admin_Form_Setting_Localization extends CRM_Admin_Form_Setting {
   public function buildQuickForm() {
     $config = CRM_Core_Config::singleton();
 
-    CRM_Utils_System::setTitle(ts('Settings - Localization'));
+    $this->setTitle(ts('Settings - Localization'));
 
     $warningTitle = json_encode(ts("Warning"));
     $defaultLocaleOptions = CRM_Admin_Form_Setting_Localization::getDefaultLocaleOptions();
@@ -354,11 +354,13 @@ class CRM_Admin_Form_Setting_Localization extends CRM_Admin_Form_Setting {
    * @return array
    */
   public static function getDefaultLanguageOptions() {
-    return [
+    $availableOptions = [
       '*default*' => ts('Use default site language'),
       'undefined' => ts('Leave undefined'),
       'current_site_language' => ts('Use language in use at the time'),
     ];
+    $availableLanguages = array_merge($availableOptions, CRM_Admin_Form_Setting_Localization::getDefaultLocaleOptions());
+    return $availableLanguages;
   }
 
 }

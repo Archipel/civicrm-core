@@ -22,6 +22,134 @@ class CRM_Core_BAO_MessageTemplateTest extends CiviUnitTestCase {
     parent::tearDown();
   }
 
+  public function testRenderTemplate() {
+    $contactId = $this->individualCreate([
+      'first_name' => 'Abba',
+      'last_name' => 'Baab',
+      'prefix_id' => NULL,
+      'suffix_id' => NULL,
+    ]);
+    $rendered = CRM_Core_BAO_MessageTemplate::renderTemplate([
+      'valueName' => 'case_activity',
+      'tokenContext' => [
+        'contactId' => $contactId,
+      ],
+      'messageTemplate' => [
+        'msg_subject' => 'Hello testRenderTemplate {contact.display_name}!',
+        'msg_text' => 'Hello testRenderTemplate {contact.display_name}!',
+        'msg_html' => '<p>Hello testRenderTemplate {contact.display_name}!</p>',
+      ],
+    ]);
+    $this->assertEquals('Hello testRenderTemplate Abba Baab!', $rendered['subject']);
+    $this->assertEquals('Hello testRenderTemplate Abba Baab!', $rendered['text']);
+    $this->assertStringContainsString('<p>Hello testRenderTemplate Abba Baab!</p>', $rendered['html']);
+  }
+
+  public function testSendTemplate_RenderMode_OpenTemplate() {
+    $contactId = $this->individualCreate([
+      'first_name' => 'Abba',
+      'last_name' => 'Baab',
+      'prefix_id' => NULL,
+      'suffix_id' => NULL,
+    ]);
+    [$sent, $subject, $messageText, $messageHtml] = CRM_Core_BAO_MessageTemplate::sendTemplate(
+      [
+        'valueName' => 'case_activity',
+        'contactId' => $contactId,
+        'from' => 'admin@example.com',
+        // No 'toEmail'/'toName' address => not sendable, but still returns rendered value.
+        'attachments' => NULL,
+        'messageTemplate' => [
+          'msg_subject' => 'Hello testSendTemplate_RenderMode_OpenTemplate {contact.display_name}!',
+          'msg_text' => 'Hello testSendTemplate_RenderMode_OpenTemplate {contact.display_name}!',
+          'msg_html' => '<p>Hello testSendTemplate_RenderMode_OpenTemplate {contact.display_name}!</p>',
+        ],
+      ]
+    );
+    $this->assertEquals(FALSE, $sent);
+    $this->assertEquals('Hello testSendTemplate_RenderMode_OpenTemplate Abba Baab!', $subject);
+    $this->assertEquals('Hello testSendTemplate_RenderMode_OpenTemplate Abba Baab!', $messageText);
+    $this->assertStringContainsString('<p>Hello testSendTemplate_RenderMode_OpenTemplate Abba Baab!</p>', $messageHtml);
+  }
+
+  public function testSendTemplate_RenderMode_DefaultTpl() {
+    CRM_Core_Transaction::create(TRUE)->run(function(CRM_Core_Transaction $tx) {
+      $tx->rollback();
+
+      \Civi\Api4\MessageTemplate::update()
+        ->addWhere('workflow_name', '=', 'case_activity')
+        ->addWhere('is_reserved', '=', 0)
+        ->setValues([
+          'msg_subject' => 'Hello testSendTemplate_RenderMode_Default {contact.display_name}!',
+          'msg_text' => 'Hello testSendTemplate_RenderMode_Default {contact.display_name}!',
+          'msg_html' => '<p>Hello testSendTemplate_RenderMode_Default {contact.display_name}!</p>',
+        ])
+        ->execute();
+
+      $contactId = $this->individualCreate([
+        'first_name' => 'Abba',
+        'last_name' => 'Baab',
+        'prefix_id' => NULL,
+        'suffix_id' => NULL,
+      ]);
+
+      [$sent, $subject, $messageText, $messageHtml] = CRM_Core_BAO_MessageTemplate::sendTemplate(
+        [
+          'valueName' => 'case_activity',
+          'contactId' => $contactId,
+          'from' => 'admin@example.com',
+          // No 'toEmail'/'toName' address => not sendable, but still returns rendered value.
+          'attachments' => NULL,
+        ]
+      );
+      $this->assertEquals(FALSE, $sent);
+      $this->assertEquals('Hello testSendTemplate_RenderMode_Default Abba Baab!', $subject);
+      $this->assertEquals('Hello testSendTemplate_RenderMode_Default Abba Baab!', $messageText);
+      $this->assertStringContainsString('<p>Hello testSendTemplate_RenderMode_Default Abba Baab!</p>', $messageHtml);
+    });
+  }
+
+  public function testSendTemplate_RenderMode_TokenContext() {
+    CRM_Core_Transaction::create(TRUE)->run(function(CRM_Core_Transaction $tx) {
+      $tx->rollback();
+
+      \Civi\Api4\MessageTemplate::update()
+        ->addWhere('workflow_name', '=', 'case_activity')
+        ->addWhere('is_reserved', '=', 0)
+        ->setValues([
+          'msg_subject' => 'Hello {contact.display_name} about {activity.subject}!',
+          'msg_text' => 'Hello {contact.display_name} about {activity.subject}!',
+          'msg_html' => '<p>Hello {contact.display_name} about {activity.subject}!</p>',
+        ])
+        ->execute();
+
+      $contactId = $this->individualCreate([
+        'first_name' => 'Abba',
+        'last_name' => 'Baab',
+        'prefix_id' => NULL,
+        'suffix_id' => NULL,
+      ]);
+      $activityId = $this->activityCreate(['subject' => 'Something Something'])['id'];
+
+      [$sent, $subject, $messageText, $messageHtml] = CRM_Core_BAO_MessageTemplate::sendTemplate(
+        [
+          'valueName' => 'case_activity',
+          'tokenContext' => [
+            'contactId' => $contactId,
+            'activityId' => $activityId,
+          ],
+          'from' => 'admin@example.com',
+          // No 'toEmail'/'toName' address => not sendable, but still returns rendered value.
+          'attachments' => NULL,
+        ]
+      );
+      $this->assertEquals(FALSE, $sent);
+      $this->assertEquals('Hello Abba Baab about Something Something!', $subject);
+      $this->assertEquals('Hello Abba Baab about Something Something!', $messageText);
+      $this->assertStringContainsString('<p>Hello Abba Baab about Something Something!</p>', $messageHtml);
+    });
+  }
+
   /**
    * Test message template send.
    *
@@ -49,6 +177,7 @@ class CRM_Core_BAO_MessageTemplateTest extends CiviUnitTestCase {
       ],
       'activitySubject' => 'Test 123',
       'idHash' => substr(sha1(CIVICRM_SITE_KEY . '1234'), 0, 7),
+      'contact' => ['role' => 'Sand grain counter'],
     ];
 
     [, $subject, $message] = CRM_Core_BAO_MessageTemplate::sendTemplate(
@@ -64,8 +193,8 @@ class CRM_Core_BAO_MessageTemplateTest extends CiviUnitTestCase {
     );
 
     $this->assertEquals('[case #' . $tplParams['idHash'] . '] Test 123', $subject);
-    $this->assertContains('Your Case Role', $message);
-    $this->assertContains('Case ID : 1234', $message);
+    $this->assertStringContainsString('Your Case Role(s) : Sand grain counter', $message);
+    $this->assertStringContainsString('Case ID : 1234', $message);
   }
 
   /**
@@ -82,12 +211,17 @@ class CRM_Core_BAO_MessageTemplateTest extends CiviUnitTestCase {
     $this->callAPISuccess('Address', 'create', array_merge($values['address'], ['contact_id' => 1]));
     $this->callAPISuccess('Email', 'create', array_merge(['email' => $values['email']], ['contact_id' => 1, 'is_primary' => 1]));
     $tokenString = '{domain.' . implode('} ~ {domain.', array_keys($values)) . '}';
-    $messageContent = CRM_Core_BAO_MessageTemplate::renderMessageTemplate([
-      'html' => $tokenString,
-      // Check the space is stripped.
-      'subject' => $tokenString . ' ',
-      'text' => $tokenString,
-    ], FALSE, FALSE, []);
+
+    $messageContent = CRM_Core_BAO_MessageTemplate::renderTemplate([
+      'valueName' => 'dummy',
+      'messageTemplate' => [
+        'msg_html' => $tokenString,
+        // Check the space is stripped.
+        'msg_subject' => $tokenString . ' ',
+        'msg_text' => $tokenString,
+      ],
+    ]);
+
     $this->assertEquals('Default Domain Name ~  ~ <div class="location vcard"><span class="adr"><span class="street-address">Buckingham palace</span><br /><span class="extended-address">Up the road</span><br /><span class="locality">London</span>, <span class="postal-code">90210</span><br /></span></div> ~ crown@example.com ~ 1 ~ rather nice', $messageContent['html']);
     $this->assertEquals('Default Domain Name ~  ~ Buckingham palace
 Up the road
@@ -101,14 +235,17 @@ London, 90210
    *
    * @throws \CRM_Core_Exception
    */
-  public function testRenderMessageTemplateSmarty(): void {
-    $messageContent = CRM_Core_BAO_MessageTemplate::renderMessageTemplate([
-      'html' => '{$tokenString}',
-      // Check the space is stripped.
-      'subject' => '{$tokenString} ',
-      'text' => '{$tokenString}',
-    ], FALSE, FALSE, ['tokenString' => 'Something really witty']);
-
+  public function testRenderTemplateSmarty(): void {
+    $messageContent = CRM_Core_BAO_MessageTemplate::renderTemplate([
+      'valueName' => 'dummy',
+      'messageTemplate' => [
+        'msg_html' => '{$tokenString}',
+        // Check the space is stripped.
+        'msg_subject' => '{$tokenString} ',
+        'msg_text' => '{$tokenString}',
+      ],
+      'tplParams' => ['tokenString' => 'Something really witty'],
+    ]);
     $this->assertEquals('Something really witty', $messageContent['text']);
     $this->assertEquals('Something really witty', $messageContent['html']);
     $this->assertEquals('Something really witty', $messageContent['subject']);
@@ -118,13 +255,18 @@ London, 90210
    * Test rendering of smarty tokens.
    *
    */
-  public function testRenderMessageTemplateIgnoreSmarty(): void {
-    $messageContent = CRM_Core_BAO_MessageTemplate::renderMessageTemplate([
-      'html' => '{$tokenString}',
-      // Check the space is stripped.
-      'subject' => '{$tokenString} ',
-      'text' => '{$tokenString}',
-    ], TRUE, FALSE, ['tokenString' => 'Something really witty']);
+  public function testRenderTemplateIgnoreSmarty(): void {
+    $messageContent = CRM_Core_BAO_MessageTemplate::renderTemplate([
+      'valueName' => 'dummy',
+      'messageTemplate' => [
+        'msg_html' => '{$tokenString}',
+        // Check the space is stripped.
+        'msg_subject' => '{$tokenString} ',
+        'msg_text' => '{$tokenString}',
+      ],
+      'disableSmarty' => TRUE,
+      'tplParams' => ['tokenString' => 'Something really witty'],
+    ]);
 
     $this->assertEquals('{$tokenString}', $messageContent['text']);
     $this->assertEquals('{$tokenString}', $messageContent['html']);
@@ -139,6 +281,10 @@ London, 90210
    * @throws \CiviCRM_API3_Exception
    */
   public function testContactTokens(): void {
+    // Freeze the time at the start of the test, so checksums don't suffer from second rollovers.
+    putenv('TIME_FUNC=frozen');
+    CRM_Utils_Time::setTime(date('Y-m-d H:i:s'));
+
     $this->createCustomGroupWithFieldsOfAllTypes([]);
     $tokenData = $this->getAllContactTokens();
     $address = $this->setupContactFromTokeData($tokenData);
@@ -152,19 +298,36 @@ London, 90210
     foreach (array_keys($tokenData) as $key) {
       $tokenString .= "{$key}:{contact.{$key}}\n";
     }
-    $messageContent = CRM_Core_BAO_MessageTemplate::renderMessageTemplate([
-      'html' => $tokenString,
-      // Check the space is stripped.
-      'subject' => $tokenString . ' ',
-      'text' => $tokenString,
-    ], FALSE, $tokenData['contact_id'], ['passed_smarty' => 'whoa']);
+    $messageContent = CRM_Core_BAO_MessageTemplate::renderTemplate([
+      'valueName' => 'dummy',
+      'messageTemplate' => [
+        'msg_html' => $tokenString,
+        // Check the space is stripped.
+        'msg_subject' => $tokenString . ' ',
+        'msg_text' => $tokenString,
+      ],
+      'tokenContext' => ['contactId' => $tokenData['contact_id']],
+      'tplParams' => ['passed_smarty' => 'whoa'],
+    ]);
     $expected = 'weewhoa
 Default Domain Name
 ';
     $expected .= $this->getExpectedContactOutput($address['id'], $tokenData, $messageContent['html']);
     $this->assertEquals($expected, $messageContent['html']);
     $this->assertEquals($expected, $messageContent['text']);
-    $this->assertEquals(rtrim(str_replace("\n", ' ', $expected)), $messageContent['subject']);
+    $checksum_position = strpos($messageContent['subject'], 'cs=');
+    $this->assertTrue($checksum_position !== FALSE);
+    $fixedExpected = rtrim(str_replace("\n", ' ', $expected));
+    $this->assertEquals(substr($fixedExpected, 0, $checksum_position), substr($messageContent['subject'], 0, $checksum_position));
+    $returned_parts = explode('_', substr($messageContent['subject'], $checksum_position));
+    $expected_parts = explode('_', substr($fixedExpected, $checksum_position));
+    $this->assertEquals($expected_parts[0], $returned_parts[0]);
+    $this->assertApproxEquals($expected_parts[1], $returned_parts[1], 2);
+    $this->assertEquals($expected_parts[2], $returned_parts[2]);
+
+    // reset time
+    putenv('TIME_FUNC');
+    CRM_Utils_Time::resetTime();
   }
 
   /**

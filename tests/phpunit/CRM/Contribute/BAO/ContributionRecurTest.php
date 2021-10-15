@@ -19,6 +19,8 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
 
   use CRMTraits_Financial_OrderTrait;
 
+  protected $isValidateFinancialsOnPostAssert = TRUE;
+
   /**
    * Set up for test.
    *
@@ -213,10 +215,93 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test that is_template contribution is used where available
+   * Check whether template contribution is created based on the first contribution.
+   *
+   * There are three contributions created. Each of them with a different value at a custom field.
+   * The first contribution created should be copied as a template contribution.
+   * The other two should not be used as a template.
+   *
+   * Then we delete the template contribution and make sure a new one exists.
+   * At that time the second contribution should be used a template as that is the most recent one (according to the date).
    *
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testCreateTemplateContributionFromFirstContributionTest(): void {
+    $custom_group = $this->customGroupCreate(['extends' => 'Contribution', 'name' => 'template']);
+    $custom_field = $this->customFieldCreate(['custom_group_id' => $custom_group['id'], 'name' => 'field']);
+
+    $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $this->_params);
+    // Create a first test contrib
+    $date = new DateTime();
+    $firstContrib = $this->callAPISuccess('Contribution', 'create', [
+      'contribution_recur_id' => $contributionRecur['id'],
+      'total_amount' => '3.00',
+      'financial_type_id' => 1,
+      'payment_instrument_id' => 1,
+      'currency' => 'USD',
+      'contact_id' => $this->_params['contact_id'],
+      'contribution_status_id' => 1,
+      'receive_date' => $date->format('YmdHis'),
+      'custom_' . $custom_field['id'] => 'First Contribution',
+    ]);
+    $date->modify('+2 days');
+    $secondContrib = $this->callAPISuccess('Contribution', 'create', [
+      'contribution_recur_id' => $contributionRecur['id'],
+      'total_amount' => '3.00',
+      'financial_type_id' => 1,
+      'payment_instrument_id' => 1,
+      'currency' => 'USD',
+      'contact_id' => $this->_params['contact_id'],
+      'contribution_status_id' => 1,
+      'receive_date' => $date->format('YmdHis'),
+      'custom_' . $custom_field['id'] => 'Second and most recent Contribution',
+    ]);
+
+    $date->modify('-1 week');
+    $thirdContrib = $this->callAPISuccess('Contribution', 'create', [
+      'contribution_recur_id' => $contributionRecur['id'],
+      'total_amount' => '3.00',
+      'financial_type_id' => 1,
+      'payment_instrument_id' => 1,
+      'currency' => 'USD',
+      'contact_id' => $this->_params['contact_id'],
+      'contribution_status_id' => 1,
+      'receive_date' => $date->format('YmdHis'),
+      'custom_' . $custom_field['id'] => 'Third Contribution',
+    ]);
+
+    // Make sure a template contribution exists.
+    $templateContributionId = CRM_Contribute_BAO_ContributionRecur::ensureTemplateContributionExists($contributionRecur['id']);
+    $fetchedTemplate = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($contributionRecur['id']);
+    $templateContribution = \Civi\Api4\Contribution::get(FALSE)
+      ->addSelect('*', 'custom.*')
+      ->addWhere('contribution_recur_id', '=', $contributionRecur['id'])
+      ->addWhere('is_template', '=', 1)
+      ->addWhere('is_test', '=', 0)
+      ->addOrderBy('id', 'DESC')
+      ->execute();
+
+    $this->assertNotEquals($firstContrib['id'], $fetchedTemplate['id']);
+    $this->assertNotEquals($secondContrib['id'], $fetchedTemplate['id']);
+    $this->assertNotEquals($thirdContrib['id'], $fetchedTemplate['id']);
+    $this->assertEquals($templateContributionId, $fetchedTemplate['id']);
+    $this->assertTrue($fetchedTemplate['is_template']);
+    $this->assertFalse($fetchedTemplate['is_test']);
+    $this->assertEquals(1, $templateContribution->count());
+    $templateContribution = $templateContribution->first();
+    $this->assertNotNull($templateContribution['template.field']);
+    $this->assertEquals('Second and most recent Contribution', $templateContribution['template.field']);
+    $this->callAPISuccess('CustomField', 'delete', ['id' => $custom_field['id']]);
+    $this->callAPISuccess('CustomGroup', 'delete', ['id' => $custom_group['id']]);
+  }
+
+  /**
+   * Test that is_template contribution is used where available
+   *
+   * @throws \API_Exception
    * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
@@ -407,33 +492,19 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
       'is_deceased' => 1,
     ]);
 
-    // We delete latest membership payment and line item.
-    $lineItemId = $this->callAPISuccessGetValue('LineItem', [
-      'contribution_id' => $contribution['id'],
-      'entity_id' => $membershipId2,
-      'entity_table' => 'civicrm_membership',
-      'return' => 'id',
-    ]);
-
-    // No api to delete membership payment.
-    CRM_Core_DAO::executeQuery('
-      DELETE FROM civicrm_membership_payment
-      WHERE contribution_id = %1
-        AND membership_id = %2
-    ', [
-      1 => [$contribution['id'], 'Integer'],
-      2 => [$membershipId2, 'Integer'],
-    ]);
-
-    $this->callAPISuccess('LineItem', 'delete', [
-      'id' => $lineItemId,
-    ]);
-
     // set membership recurring to null.
     $this->callAPISuccess('Membership', 'create', [
       'id' => $membershipId2,
       'contribution_recur_id' => NULL,
     ]);
+
+    $this->callAPISuccess('Contribution', 'delete', ['id' => $contribution['id']]);
+    unset($params['line_items'][1]);
+    $params['total_amount'] = 100;
+    $params['line_items'][0]['params']['id'] = $membershipId1;
+    $params['api.Payment.create']['total_amount'] = 100;
+
+    $order = $this->callAPISuccess('Order', 'create', $params);
 
     // check line item and membership payment count.
     $this->validateAllCounts($membershipId1, 5);
@@ -446,7 +517,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
 
     // record next subsequent payment (6th payment).
     $this->callAPISuccess('Contribution', 'repeattransaction', [
-      'original_contribution_id' => $contributionId,
+      'original_contribution_id' => $order['id'],
       'contribution_status_id' => 'Completed',
       'total_amount' => '100',
     ]);
@@ -485,6 +556,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
     $lineItemParams = [
       'entity_id' => $membershipId,
       'entity_table' => 'civicrm_membership',
+      'contribution_id' => ['>' => 0],
     ];
     $this->callAPISuccessGetCount('LineItem', $lineItemParams, $count);
     $this->callAPISuccessGetCount('MembershipPayment', $memPayParams, $count);

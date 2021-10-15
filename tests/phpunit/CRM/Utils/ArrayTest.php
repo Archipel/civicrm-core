@@ -6,6 +6,37 @@
  */
 class CRM_Utils_ArrayTest extends CiviUnitTestCase {
 
+  public function testAsColumns() {
+    $rowsNum = [
+      ['a' => 10, 'b' => 11],
+      ['a' => 20, 'b' => 21],
+      ['a' => 20, 'b' => 29],
+    ];
+
+    $rowsAssoc = [
+      '!' => ['a' => 10, 'b' => 11],
+      '@' => ['a' => 20, 'b' => 21],
+      '#' => ['a' => 20, 'b' => 29],
+    ];
+
+    $this->assertEquals(
+      ['a' => [10, 20, 20], 'b' => [11, 21, 29]],
+      CRM_Utils_Array::asColumns($rowsNum)
+    );
+    $this->assertEquals(
+      ['a' => [10, 20], 'b' => [11, 21, 29]],
+      CRM_Utils_Array::asColumns($rowsNum, TRUE)
+    );
+    $this->assertEquals(
+      ['a' => ['!' => 10, '@' => 20, '#' => 20], 'b' => ['!' => 11, '@' => 21, '#' => 29]],
+      CRM_Utils_Array::asColumns($rowsAssoc)
+    );
+    $this->assertEquals(
+      ['a' => [10, 20], 'b' => [11, 21, 29]],
+      CRM_Utils_Array::asColumns($rowsAssoc, TRUE)
+    );
+  }
+
   public function testIndexArray() {
     $inputs = [];
     $inputs[] = [
@@ -128,10 +159,14 @@ class CRM_Utils_ArrayTest extends CiviUnitTestCase {
   }
 
   public function testGetSetPathParts() {
-    $arr = [
+    $arr = $arrOrig = [
       'one' => '1',
       'two' => [
         'half' => 2,
+      ],
+      'three' => [
+        'first-third' => '1/3',
+        'second-third' => '2/3',
       ],
     ];
     $this->assertEquals('1', CRM_Utils_Array::pathGet($arr, ['one']));
@@ -140,6 +175,36 @@ class CRM_Utils_ArrayTest extends CiviUnitTestCase {
     CRM_Utils_Array::pathSet($arr, ['zoo', 'half'], '3');
     $this->assertEquals(3, CRM_Utils_Array::pathGet($arr, ['zoo', 'half']));
     $this->assertEquals(3, $arr['zoo']['half']);
+
+    $arrCopy = $arr;
+    $this->assertEquals(FALSE, CRM_Utils_Array::pathUnset($arr, ['does-not-exist']));
+    $this->assertEquals($arrCopy, $arr);
+
+    $this->assertEquals(TRUE, CRM_Utils_Array::pathUnset($arr, ['two', 'half'], FALSE));
+    $this->assertEquals([], $arr['two']);
+    $this->assertTrue(array_key_exists('two', $arr));
+
+    CRM_Utils_Array::pathUnset($arr, ['three', 'first-third'], TRUE);
+    $this->assertEquals(['second-third' => '2/3'], $arr['three']);
+    CRM_Utils_Array::pathUnset($arr, ['three', 'second-third'], TRUE);
+    $this->assertFalse(array_key_exists('three', $arr));
+
+    // pathMove(): Change location of an item
+    $arr = $arrOrig;
+    $this->assertEquals(2, $arr['two']['half']);
+    $this->assertTrue(!isset($arr['verb']['double']['half']));
+    $this->assertEquals(1, CRM_Utils_Array::pathMove($arr, ['two'], ['verb', 'double']));
+    $this->assertEquals(2, $arr['verb']['double']['half']);
+    $this->assertTrue(!isset($arr['two']['half']));
+
+    // pathMove(): If item doesn't exist, return 0.
+    $arr = $arrOrig;
+    $this->assertTrue(!isset($arr['not-a-src']));
+    $this->assertTrue(!isset($arr['not-a-dest']));
+    $this->assertEquals(0, CRM_Utils_Array::pathMove($arr, ['not-a-src'], ['not-a-dest']));
+    $this->assertTrue(!isset($arr['not-a-src']));
+    $this->assertTrue(!isset($arr['not-a-dest']));
+
   }
 
   public function getSortExamples() {

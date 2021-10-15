@@ -1,5 +1,4 @@
 <?php
-
 /*
  +--------------------------------------------------------------------+
  | Copyright CiviCRM LLC. All rights reserved.                        |
@@ -9,14 +8,6 @@
  | and copyright information, see https://civicrm.org/licensing       |
  +--------------------------------------------------------------------+
  */
-
-/**
- *
- * @package CRM
- * @copyright CiviCRM LLC https://civicrm.org/licensing
- */
-
-
 namespace Civi\Api4;
 
 /**
@@ -25,9 +16,16 @@ namespace Civi\Api4;
  * Stores search parameters for populating smart groups with live results.
  *
  * @see https://docs.civicrm.org/user/en/latest/organising-your-data/smart-groups/
- * @searchable false
+ * @searchable secondary
+ * @since 5.24
  * @package Civi\Api4
  */
 class SavedSearch extends Generic\DAOEntity {
+
+  public static function permissions() {
+    $permissions = parent::permissions();
+    $permissions['get'] = ['access CiviCRM'];
+    return $permissions;
+  }
 
 }

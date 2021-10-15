@@ -340,7 +340,7 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
       $field = CRM_Core_DAO::executeQuery($query);
 
       $importableFields = self::getProfileFieldMetadata($showAll);
-      list($customFields, $addressCustomFields) = self::getCustomFields($ctype);
+      list($customFields, $addressCustomFields) = self::getCustomFields($ctype, $skipPermission ? FALSE : $permissionType);
 
       while ($field->fetch()) {
         list($name, $formattedField) = self::formatUFField($group, $field, $customFields, $addressCustomFields, $importableFields, $permissionType);
@@ -400,7 +400,7 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
     $profileType = CRM_Core_BAO_UFField::calculateProfileType(implode(',', $ufGroupType));
     $contactActivityProfile = CRM_Core_BAO_UFField::checkContactActivityProfileTypeByGroupType(implode(',', $ufGroupType));
     $importableFields = self::getImportableFields($showAll, $profileType, $contactActivityProfile);
-    list($customFields, $addressCustomFields) = self::getCustomFields($ctype);
+    list($customFields, $addressCustomFields) = self::getCustomFields($ctype, $permissionType);
 
     $formattedFields = [];
     foreach ($fieldArrs as $fieldArr) {
@@ -443,7 +443,7 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
 
     $addressCustom = FALSE;
     if (in_array($permissionType, [CRM_Core_Permission::CREATE, CRM_Core_Permission::EDIT]) &&
-      in_array($field->field_name, array_keys($addressCustomFields))
+      array_key_exists($field->field_name, $addressCustomFields)
     ) {
       $addressCustom = TRUE;
       $name = "address_{$name}";
@@ -722,13 +722,17 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
 
   /**
    * @param $ctype
-   *
+   * @param int|bool $checkPermission
    * @return mixed
    */
-  protected static function getCustomFields($ctype) {
-    $cacheKey = 'uf_group_custom_fields_' . $ctype;
+  protected static function getCustomFields($ctype, $checkPermission = CRM_Core_Permission::VIEW) {
+    // Only Edit and View is supported in ACL for custom field.
+    if ($checkPermission == CRM_Core_Permission::CREATE) {
+      $checkPermission = CRM_Core_Permission::EDIT;
+    }
+    $cacheKey = 'uf_group_custom_fields_' . $ctype . '_' . (int) $checkPermission;
     if (!Civi::cache('metadata')->has($cacheKey)) {
-      $customFields = CRM_Core_BAO_CustomField::getFieldsForImport($ctype, FALSE, FALSE, FALSE, TRUE, TRUE);
+      $customFields = CRM_Core_BAO_CustomField::getFieldsForImport($ctype, FALSE, FALSE, FALSE, $checkPermission, TRUE);
 
       // hack to add custom data for components
       $components = ['Contribution', 'Participant', 'Membership', 'Activity', 'Case'];
@@ -1439,21 +1443,16 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
       $params['id'] = $ids['ufgroup'];
       CRM_Core_Error::deprecatedWarning('ids parameter is deprecated');
     }
-    $fields = [
-      'is_active',
-      'add_captcha',
-      'is_map',
-      'is_update_dupe',
-      'is_edit_link',
-      'is_uf_link',
-      'is_cms_user',
-    ];
-    foreach ($fields as $field) {
-      $params[$field] = CRM_Utils_Array::value($field, $params, FALSE);
-    }
 
-    $params['limit_listings_group_id'] = $params['group'] ?? NULL;
-    $params['add_to_group_id'] = $params['add_contact_to_group'] ?? NULL;
+    // Convert parameter names but don't overwrite existing data on updates
+    // unless explicitly specified. And allow setting to null, so use
+    // array_key_exists. i.e. we need to treat missing and empty separately.
+    if (array_key_exists('group', $params)) {
+      $params['limit_listings_group_id'] = $params['group'];
+    }
+    if (array_key_exists('add_contact_to_group', $params)) {
+      $params['add_to_group_id'] = $params['add_contact_to_group'];
+    }
 
     //CRM-15427
     if (!empty($params['group_type']) && is_array($params['group_type'])) {

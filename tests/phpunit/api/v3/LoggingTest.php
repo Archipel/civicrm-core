@@ -29,10 +29,15 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
 
   /**
    * Clean up log tables.
+   *
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
   protected function tearDown(): void {
     $this->quickCleanup(['civicrm_email', 'civicrm_address']);
     parent::tearDown();
+    Civi::settings()->set('logging_no_trigger_permission', FALSE);
     $this->callAPISuccess('Setting', 'create', ['logging' => FALSE]);
     $schema = new CRM_Logging_Schema();
     $schema->dropAllLogTables();
@@ -41,8 +46,10 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
 
   /**
    * Test that logging is successfully enabled and disabled.
+   *
+   * @throws \CRM_Core_Exception
    */
-  public function testEnableDisableLogging() {
+  public function testEnableDisableLogging(): void {
     $this->assertEquals(0, $this->callAPISuccessGetValue('Setting', ['name' => 'logging']));
     $this->assertLoggingEnabled(FALSE);
 
@@ -145,31 +152,35 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
     $this->hookClass->setHook('civicrm_alterLogTables', [$this, 'innodbLogTableSpecNewIndex']);
     $this->callAPISuccess('System', 'updatelogtables', []);
     $this->checkINNODBLogTableCreated();
-    $this->assertContains('KEY `index_log_user_id` (`log_user_id`)', $this->checkLogTableCreated());
+    $this->assertStringContainsString('KEY `index_log_user_id` (`log_user_id`)', $this->checkLogTableCreated());
   }
 
   /**
    * Check that if a field is added then the trigger is updated on refresh.
+   *
+   * @throws \CRM_Core_Exception
    */
-  public function testRebuildTriggerAfterSchemaChange() {
+  public function testRebuildTriggerAfterSchemaChange(): void {
     $this->callAPISuccess('Setting', 'create', ['logging' => TRUE]);
     $tables = ['civicrm_acl', 'civicrm_website'];
     foreach ($tables as $table) {
       CRM_Core_DAO::executeQuery("ALTER TABLE $table ADD column temp_col INT(10)");
     }
+    unset(\Civi::$statics['CRM_Logging_Schema']);
 
     $schema = new CRM_Logging_Schema();
-    $schema->fixSchemaDifferencesForAll(TRUE);
+    $schema->fixSchemaDifferencesForAll();
+    Civi::service('sql_triggers')->rebuild();
 
     foreach ($tables as $table) {
       $this->assertTrue($this->checkColumnExistsInTable('log_' . $table, 'temp_col'), 'log_' . $table . ' has temp_col');
       $dao = CRM_Core_DAO::executeQuery("SHOW TRIGGERS LIKE '{$table}'");
       while ($dao->fetch()) {
-        $this->assertContains('temp_col', $dao->Statement);
+        $this->assertStringContainsString('temp_col', $dao->Statement);
       }
     }
-    CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_acl DROP column temp_col");
-    CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_website DROP column temp_col");
+    CRM_Core_DAO::executeQuery('ALTER TABLE civicrm_acl DROP column temp_col');
+    CRM_Core_DAO::executeQuery('ALTER TABLE civicrm_website DROP column temp_col');
   }
 
   /**
@@ -216,8 +227,8 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
     $dao->fetch();
     $this->assertEquals('log_civicrm_contact', $dao->Table);
     $tableField = 'Create_Table';
-    $this->assertContains('`log_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,', $dao->$tableField);
-    $this->assertContains('`log_conn_id` varchar(17)', $dao->$tableField);
+    $this->assertStringContainsString('`log_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,', $dao->$tableField);
+    $this->assertStringContainsString('`log_conn_id` varchar(17)', $dao->$tableField);
     return $dao->$tableField;
   }
 
@@ -226,9 +237,9 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
    */
   protected function checkINNODBLogTableCreated() {
     $createTableString = $this->checkLogTableCreated();
-    $this->assertContains('ENGINE=InnoDB', $createTableString);
-    $this->assertContains('ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4', $createTableString);
-    $this->assertContains('KEY `index_id` (`id`),', $createTableString);
+    $this->assertStringContainsString('ENGINE=InnoDB', $createTableString);
+    $this->assertStringContainsString('ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4', $createTableString);
+    $this->assertStringContainsString('KEY `index_id` (`id`),', $createTableString);
   }
 
   /**
@@ -242,10 +253,10 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
     while ($dao->fetch()) {
       if ($dao->Timing == 'After') {
         if ($unique) {
-          $this->assertContains('@uniqueID', $dao->Statement);
+          $this->assertStringContainsString('@uniqueID', $dao->Statement);
         }
         else {
-          $this->assertContains('CONNECTION_ID()', $dao->Statement);
+          $this->assertStringContainsString('CONNECTION_ID()', $dao->Statement);
         }
       }
     }
@@ -480,6 +491,43 @@ class api_v3_LoggingTest extends CiviUnitTestCase {
       CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_acl DROP Column temp_col");
       CRM_Core_DAO::executeQuery("ALTER TABLE civicrm_website DROP Column temp_col");
     }
+  }
+
+  /**
+   * Test the output under logging_no_trigger_permission.
+   *
+   * The logging_no_trigger_permission setting causes the trigger sql
+   * to be output to a file rather than run. It is for situations
+   * where the db user does not have adequate permissions (Super permission
+   * is required when replication is enabled.
+   *
+   * This tests the output of that file.
+   */
+  public function testTriggerOutput(): void {
+    Civi::settings()->set('logging_no_trigger_permission', TRUE);
+    Civi::settings()->set('logging', TRUE);
+    /* @var \Civi\Core\SqlTriggers $sqlTriggers */
+    $sqlTriggers = Civi::service('sql_triggers');
+    $fileName = $sqlTriggers->getFile();
+    $triggerOutPut = file_get_contents($fileName);
+    $this->assertStringStartsWith('DELIMITER //
+DROP FUNCTION', $triggerOutPut);
+    $this->assertStringContainsString('DROP TRIGGER IF EXISTS civicrm_activity_before_insert //
+DROP TRIGGER IF EXISTS civicrm_activity_before_update //
+DROP TRIGGER IF EXISTS civicrm_activity_before_delete //
+DROP TRIGGER IF EXISTS civicrm_activity_after_insert //
+DROP TRIGGER IF EXISTS civicrm_activity_after_update //
+DROP TRIGGER IF EXISTS civicrm_activity_after_delete //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_before_insert //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_before_update //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_before_delete //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_after_insert //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_after_update //
+DROP TRIGGER IF EXISTS civicrm_activity_contact_after_delete //', $triggerOutPut);
+
+    $this->assertStringEndsWith('END //
+DELIMITER ;
+', $triggerOutPut);
   }
 
 }

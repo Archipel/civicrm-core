@@ -25,6 +25,7 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
    */
   public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
+    $this->revertTemplateToReservedTemplate('contribution_invoice_receipt');
     CRM_Utils_Hook::singleton()->reset();
   }
 
@@ -67,14 +68,14 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
       $invoiceHTML[current($contributionID)] = CRM_Contribute_Form_Task_Invoice::printPDF($contributionID, $params, $contactIds);
     }
 
-    $this->assertNotContains('Due Date', $invoiceHTML[$result['id']]);
-    $this->assertNotContains('PAYMENT ADVICE', $invoiceHTML[$result['id']]);
-    $this->assertContains('Mr. Anthony Anderson II', $invoiceHTML[$result['id']]);
+    $this->assertStringNotContainsString('Due Date', $invoiceHTML[$result['id']]);
+    $this->assertStringNotContainsString('PAYMENT ADVICE', $invoiceHTML[$result['id']]);
+    $this->assertStringContainsString('Mr. Anthony Anderson II', $invoiceHTML[$result['id']]);
 
-    $this->assertContains('Due Date', $invoiceHTML[$contribution['id']]);
-    $this->assertContains('PAYMENT ADVICE', $invoiceHTML[$contribution['id']]);
+    $this->assertStringContainsString('Due Date', $invoiceHTML[$contribution['id']]);
+    $this->assertStringContainsString('PAYMENT ADVICE', $invoiceHTML[$contribution['id']]);
 
-    $this->assertContains('AMOUNT DUE:</font></b></td>
+    $this->assertStringContainsString('AMOUNT DUE:</font></b></td>
                 <td style="text-align:right;"><b><font size="1">$ 92.00</font></b></td>', $invoiceHTML[$contribution3['id']]);
   }
 
@@ -152,11 +153,11 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
     $lineItems = $this->callAPISuccess('LineItem', 'get', ['contribution_id' => $order['id']]);
 
     foreach ($lineItems['values'] as $lineItem) {
-      $this->assertContains("<font size=\"1\">$ {$lineItem['line_total']}</font>", $invoiceHTML);
+      $this->assertStringContainsString("<font size=\"1\">$ {$lineItem['line_total']}</font>", $invoiceHTML);
     }
 
     $totalAmount = $this->formatMoneyInput($order['values'][$order['id']]['total_amount']);
-    $this->assertContains("TOTAL USD</font></b></td>
+    $this->assertStringContainsString("TOTAL USD</font></b></td>
                 <td style=\"text-align:right;\"><font size=\"1\">$ $totalAmount</font>", $invoiceHTML);
 
   }
@@ -173,31 +174,70 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
 
     $this->_individualId = $this->individualCreate();
 
-    $contributionParams = [
-      'contact_id' => $this->_individualId,
-      'total_amount' => 100,
-      'currency' => 'GBP',
-      'financial_type_id' => 'Donation',
-      'contribution_status_id' => 1,
-    ];
-
-    $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
+    $contributionID = $this->setupContribution();
 
     $params = [
       'output' => 'pdf_invoice',
       'forPage' => 1,
     ];
 
-    $invoiceHTML = CRM_Contribute_Form_Task_Invoice::printPDF([$contribution['id']], $params, [$this->_individualId]);
+    $invoiceHTML = CRM_Contribute_Form_Task_Invoice::printPDF([$contributionID], $params, [$this->_individualId]);
 
-    $this->assertNotContains('$', $invoiceHTML);
-    $this->assertNotContains('Amount USD', $invoiceHTML);
-    $this->assertNotContains('TOTAL USD', $invoiceHTML);
-    $this->assertContains('£ 0.00', $invoiceHTML);
-    $this->assertContains('£ 100.00', $invoiceHTML);
-    $this->assertContains('Amount GBP', $invoiceHTML);
-    $this->assertContains('TOTAL GBP', $invoiceHTML);
+    $this->assertStringNotContainsString('$', $invoiceHTML);
+    $this->assertStringNotContainsString('Amount USD', $invoiceHTML);
+    $this->assertStringNotContainsString('TOTAL USD', $invoiceHTML);
+    $this->assertStringContainsString('£ 0.00', $invoiceHTML);
+    $this->assertStringContainsString('£ 100.00', $invoiceHTML);
+    $this->assertStringContainsString('Amount GBP', $invoiceHTML);
+    $this->assertStringContainsString('TOTAL GBP', $invoiceHTML);
 
+  }
+
+  /**
+   * Test invoice contact fields.
+   */
+  public function testInvoiceContactFields(): void {
+    $this->swapMessageTemplateForTestTemplate('contribution_invoice_receipt');
+    $contactID = $this->individualCreate([
+      'postal_code' => 2345,
+      'street_address' => 'on my street',
+      'supplemental_address_1' => 'and more detail',
+      'supplemental_address_2' => 'and more',
+      'stateProvinceAbbreviation' => 'ME',
+      'city' => 'Baltimore',
+      'country' => 'US',
+      'external_identifier' => 2345,
+    ]);
+    $params = [
+      'output' => 'pdf_invoice',
+      'forPage' => 1,
+    ];
+    $invoiceHTML = CRM_Contribute_Form_Task_Invoice::printPDF([$this->setupContribution(['contact_id' => $contactID])], $params, [$contactID]);
+    $expected = [
+      'externalIdentifier (token):::2345',
+      'displayName (token):::Mr. Anthony Anderson II',
+    ];
+    foreach ($expected as $string) {
+      $this->assertStringContainsString($string, $invoiceHTML);
+    }
+  }
+
+  /**
+   * Set up a contribution.
+   *
+   * @param array $params
+   *
+   * @return int
+   */
+  protected function setupContribution(array $params = []): int {
+    $contributionParams = array_merge([
+      'contact_id' => $this->_individualId,
+      'total_amount' => 100,
+      'currency' => 'GBP',
+      'financial_type_id' => 'Donation',
+      'contribution_status_id' => 1,
+    ], $params);
+    return (int) $this->callAPISuccess('Contribution', 'create', $contributionParams)['id'];
   }
 
 }
