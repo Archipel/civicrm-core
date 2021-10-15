@@ -10,3 +10,6 @@
 [submodule "ext/expense-notes"]
 	path = ext/expense-notes
 	url = https://gitlab+deploy-token-175891:j9x9ePzWvo8DHzzmJshk@gitlab.com/weynwebworks/civicrm-extension-expense-notes.git
+[submodule "drupal"]
+	path = drupal
+	url = git@github.com:Weyn-Web-Works/civicrm-drupal.git
