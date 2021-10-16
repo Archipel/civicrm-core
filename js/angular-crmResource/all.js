@@ -26,7 +26,7 @@
         }
         else {
           angular.forEach(dfrs, function(dfr) {
-            dfr.reject({status: 500}); // FIXME
+            dfr.reject({status: 500, msg: "URL '"+url+"' not in templates array"});
           });
         }
       });
