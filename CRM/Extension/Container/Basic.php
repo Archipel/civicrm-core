@@ -196,7 +196,7 @@ class CRM_Extension_Container_Basic implements CRM_Extension_Container_Interface
       if ($this->cache) {
         $this->relPaths = $this->cache->get($this->cacheKey);
       }
-      if (!is_array($this->relPaths)) {
+      if (!is_array($this->relPaths) || empty($this->relPaths)) {
         $this->relPaths = [];
         $infoPaths = CRM_Utils_File::findFiles($this->baseDir, 'info.xml');
         foreach ($infoPaths as $infoPath) {

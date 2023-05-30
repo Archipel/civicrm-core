@@ -143,6 +143,7 @@ class CRM_Extension_Container_Collection implements CRM_Extension_Container_Inte
    */
   public function getContainer($key) {
     $k2c = $this->getKeysToContainer();
+
     if (isset($k2c[$key]) && isset($this->containers[$k2c[$key]])) {
       return $this->containers[$k2c[$key]];
     }
@@ -162,7 +163,7 @@ class CRM_Extension_Container_Collection implements CRM_Extension_Container_Inte
     if ($this->cache) {
       $k2c = $this->cache->get($this->cacheKey);
     }
-    if (!isset($k2c) || !is_array($k2c)) {
+    if (empty($k2c)) {
       $k2c = [];
       $containerNames = array_reverse(array_keys($this->containers));
       foreach ($containerNames as $name) {
