@@ -13,3 +13,6 @@
 [submodule "drupal"]
 	path = drupal
 	url = git@github.com:Weyn-Web-Works/civicrm-drupal.git
+[submodule "ext/timelabtests"]
+	path = ext/timelabtests
+	url = git@github.com:Weyn-Web-Works/civicrm-timelab-tests.git
