@@ -19,16 +19,17 @@
 
 namespace api\v4\Action;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Api4\Activity;
 use Civi\Api4\Contact;
 use Civi\Api4\CustomField;
 use Civi\Api4\CustomGroup;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class ChainTest extends UnitTestCase {
+class ChainTest extends Api4TestBase implements TransactionalInterface {
 
   public function tearDown(): void {
     CustomField::delete()
@@ -39,7 +40,7 @@ class ChainTest extends UnitTestCase {
     parent::tearDown();
   }
 
-  public function testGetActionsWithFields() {
+  public function testGetActionsWithFields(): void {
     $actions = \Civi\Api4\Activity::getActions()
       ->addChain('fields', \Civi\Api4\Activity::getFields()->setAction('$name'), 'name')
       ->execute()
@@ -48,7 +49,7 @@ class ChainTest extends UnitTestCase {
     $this->assertEquals('Array', $actions['getActions']['fields']['params']['data_type']);
   }
 
-  public function testGetEntityWithActions() {
+  public function testGetEntityWithActions(): void {
     $entities = \Civi\Api4\Entity::get()
       ->addSelect('name')
       ->setChain([
@@ -62,7 +63,7 @@ class ChainTest extends UnitTestCase {
     $this->assertArrayNotHasKey('replace', $entities['Entity']['actions']);
   }
 
-  public function testContactCreateWithGroup() {
+  public function testContactCreateWithGroup(): void {
     $firstName = uniqid('cwtf');
     $lastName = uniqid('cwtl');
 
@@ -80,10 +81,10 @@ class ChainTest extends UnitTestCase {
     $this->assertEquals($contact['group']['id'], $contact['check_group'][0]['group_id']);
   }
 
-  public function testWithContactRef() {
+  public function testWithContactRef(): void {
     CustomGroup::create()
       ->setCheckPermissions(FALSE)
-      ->addValue('name', 'TestActCus')
+      ->addValue('title', 'TestActCus')
       ->addValue('extends', 'Activity')
       ->addChain('field1', CustomField::create()
         ->addValue('label', 'FavPerson')

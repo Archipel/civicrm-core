@@ -13,32 +13,33 @@
  * Test ContributionPage translation features.
  *
  * @group headless
+ * @group locale
  */
 class CRM_Contribute_Form_ContributionPageTranslationTest extends CiviUnitTestCase {
 
   public function setUp(): void {
     parent::setUp();
-    $this->_financialTypeID = 1;
-    $this->enableMultilingual();
-    CRM_Core_I18n_Schema::addLocale('fr_FR', 'en_US');
+    $this->enableMultilingual(['en_US' => 'fr_FR']);
   }
 
   public function tearDown(): void {
     global $dbLocale;
     if ($dbLocale) {
-      CRM_Core_I18n_Schema::makeSinglelingual('en_US');
+      $this->disableMultilingual();
     }
+    $this->quickCleanup(['civicrm_contribution_page']);
+    parent::tearDown();
   }
 
   /**
    * Create() method (create Contribution Page with Honor block)
    */
-  public function testCreateHonor() {
+  public function testCreateHonor(): void {
     CRM_Core_I18n::singleton()->setLocale('en_US');
 
     $params = [
       'title' => 'Test Contribution Page',
-      'financial_type_id' => $this->_financialTypeID,
+      'financial_type_id' => 1,
       'is_for_organization' => 0,
       'for_organization' => ' I am contributing on behalf of an organization',
       'goal_amount' => '400',
@@ -57,14 +58,14 @@ class CRM_Contribute_Form_ContributionPageTranslationTest extends CiviUnitTestCa
       'is_credit_card_only' => '',
     ];
 
-    $contributionpage = CRM_Contribute_BAO_ContributionPage::create($params);
+    $contributionPage = CRM_Contribute_BAO_ContributionPage::create($params);
 
     // The BAO does not save these
-    $params['id'] = $contributionpage->id;
+    $params['id'] = $contributionPage->id;
     $params['honor_block_title'] = 'In Honor Title EN';
     $params['honor_block_text'] = 'In Honor Text EN';
 
-    $form = $this->getFormObject('CRM_Contribute_Form_ContributionPage_Settings', $params, 'Settings');
+    $form = $this->getFormObject('CRM_Contribute_Form_ContributionPage_Settings', $params);
     $form->postProcess();
 
     // Now update the page with In Honor (soft credit) text in French
@@ -73,11 +74,11 @@ class CRM_Contribute_Form_ContributionPageTranslationTest extends CiviUnitTestCa
     $params['honor_block_title'] = 'In Honor Title FR';
     $params['honor_block_text'] = 'In Honor Text FR';
 
-    $form = $this->getFormObject('CRM_Contribute_Form_ContributionPage_Settings', $params, 'Settings');
+    $form = $this->getFormObject('CRM_Contribute_Form_ContributionPage_Settings', $params);
     $form->postProcess();
 
     $uf = $this->callAPISuccess('UFJoin', 'getsingle', [
-      'entity_id' => $contributionpage->id,
+      'entity_id' => $contributionPage->id,
       'module' => 'soft_credit',
     ]);
 
@@ -87,8 +88,6 @@ class CRM_Contribute_Form_ContributionPageTranslationTest extends CiviUnitTestCa
     $this->assertEquals('In Honor Text EN', $json['soft_credit']['en_US']['honor_block_text']);
     $this->assertEquals('In Honor Title FR', $json['soft_credit']['fr_FR']['honor_block_title']);
     $this->assertEquals('In Honor Text FR', $json['soft_credit']['fr_FR']['honor_block_text']);
-
-    $this->callAPISuccess('ContributionPage', 'delete', ['id' => $contributionpage->id]);
   }
 
 }

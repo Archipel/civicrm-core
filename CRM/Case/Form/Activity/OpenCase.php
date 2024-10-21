@@ -30,7 +30,6 @@ class CRM_Case_Form_Activity_OpenCase {
    * @param CRM_Case_Form_Case $form
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public static function preProcess(&$form) {
     //get multi client case configuration
@@ -75,7 +74,7 @@ class CRM_Case_Form_Activity_OpenCase {
    * @param CRM_Case_Form_Case $form
    *
    * @return array $defaults
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public static function setDefaultValues(&$form) {
     $defaults = [];
@@ -133,7 +132,7 @@ class CRM_Case_Form_Activity_OpenCase {
   /**
    * @param CRM_Case_Form_Case $form
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Exception
    */
   public static function buildQuickForm(&$form) {
@@ -169,8 +168,8 @@ class CRM_Case_Form_Activity_OpenCase {
 
     if ($form->_currentlyViewedContactId) {
       list($displayName) = CRM_Contact_BAO_Contact::getDisplayAndImage($form->_currentlyViewedContactId);
-      $form->assign('clientName', $displayName);
     }
+    $form->assign('clientName', $displayName ?? NULL);
 
     $form->add('datepicker', 'start_date', ts('Case Start Date'), [], TRUE);
 
@@ -277,7 +276,7 @@ class CRM_Case_Form_Activity_OpenCase {
           'case_id' => $params['case_id'],
           'contact_id' => $cliId,
         ];
-        CRM_Case_BAO_CaseContact::create($contactParams);
+        CRM_Case_BAO_CaseContact::writeRecord($contactParams);
       }
     }
     else {
@@ -285,7 +284,7 @@ class CRM_Case_Form_Activity_OpenCase {
         'case_id' => $params['case_id'],
         'contact_id' => $form->_currentlyViewedContactId,
       ];
-      CRM_Case_BAO_CaseContact::create($contactParams);
+      CRM_Case_BAO_CaseContact::writeRecord($contactParams);
     }
 
     // 2. initiate xml processor

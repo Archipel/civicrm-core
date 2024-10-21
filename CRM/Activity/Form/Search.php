@@ -53,13 +53,6 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
   protected $_prefix = 'activity_';
 
   /**
-   * The saved search ID retrieved from the GET vars.
-   *
-   * @var int
-   */
-  protected $_ssID;
-
-  /**
    * @return string
    */
   public function getDefaultEntity(): string {
@@ -70,7 +63,6 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
    * Processing needed for buildForm and later.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function preProcess(): void {
     $this->set('searchFormName', 'Search');
@@ -121,7 +113,6 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
    * Build the form object.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function buildQuickForm(): void {
     parent::buildQuickForm();
@@ -153,7 +144,7 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
    * The processing consists of using a Selector / Controller framework for getting the
    * search results.
    *
-   * @throws \CRM_Core_Exception|\CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function postProcess(): void {
     if ($this->_done) {
@@ -178,11 +169,6 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
     if (isset($this->_ssID) && empty($_POST)) {
       // if we are editing / running a saved search and the form has not been posted
       $this->_formValues = CRM_Contact_BAO_SavedSearch::getFormValues($this->_ssID);
-    }
-
-    // We don't show test records in summaries or dashboards
-    if (empty($this->_formValues['activity_test']) && $this->_force) {
-      $this->_formValues['activity_test'] = 0;
     }
 
     $this->_queryParams = CRM_Contact_BAO_Query::convertFormValues($this->_formValues);
@@ -316,7 +302,7 @@ class CRM_Activity_Form_Search extends CRM_Core_Form_Search {
    *
    * @return array
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function getEntityMetadata() {
     return CRM_Activity_BAO_Query::getSearchFieldMetadata();

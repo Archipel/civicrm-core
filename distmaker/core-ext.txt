@@ -6,6 +6,10 @@
 
 afform
 authx
+civicrm_admin_ui
+civicrm_search_ui
+civigrant
+civiimport
 contributioncancelactions
 ckeditor4
 eventcart
@@ -19,4 +23,15 @@ payflowpro
 recaptcha
 search_kit
 sequentialcreditnotes
+standaloneusers
 legacycustomsearches
+elavon
+civi_campaign
+civi_case
+civi_contribute
+civi_event
+civi_mail
+civi_member
+civi_pledge
+civi_report
+scheduled_communications

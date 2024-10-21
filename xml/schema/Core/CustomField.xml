@@ -8,6 +8,13 @@
   <add>1.1</add>
   <log>true</log>
   <labelField>label</labelField>
+  <paths>
+    <add>civicrm/admin/custom/group/field/add?reset=1&amp;action=add&amp;gid=[custom_group_id]</add>
+    <update>civicrm/admin/custom/group/field/update?action=update&amp;reset=1&amp;id=[id]&amp;gid=[custom_group_id]</update>
+    <preview>civicrm/admin/custom/group/preview?reset=1&amp;fid=[id]</preview>
+    <delete>civicrm/admin/custom/group/field/delete?reset=1&amp;id=[id]</delete>
+    <detach>civicrm/admin/custom/group/field/move?reset=1&amp;fid=[id]</detach>
+  </paths>
   <field>
     <name>id</name>
     <type>int unsigned</type>
@@ -64,6 +71,9 @@
     <localizable>true</localizable>
     <comment>Text for form field label (also friendly name for administering this custom property).</comment>
     <add>1.1</add>
+    <html>
+      <type>Text</type>
+    </html>
   </field>
   <field>
     <name>data_type</name>
@@ -111,6 +121,7 @@
     <type>boolean</type>
     <comment>Is a value required for this property.</comment>
     <default>0</default>
+    <required>true</required>
     <add>1.1</add>
   </field>
   <field>
@@ -119,6 +130,7 @@
     <type>boolean</type>
     <comment>Is this property searchable.</comment>
     <default>0</default>
+    <required>true</required>
     <add>1.1</add>
   </field>
   <field>
@@ -128,6 +140,7 @@
     <comment>Is this property range searchable.</comment>
     <add>1.4</add>
     <default>0</default>
+    <required>true</required>
   </field>
   <field>
     <name>weight</name>
@@ -159,8 +172,9 @@
     <type>varchar</type>
     <title>Custom Field Formatting</title>
     <length>64</length>
-    <comment>Optional format instructions for specific field types, like date types.</comment>
+    <comment>Unused</comment>
     <add>1.1</add>
+    <drop>5.59</drop>
   </field>
   <field>
     <name>attributes</name>
@@ -175,14 +189,19 @@
     <type>varchar</type>
     <title>Custom Field Javascript</title>
     <length>255</length>
-    <comment>Optional scripting attributes for field.</comment>
+    <comment>Unused</comment>
     <add>1.1</add>
+    <drop>5.61</drop>
   </field>
   <field>
     <name>is_active</name>
     <type>boolean</type>
     <title>Custom Field Is Active?</title>
     <comment>Is this property active?</comment>
+    <html>
+      <type>CheckBox</type>
+      <label>Enabled</label>
+    </html>
     <default>1</default>
     <add>1.1</add>
   </field>
@@ -191,6 +210,7 @@
     <type>boolean</type>
     <title>Field is Viewable</title>
     <default>0</default>
+    <required>true</required>
     <comment>Is this property set by PHP Code? A code field is viewable but not editable</comment>
     <add>1.1</add>
   </field>
@@ -312,8 +332,18 @@
     <type>boolean</type>
     <title>Field Display</title>
     <default>0</default>
+    <required>true</required>
     <comment>Should the multi-record custom field values be displayed in tab table listing</comment>
     <add>4.5</add>
+  </field>
+  <field>
+    <name>fk_entity</name>
+    <type>varchar</type>
+    <title>Entity</title>
+    <length>255</length>
+    <default>NULL</default>
+    <comment>Name of entity being referenced.</comment>
+    <add>5.60</add>
   </field>
   <index>
     <name>UI_label_custom_group_id</name>

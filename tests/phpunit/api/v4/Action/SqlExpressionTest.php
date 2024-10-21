@@ -19,16 +19,17 @@
 
 namespace api\v4\Action;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Api4\Contact;
 use Civi\Api4\Email;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class SqlExpressionTest extends UnitTestCase {
+class SqlExpressionTest extends Api4TestBase implements TransactionalInterface {
 
-  public function testSelectNull() {
+  public function testSelectNull(): void {
     Contact::create()->addValue('first_name', 'bob')->setCheckPermissions(FALSE)->execute();
     $result = Contact::get()
       ->addSelect('NULL AS nothing', 'NULL', 'NULL AS b*d char', 'first_name')
@@ -43,7 +44,7 @@ class SqlExpressionTest extends UnitTestCase {
     $this->assertArrayNotHasKey('b*d char', $result);
   }
 
-  public function testSelectNumbers() {
+  public function testSelectNumbers(): void {
     Contact::create()->addValue('first_name', 'bob')->setCheckPermissions(FALSE)->execute();
     $result = Contact::get()
       ->addSelect('first_name', 123, 45.678, '-55 AS neg')
@@ -57,7 +58,7 @@ class SqlExpressionTest extends UnitTestCase {
     $this->assertEquals('45.678', $result['45_678']);
   }
 
-  public function testSelectStrings() {
+  public function testSelectStrings(): void {
     Contact::create()->addValue('first_name', 'bob')->setCheckPermissions(FALSE)->execute();
     $result = Contact::get()
       ->addSelect('first_name')
@@ -72,13 +73,13 @@ class SqlExpressionTest extends UnitTestCase {
     $this->assertEquals('can\'t "quote"', $result['quot']);
   }
 
-  public function testSelectAlias() {
+  public function testSelectAlias(): void {
     try {
       Contact::get()
         ->addSelect('first_name AS bob')
         ->execute();
     }
-    catch (\API_Exception $e) {
+    catch (\CRM_Core_Exception $e) {
       $msg = $e->getMessage();
     }
     $this->assertStringContainsString('alias', $msg);
@@ -87,7 +88,7 @@ class SqlExpressionTest extends UnitTestCase {
         ->addSelect('55 AS sort_name')
         ->execute();
     }
-    catch (\API_Exception $e) {
+    catch (\CRM_Core_Exception $e) {
       $msg = $e->getMessage();
     }
     $this->assertStringContainsString('existing field name', $msg);
@@ -96,7 +97,7 @@ class SqlExpressionTest extends UnitTestCase {
       ->execute();
   }
 
-  public function testSelectEquations() {
+  public function testSelectEquations(): void {
     $contact = Contact::create(FALSE)->addValue('first_name', 'bob')
       ->addChain('email', Email::create()->setValues(['email' => 'hello@example.com', 'contact_id' => '$id']))
       ->execute()->first();
@@ -112,8 +113,9 @@ class SqlExpressionTest extends UnitTestCase {
         '(illegal * stuff) AS illegal_stuff',
         // This field will be null
         '(hold_date + 5) AS null_plus_five',
+        '(1 % 2) AS one_is_odd',
       ])
-      ->addWhere('contact_id', '=', $contact['id'])
+      ->addWhere('(contact_id + 1)', '=', 1 + $contact['id'])
       ->setLimit(1)
       ->execute()
       ->first();
@@ -125,6 +127,7 @@ class SqlExpressionTest extends UnitTestCase {
     $this->assertTrue($result['is_between']);
     $this->assertArrayNotHasKey('illegal_stuff', $result);
     $this->assertEquals('5', $result['null_plus_five']);
+    $this->assertEquals('1', $result['one_is_odd']);
   }
 
 }

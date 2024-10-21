@@ -8,8 +8,6 @@
  +--------------------------------------------------------------------+
 *}
 <div class="crm-block crm-form-block crm-miscellaneous-form-block">
-   <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
-
     <table class="form-layout">
       <tr class="crm-miscellaneous-form-block-checksum_timeout">
         <td class="label">{$form.checksum_timeout.label}</td>
@@ -17,7 +15,6 @@
             <span class="description">{ts}The number of days before a personalized (hashed) link will expire.{/ts}</span></td>
       </tr>
     </table>
-
     <table class="form-layout">
       <tr class="crm-miscellaneous-form-block-contact_undelete">
         <td class="label">{$form.contact_undelete.label}</td>
@@ -39,6 +36,12 @@
         {else}
           <p class="description">{ts}In order to use this functionality, the installation's database user must have privileges to create triggers (in MySQL 5.0 – and in MySQL 5.1 if binary logging is enabled – this means the SUPER privilege). This install either does not seem to have the required privilege enabled.{/ts}&nbsp;{ts}This functionality cannot be enabled on multilingual installations.{/ts}</p>
         {/if}
+        </td>
+      </tr>
+      <tr class="crm-miscellaneous-form-block-enableBackgroundQueue">
+        <td class="label">{$form.enableBackgroundQueue.label}</td>
+        <td>{$form.enableBackgroundQueue.html}<br />
+          <span class="description">{$setting_descriptions.enableBackgroundQueue}</span>
         </td>
       </tr>
       <tr class="crm-miscellaneous-form-block-doNotAttachPDFReceipt">

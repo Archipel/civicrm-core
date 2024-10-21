@@ -436,6 +436,79 @@
     };
   });
 
+  // @deprecated This code was moved from ViewRecipCtrl and is quarantined in this service.
+  // It's used to fetch data that ought to be available in other ways.
+  // It would be nice to refactor it out completely.
+  angular.module('crmMailing').factory('crmMailingLoader', function ($q, crmApi, crmFromAddresses, crmQueue) {
+
+    var mids = [];
+    var gids = [];
+    var groupNames = [];
+    var mailings = [];
+    var civimailings = [];
+    var civimails = [];
+
+    return {
+      // Populates the CRM.crmMailing.groupNames global
+      getGroupNames: function(mailing) {
+        if (-1 == mailings.indexOf(mailing.id)) {
+          mailings.push(mailing.id);
+          _.each(mailing.recipients.groups.include, function(id) {
+            if (-1 == gids.indexOf(id)) {
+              gids.push(id);
+            }
+          });
+          _.each(mailing.recipients.groups.exclude, function(id) {
+            if (-1 == gids.indexOf(id)) {
+              gids.push(id);
+            }
+          });
+          _.each(mailing.recipients.groups.base, function(id) {
+            if (-1 == gids.indexOf(id)) {
+              gids.push(id);
+            }
+          });
+          if (!_.isEmpty(gids)) {
+            CRM.api3('Group', 'get', {'id': {"IN": gids}}).then(function(result) {
+              _.each(result.values, function(grp) {
+                if (_.isEmpty(_.where(groupNames, {id: parseInt(grp.id)}))) {
+                  groupNames.push({id: parseInt(grp.id), title: grp.title, is_hidden: grp.is_hidden});
+                }
+              });
+              CRM.crmMailing.groupNames = groupNames;
+            });
+          }
+        }
+      },
+      // Populates the CRM.crmMailing.civiMails global
+      getCiviMails: function(mailing) {
+        if (-1 == civimailings.indexOf(mailing.id)) {
+          civimailings.push(mailing.id);
+          _.each(mailing.recipients.mailings.include, function(id) {
+            if (-1 == mids.indexOf(id)) {
+              mids.push(id);
+            }
+          });
+          _.each(mailing.recipients.mailings.exclude, function(id) {
+            if (-1 == mids.indexOf(id)) {
+              mids.push(id);
+            }
+          });
+          if (!_.isEmpty(mids)) {
+            CRM.api3('Mailing', 'get', {'id': {"IN": mids}}).then(function(result) {
+              _.each(result.values, function(mail) {
+                if (_.isEmpty(_.where(civimails, {id: parseInt(mail.id)}))) {
+                  civimails.push({id: parseInt(mail.id), name: mail.name});
+                }
+              });
+              CRM.crmMailing.civiMails = civimails;
+            });
+          }
+        }
+      }
+    };
+  });
+
   // The preview manager performs preview actions while putting up a visible UI (e.g. dialogs & status alerts)
   angular.module('crmMailing').factory('crmMailingPreviewMgr', function (dialogService, crmMailingMgr, crmStatus) {
     return {
@@ -453,6 +526,8 @@
           .then(function (content) {
             var options = CRM.utils.adjustDialogDefaults({
               autoOpen: false,
+              height: '90%',
+              width: '800px',
               title: ts('Subject: %1', {
                 1: content.subject
               })
@@ -481,15 +556,15 @@
 
   angular.module('crmMailing').factory('crmMailingStats', function (crmApi, crmLegacy) {
     var statTypes = [
-      // {name: 'Recipients', title: ts('Intended Recipients'),   searchFilter: '',                           eventsFilter: '&event=queue', reportType: 'detail', reportFilter: ''},
-      {name: 'Delivered',     title: ts('Successful Deliveries'), searchFilter: '&mailing_delivery_status=Y', eventsFilter: '&event=delivered', reportType: 'detail', reportFilter: '&delivery_status_value=successful'},
-      {name: 'Opened',        title: ts('Tracked Opens'),         searchFilter: '&mailing_open_status=Y',     eventsFilter: '&event=opened', reportType: 'opened', reportFilter: ''},
-      {name: 'Unique Clicks', title: ts('Click-throughs'),        searchFilter: '&mailing_click_status=Y',    eventsFilter: '&event=click&distinct=1', reportType: 'clicks', reportFilter: ''},
-      // {name: 'Forward',    title: ts('Forwards'),              searchFilter: '&mailing_forward=1',         eventsFilter: '&event=forward', reportType: 'detail', reportFilter: '&is_forwarded_value=1'},
-      // {name: 'Replies',    title: ts('Replies'),               searchFilter: '&mailing_reply_status=Y',    eventsFilter: '&event=reply', reportType: 'detail', reportFilter: '&is_replied_value=1'},
-      {name: 'Bounces',       title: ts('Bounces'),               searchFilter: '&mailing_delivery_status=N', eventsFilter: '&event=bounce', reportType: 'bounce', reportFilter: ''},
-      {name: 'Unsubscribers', title: ts('Unsubscribes'),          searchFilter: '&mailing_unsubscribe=1',     eventsFilter: '&event=unsubscribe', reportType: 'detail', reportFilter: '&is_unsubscribed_value=1'},
-      // {name: 'OptOuts',    title: ts('Opt-Outs'),              searchFilter: '&mailing_optout=1',          eventsFilter: '&event=optout', reportType: 'detail', reportFilter: ''}
+      {name: 'Recipients',    title: ts('Intended Recipients'),     searchFilter: '',                           eventsFilter: '&event=queue', reportType: 'detail', reportFilter: ''},
+      {name: 'Delivered',     title: ts('Successful Deliveries'),   searchFilter: '&mailing_delivery_status=Y', eventsFilter: '&event=delivered', reportType: 'detail', reportFilter: '&delivery_status_value=successful'},
+      {name: 'Opened',        title: ts('Unique Opens'),           searchFilter: '&mailing_open_status=Y',     eventsFilter: '&event=opened', reportType: 'opened', reportFilter: ''},
+      {name: 'Unique Clicks', title: ts('Unique Clicks'),          searchFilter: '&mailing_click_status=Y',    eventsFilter: '&event=click&distinct=1', reportType: 'clicks', reportFilter: ''},
+      // {name: 'Forward',    title: ts('Forwards'),                searchFilter: '&mailing_forward=1',         eventsFilter: '&event=forward', reportType: 'detail', reportFilter: '&is_forwarded_value=1'},
+      // {name: 'Replies',    title: ts('Replies'),                 searchFilter: '&mailing_reply_status=Y',    eventsFilter: '&event=reply', reportType: 'detail', reportFilter: '&is_replied_value=1'},
+      {name: 'Bounces',       title: ts('Bounces'),                 searchFilter: '&mailing_delivery_status=N', eventsFilter: '&event=bounce', reportType: 'bounce', reportFilter: ''},
+      {name: 'Unsubscribers', title: ts('Unsubscribes & Opt-outs'), searchFilter: '&mailing_unsubscribe=1',     eventsFilter: '&event=unsubscribe', reportType: 'detail', reportFilter: '&is_unsubscribed_value=1'},
+      // {name: 'OptOuts',    title: ts('Opt-Outs'),                searchFilter: '&mailing_optout=1',          eventsFilter: '&event=optout', reportType: 'detail', reportFilter: ''}
     ];
 
     return {
@@ -507,7 +582,7 @@
       getStats: function(mailingIds) {
         var params = {};
         angular.forEach(mailingIds, function(mailingId, name) {
-          params[name] = ['Mailing', 'stats', {mailing_id: mailingId, is_distinct: 0}];
+          params[name] = ['Mailing', 'stats', {mailing_id: mailingId, is_distinct: 1}];
         });
         return crmApi(params).then(function(result) {
           var stats = {};
@@ -566,6 +641,7 @@
           scope.crmMailingConst = CRM.crmMailing;
           scope.ts = CRM.ts(null);
           scope.hs = crmUiHelp({file: 'CRM/Mailing/MailingUI'});
+          scope.checkPerm = CRM.checkPerm;
           scope[directiveName] = attr[directiveName] ? scope.$parent.$eval(attr[directiveName]) : {};
           $q.when(crmMetadata.getFields('Mailing'), function(fields) {
             scope.mailingFields = fields;

@@ -249,6 +249,8 @@ class CRM_Campaign_Form_Campaign extends CRM_Core_Form {
     ];
 
     $this->addButtons($buttons);
+
+    $this->addFormRule(['CRM_Campaign_Form_Campaign', 'formRule']);
   }
 
   /**
@@ -256,14 +258,17 @@ class CRM_Campaign_Form_Campaign extends CRM_Core_Form {
    * All local rules are added near the element
    *
    * @param $fields
-   * @param $files
-   * @param $errors
    *
    * @return bool|array
-   * @see valid_date
    */
-  public static function formRule($fields, $files, $errors) {
+  public static function formRule($fields) {
     $errors = [];
+
+    // Validate start/end date inputs
+    $validateDates = \CRM_Utils_Date::validateStartEndDatepickerInputs('start_date', $fields['start_date'], 'end_date', $fields['end_date']);
+    if ($validateDates !== TRUE) {
+      $errors[$validateDates['key']] = $validateDates['message'];
+    }
 
     return empty($errors) ? TRUE : $errors;
   }
@@ -282,7 +287,7 @@ class CRM_Campaign_Form_Campaign extends CRM_Core_Form {
     }
     if (!empty($params['id'])) {
       if ($this->_action & CRM_Core_Action::DELETE) {
-        CRM_Campaign_BAO_Campaign::del($params['id']);
+        CRM_Campaign_BAO_Campaign::deleteRecord(['id' => $params['id']]);
         CRM_Core_Session::setStatus(ts('Campaign has been deleted.'), ts('Record Deleted'), 'success');
         $session->replaceUserContext(CRM_Utils_System::url('civicrm/campaign', 'reset=1&subPage=campaign'));
         return;

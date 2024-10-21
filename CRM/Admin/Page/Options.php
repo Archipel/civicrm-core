@@ -16,7 +16,7 @@
  */
 
 /**
- * Page for displaying list of Gender.
+ * Page for displaying list of option groups and option values.
  */
 class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
 
@@ -95,9 +95,6 @@ class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
       self::$_gLabel = ts('Option');
     }
 
-    $this->assign('gName', self::$_gName);
-    $this->assign('gLabel', self::$_gLabel);
-
     if (self::$_gName == 'acl_role') {
       CRM_Utils_System::setTitle(ts('Manage ACL Roles'));
       // set breadcrumb to append to admin/access
@@ -128,14 +125,12 @@ class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
       ]
     ));
 
-    if (self::$_gName == 'participant_role') {
-      $this->assign('showCounted', TRUE);
-    }
+    $this->assign('showCounted', self::$_gName === 'participant_role');
     $this->assign('isLocked', self::$_isLocked);
     $this->assign('allowLoggedIn', Civi::settings()->get('allow_mail_from_logged_in_contact'));
-    if (self::$_gName == 'activity_type') {
-      $this->assign('showComponent', TRUE);
-    }
+    $this->assign('showComponent', self::$_gName === 'activity_type');
+    $this->assign('gName', self::$_gName);
+    $this->assign('gLabel', self::$_gLabel);
   }
 
   /**
@@ -162,26 +157,30 @@ class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
           'url' => 'civicrm/admin/options/' . self::$_gName,
           'qs' => 'action=update&id=%%id%%&reset=1',
           'title' => ts('Edit %1', [1 => self::$_gName]),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::UPDATE),
         ],
         CRM_Core_Action::DISABLE => [
           'name' => ts('Disable'),
           'ref' => 'crm-enable-disable',
           'title' => ts('Disable %1', [1 => self::$_gName]),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::DISABLE),
         ],
         CRM_Core_Action::ENABLE => [
           'name' => ts('Enable'),
           'ref' => 'crm-enable-disable',
           'title' => ts('Enable %1', [1 => self::$_gName]),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::ENABLE),
         ],
         CRM_Core_Action::DELETE => [
           'name' => ts('Delete'),
           'url' => 'civicrm/admin/options/' . self::$_gName,
           'qs' => 'action=delete&id=%%id%%',
           'title' => ts('Delete %1 Type', [1 => self::$_gName]),
+          'weight' => CRM_Core_Action::getWeight(CRM_Core_Action::DELETE),
         ],
       ];
 
-      if (self::$_gName == 'custom_search') {
+      if (self::$_gName === 'custom_search') {
         $runLink = [
           CRM_Core_Action::FOLLOWUP => [
             'name' => ts('Run'),
@@ -189,6 +188,7 @@ class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
             'qs' => 'reset=1&csid=%%value%%',
             'title' => ts('Run %1', [1 => self::$_gName]),
             'class' => 'no-popup',
+            'weight' => 10,
           ],
         ];
         self::$_links = $runLink + self::$_links;
@@ -222,11 +222,20 @@ class CRM_Admin_Page_Options extends CRM_Core_Page_Basic {
     CRM_Utils_Weight::addOrder($optionValue, 'CRM_Core_DAO_OptionValue',
       'id', $returnURL, $filter
     );
+    $this->assign('hasIcons', FALSE);
 
     // retrieve financial account name for the payment method page
-    if ($gName === "payment_instrument") {
-      foreach ($optionValue as $key => $option) {
+    foreach ($optionValue as $key => $option) {
+      if ($gName === 'payment_instrument') {
         $optionValue[$key]['financial_account'] = CRM_Contribute_PseudoConstant::getRelationalFinancialAccount($key, NULL, 'civicrm_option_value', 'financial_account_id.name');
+      }
+      foreach (['weight', 'description', 'value', 'color', 'label', 'is_default', 'icon'] as $expectedKey) {
+        if (!array_key_exists($expectedKey, $option)) {
+          $optionValue[$key][$expectedKey] = NULL;
+        }
+      }
+      if ($option['icon']) {
+        $this->assign('hasIcons', TRUE);
       }
     }
     $this->assign('rows', $optionValue);

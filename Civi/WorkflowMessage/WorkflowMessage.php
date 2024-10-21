@@ -13,6 +13,7 @@
 namespace Civi\WorkflowMessage;
 
 use Civi\Api4\Utils\ReflectionUtils;
+use Civi\Core\ClassScanner;
 use Civi\WorkflowMessage\Exception\WorkflowMessageException;
 
 /**
@@ -125,11 +126,16 @@ class WorkflowMessage {
   public static function exportAll(WorkflowMessageInterface $model): array {
     // The format is defined to match the traditional format of CRM_Core_BAO_MessageTemplate::sendTemplate().
     // At the top level, it is an "envelope", but it also has keys for other sections.
+    $swapLocale = !$model->getLocale() ? NULL : \CRM_Utils_AutoClean::swapLocale($model->getLocale());
+
     $values = $model->export('envelope');
     $values['tplParams'] = $model->export('tplParams');
     $values['tokenContext'] = $model->export('tokenContext');
     if (isset($values['tokenContext']['contactId'])) {
       $values['contactId'] = $values['tokenContext']['contactId'];
+    }
+    if ($swapLocale) {
+      $swapLocale->cleanup();
     }
     return $values;
   }
@@ -146,18 +152,9 @@ class WorkflowMessage {
     $map = $cache->get($cacheKey);
     if ($map === NULL) {
       $map = [];
-      $map['generic'] = GenericWorkflowMessage::class;
-      $baseDirs = explode(PATH_SEPARATOR, get_include_path());
-      foreach ($baseDirs as $baseDir) {
-        $baseDir = \CRM_Utils_File::addTrailingSlash($baseDir);
-        $glob = (array) glob($baseDir . 'CRM/*/WorkflowMessage/*.php');
-        $glob = preg_grep('/\.ex\.php$/', $glob, PREG_GREP_INVERT);
-        foreach ($glob as $file) {
-          $class = strtr(preg_replace('/\.php$/', '', \CRM_Utils_File::relativize($file, $baseDir)), ['/' => '_', '\\' => '_']);
-          if (class_exists($class) && (new \ReflectionClass($class))->implementsInterface(WorkflowMessageInterface::class)) {
-            $map[$class::WORKFLOW] = $class;
-          }
-        }
+      foreach (ClassScanner::get(['interface' => WorkflowMessageInterface::class]) as $wfClass) {
+        $wfName = ($wfClass === GenericWorkflowMessage::class) ? 'generic' : $wfClass::WORKFLOW;
+        $map[$wfName] = $wfClass;
       }
       $cache->set($cacheKey, $map);
     }

@@ -28,7 +28,7 @@ class CRM_Utils_PDF_Utils {
    *   Ex: "HelloWorld.pdf".
    * @param bool $output
    *   FALSE to display PDF. TRUE to return as string.
-   * @param null $pdfFormat
+   * @param array|int|null $pdfFormat
    *   Unclear. Possibly PdfFormat or formValues.
    *
    * @return string|void
@@ -110,66 +110,6 @@ class CRM_Utils_PDF_Utils {
   }
 
   /**
-   * Convert html to tcpdf.
-   *
-   * @deprecated
-   * @param $paper_size
-   * @param $orientation
-   * @param $margins
-   * @param $html
-   * @param $output
-   * @param $fileName
-   * @param $stationery_path
-   */
-  public static function _html2pdf_tcpdf($paper_size, $orientation, $margins, $html, $output, $fileName, $stationery_path) {
-    CRM_Core_Error::deprecatedFunctionWarning('CRM_Utils_PDF::_html2pdf_dompdf');
-    return self::_html2pdf_dompdf($paper_size, $orientation, $margins, $html, $output, $fileName);
-    // Documentation on the TCPDF library can be found at: http://www.tcpdf.org
-    // This function also uses the FPDI library documented at: http://www.setasign.com/products/fpdi/about/
-    // Syntax borrowed from https://github.com/jake-mw/CDNTaxReceipts/blob/master/cdntaxreceipts.functions.inc
-    require_once 'tcpdf/tcpdf.php';
-    // This library is only in the 'packages' area as of version 4.5
-    require_once 'FPDI/fpdi.php';
-
-    $paper_size_arr = [$paper_size[2], $paper_size[3]];
-
-    $pdf = new TCPDF($orientation, 'pt', $paper_size_arr);
-    $pdf->Open();
-
-    if (is_readable($stationery_path)) {
-      $pdf->SetStationery($stationery_path);
-    }
-
-    $pdf->SetAuthor('');
-    $pdf->SetKeywords('CiviCRM.org');
-    $pdf->setPageUnit($margins[0]);
-    $pdf->SetMargins($margins[4], $margins[1], $margins[2], TRUE);
-
-    $pdf->setJPEGQuality('100');
-    $pdf->SetAutoPageBreak(TRUE, $margins[3]);
-
-    $pdf->AddPage();
-
-    $ln = TRUE;
-    $fill = FALSE;
-    $reset_parm = FALSE;
-    $cell = FALSE;
-    $align = '';
-
-    // output the HTML content
-    $pdf->writeHTML($html, $ln, $fill, $reset_parm, $cell, $align);
-
-    // reset pointer to the last page
-    $pdf->lastPage();
-
-    // close and output the PDF
-    $pdf->Close();
-    $pdf_file = 'CiviLetter' . '.pdf';
-    $pdf->Output($pdf_file, 'D');
-    CRM_Utils_System::civiExit();
-  }
-
-  /**
    * @param $paper_size
    * @param $orientation
    * @param $html
@@ -190,23 +130,24 @@ class CRM_Utils_PDF_Utils {
     }
     // CRM-19183 remove .pdf extension from filename
     $fileName = basename($fileName, ".pdf");
-    if (CIVICRM_UF === 'UnitTests' && headers_sent()) {
+    if (CIVICRM_UF === 'UnitTests') {
       // Streaming content will 'die' in unit tests unless ob_start()
       // has been called.
       throw new CRM_Core_Exception_PrematureExitException('_html2pdf_dompdf called', [
         'html' => $html,
         'fileName' => $fileName,
+        'output' => 'pdf',
       ]);
     }
     $dompdf->stream($fileName);
   }
 
   /**
-   * @param $paper_size
-   * @param $orientation
-   * @param $margins
-   * @param $html
-   * @param $output
+   * @param float|int[] $paper_size
+   * @param string $orientation
+   * @param array $margins
+   * @param string $html
+   * @param bool $output
    * @param string $fileName
    */
   public static function _html2pdf_wkhtmltopdf($paper_size, $orientation, $margins, $html, $output, $fileName) {
@@ -234,10 +175,10 @@ class CRM_Utils_PDF_Utils {
   /**
    * convert value from one metric to another.
    *
-   * @param $value
-   * @param $from
-   * @param $to
-   * @param null $precision
+   * @param int $value
+   * @param string $from
+   * @param string $to
+   * @param int|null $precision
    *
    * @return float|int
    */

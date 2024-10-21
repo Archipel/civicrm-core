@@ -8,9 +8,6 @@
  +--------------------------------------------------------------------+
 *}
 {* this template is used for adding/editing/deleting Message Templates *}
-{if !isset($isAdmin)}
-  {assign var="isAdmin" value="0"}
-{/if}
 {if $action neq 8}
   <div class="help">
     {ts}Use this form to add or edit re-usable message templates.{/ts} {help id="id-intro" file="CRM/Admin/Page/MessageTemplates.hlp"}
@@ -27,7 +24,6 @@
         {ts 1=$msg_title|escape}Do you want to delete the message template '%1'?{/ts}
       </div>
     {else}
-      <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
       <table class="form-layout-compressed">
         <tr>
           <td class="label-left">{$form.msg_title.label}</td>

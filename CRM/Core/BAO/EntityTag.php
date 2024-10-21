@@ -46,13 +46,9 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
   /**
    * Takes an associative array and creates a entityTag object.
    *
-   * the function extract all the params it needs to initialize the create a
-   * group object. the params array could contain additional unused name/value
-   * pairs
-   *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
    *
+   * @deprecated
    * @return CRM_Core_BAO_EntityTag
    */
   public static function add(&$params) {
@@ -89,14 +85,14 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
    * @return bool
    */
   public static function dataExists($params) {
-    return !($params['tag_id'] == 0);
+    return !empty($params['tag_id']);
   }
 
   /**
    * Delete the tag for a contact.
    *
    * @param array $params
-   *
+   * @deprecated
    * WARNING: Nonstandard params searches by tag_id rather than id!
    */
   public static function del(&$params) {
@@ -252,8 +248,10 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
   /**
    * Takes an associative array and creates tag entity record for all tag entities.
    *
+   * Nonstandard function
+   * @deprecated
+   *
    * @param array $params
-   *   (reference) an assoc array of name/value pairs.
    * @param string $entityTable
    * @param int $entityID
    */
@@ -297,7 +295,8 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
    * @param int $contactID
    * @param bool $count
    *
-   * @return array
+   * @return array|int
+   *   Dependant on $count
    */
   public static function getContactTags($contactID, $count = FALSE) {
     $contactTags = [];
@@ -319,7 +318,7 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
 
     if ($count) {
       $dao->fetch();
-      return $dao->cnt;
+      return (int) $dao->cnt;
     }
 
     while ($dao->fetch()) {
@@ -368,7 +367,7 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
    *
    * @return array
    */
-  public function mergeTags($tagAId, $tagBId) {
+  public static function mergeTags($tagAId, $tagBId) {
     $queryParams = [
       1 => [$tagAId, 'Integer'],
       2 => [$tagBId, 'Integer'],
@@ -486,13 +485,13 @@ class CRM_Core_BAO_EntityTag extends CRM_Core_DAO_EntityTag {
     // This is probably fairly mild in terms of helping performance - a case could be made to check if tags
     // exist before deleting (further down) as delete is a locking action.
     $entity = CRM_Core_DAO_AllCoreTables::getBriefName(get_class($event->object));
-    if (!isset(Civi::$statics[__CLASS__]['tagged_entities'][$entity])) {
+    if ($entity && !isset(Civi::$statics[__CLASS__]['tagged_entities'][$entity])) {
       $tableName = CRM_Core_DAO_AllCoreTables::getTableForEntityName($entity);
       $used_for = CRM_Core_OptionGroup::values('tag_used_for');
       Civi::$statics[__CLASS__]['tagged_entities'][$entity] = !empty($used_for[$tableName]) ? $tableName : FALSE;
     }
 
-    if (Civi::$statics[__CLASS__]['tagged_entities'][$entity]) {
+    if (!empty(Civi::$statics[__CLASS__]['tagged_entities'][$entity])) {
       CRM_Core_DAO::executeQuery('DELETE FROM civicrm_entity_tag WHERE entity_table = %1 AND entity_id = %2',
         [1 => [Civi::$statics[__CLASS__]['tagged_entities'][$entity], 'String'], 2 => [$event->object->id, 'Integer']]
       );

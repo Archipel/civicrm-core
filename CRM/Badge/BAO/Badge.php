@@ -78,7 +78,7 @@ class CRM_Badge_BAO_Badge {
    * @return array
    *   row with meta data
    */
-  public static function formatLabel(&$row, &$layout) {
+  public static function formatLabel(array $row, array $layout): array {
     $formattedRow = ['labelFormat' => $layout['label_format_name']];
     $formattedRow['labelTitle'] = $layout['title'];
     $formattedRow['labelId'] = $layout['id'];
@@ -147,27 +147,27 @@ class CRM_Badge_BAO_Badge {
   }
 
   /**
-   * @param $formattedRow
+   * @param array $formattedRow
    */
-  public function generateLabel($formattedRow) {
+  public function generateLabel(array $formattedRow): void {
     switch ($formattedRow['labelFormat']) {
       case 'A6 Badge Portrait 150x106':
       case 'Hanging Badge 3-3/4" x 4-3"/4':
-        self::labelCreator($formattedRow, 5);
+        $this->labelCreator($formattedRow, 5);
         break;
 
       case 'Avery 5395':
       default:
-        self::labelCreator($formattedRow);
+        $this->labelCreator($formattedRow);
         break;
     }
   }
 
   /**
-   * @param $formattedRow
+   * @param array $formattedRow
    * @param int $cellspacing
    */
-  public function labelCreator(&$formattedRow, $cellspacing = 0) {
+  public function labelCreator($formattedRow, $cellspacing = 0) {
     $this->lMarginLogo = 18;
     $this->tMarginName = 20;
 
@@ -199,7 +199,7 @@ class CRM_Badge_BAO_Badge {
 
     if (!empty($formattedRow['participant_image'])) {
       $imageAlign = 0;
-      switch (CRM_Utils_Array::value('alignment_participant_image', $formattedRow)) {
+      switch ($formattedRow['alignment_participant_image'] ?? NULL) {
         case 'R':
           $imageAlign = 68;
           break;
@@ -229,7 +229,7 @@ class CRM_Badge_BAO_Badge {
     for ($i = 1; $i <= $rowCount; $i++) {
       if (!empty($formattedRow['token'][$i]['token'])) {
         $value = '';
-        if ($formattedRow['token'][$i]['token'] != 'spacer') {
+        if ($formattedRow['token'][$i]['token'] !== 'spacer') {
           $value = $formattedRow['token'][$i]['value'];
         }
 
@@ -256,7 +256,7 @@ class CRM_Badge_BAO_Badge {
     if (!empty($formattedRow['barcode'])) {
       $data = $formattedRow['values'];
 
-      if ($formattedRow['barcode']['type'] == 'barcode') {
+      if ($formattedRow['barcode']['type'] === 'barcode') {
         $data['current_value'] = $formattedRow['values']['contact_id'] . '-' . $formattedRow['values']['participant_id'];
       }
       else {
@@ -349,13 +349,12 @@ class CRM_Badge_BAO_Badge {
    *
    * @param string $img
    *   Image url.
-   *
-   * @param string $x
-   * @param string $y
-   * @param null $w
-   * @param null $h
+   * @param string|null $x
+   * @param string|null $y
+   * @param int|null $w
+   * @param int|null $h
    */
-  public function printImage($img, $x = '', $y = '', $w = NULL, $h = NULL) {
+  public function printImage($img, $x = NULL, $y = NULL, $w = NULL, $h = NULL) {
     if (!$x) {
       $x = $this->pdf->GetAbsX();
     }
@@ -375,12 +374,14 @@ class CRM_Badge_BAO_Badge {
   }
 
   /**
-   * @param $img
+   * @param string $img
+   *   Filename
    * @param int $imgRes
-   * @param null $w
-   * @param null $h
+   * @param int|null $w
+   * @param int|null $h
    *
-   * @return array
+   * @return int[]
+   *   [width, height]
    */
   public static function getImageProperties($img, $imgRes = 300, $w = NULL, $h = NULL) {
     $imgsize = getimagesize($img);
@@ -456,6 +457,8 @@ class CRM_Badge_BAO_Badge {
     }
     $tokenProcessor->evaluate();
     foreach ($tokenProcessor->getRows() as $row) {
+      $rows[$row->context['participantId']]['contact_id'] = $row->context['contactId'];
+      $rows[$row->context['participantId']]['participant_id'] = $row->context['participantId'];
       foreach ($processorTokens as $processorToken) {
         $rows[$row->context['participantId']][$processorToken] = $row->render($processorToken);
       }

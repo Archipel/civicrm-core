@@ -10,12 +10,6 @@
 
 {* this template is used for adding/editing activities for a case. *}
 <div class="crm-block crm-form-block crm-case-activity-form-block">
-
-  {if $action neq 8 and $action  neq 32768 }
-  {* Include form buttons on top for new and edit modes. *}
-  <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
-  {/if}
-
   {if $action eq 8 or $action eq 32768 }
   <div class="messages status no-popup">
     <i class="crm-i fa-info-circle" aria-hidden="true"></i> &nbsp;
@@ -62,9 +56,9 @@
             <table class="form-layout-compressed">
               <tbody>
                 <tr id="with-clients" class="crm-case-activity-form-block-client_name">
-                  <td class="label font-size12pt">{ts}Client{/ts}</td>
+                  <td class="label">{ts}Client{/ts}</td>
                   <td class="view-value">
-                    <span class="font-size12pt">
+                    <span>
                       {foreach from=$client_names item=client name=clients key=id}
                         {foreach from=$client_names.$id item=client1}
                           {$client1.display_name}
@@ -131,7 +125,7 @@
                 <td class="view-value">
                   {$form.activity_date_time.html}
                   {if $action eq 2 && $activityTypeFile eq 'OpenCase'}
-                    <div class="description">Use a <a class="open-inline" href="{$changeStartURL}">Change Start Date</a> activity to change the date</div>
+                    <div class="description">{ts}Use a <a class="open-inline" href="{$changeStartURL}">Change Start Date</a> activity to change the date{/ts}</div>
                   {/if}
                 </td>
               </tr>
@@ -241,7 +235,9 @@
       </td>
     </tr>
     {/if}
+{if $isTagset}
   <tr class="crm-case-activity-form-block-tag_set"><td colspan="2">{include file="CRM/common/Tagset.tpl" tagsetType='activity'}</td></tr>
+{/if}
   </table>
 
   {/if}

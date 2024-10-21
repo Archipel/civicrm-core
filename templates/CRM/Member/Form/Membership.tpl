@@ -62,11 +62,10 @@
      <a class="open-inline-noreturn action-item crm-hover-button" href="{$ccModeLink}"><i class="crm-i fa-credit-card" aria-hidden="true"></i> {ts}submit credit card membership{/ts}</a>
     </div>
     {/if}
-    <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
     {if $action eq 8}
     <div class="messages status no-popup">
       {icon icon="fa-info-circle"}{/icon}
-      {$deleteMessage}
+      {$deleteMessage|smarty:nodefaults}
     </div>
     {else}
       <table class="form-layout-compressed">
@@ -85,7 +84,7 @@
               {help id="override_membership_type"}
             </span>
           </td>
-          <td id="mem_type_id-editable"><span id='mem_type_id'>{$form.membership_type_id.html}</span>
+          <td id="mem_type_id-editable"><span id='mem_type_id'>{$form.membership_type_id.html|smarty:nodefaults}</span>
             {if $hasPriceSets}
               <span id='totalAmountORPriceSet'> {ts}OR{/ts}</span>
               <span id='selectPriceSet'>{$form.price_set_id.html}</span>
@@ -109,7 +108,7 @@
           <tr id="num_terms_row" class="crm-membership-form-block-num_terms">
             <td class="label">{$form.num_terms.label}</td>
             <td>&nbsp;{$form.num_terms.html}<br />
-              <span class="description">{ts}Set the membership end date this many membership periods from now. Make sure the appropriate corresponding fee is entered below.{/ts}</span>
+              <span class="description">{ts}Set the Membership Expiration Date this many membership periods from now. Make sure the appropriate corresponding fee is entered below.{/ts}</span>
             </td>
           </tr>
         {/if}
@@ -177,7 +176,7 @@
           <tr id="send-receipt" class="crm-membership-form-block-send_receipt">
             <td class="label">{$form.send_receipt.label}</td>
             <td>
-              {$form.send_receipt.html}<br />
+              {$form.send_receipt.html}
               <span class="description">
                 {ts 1=$emailExists}Automatically email a membership confirmation and receipt to %1? OR if the payment is from a different contact, this email will only go to them.{/ts}
                 <span class="auto-renew-text">{ts}For auto-renewing memberships the emails are sent when each payment is received{/ts}</span>
@@ -188,7 +187,7 @@
           <tr id="email-receipt" style="display:none;">
             <td class="label">{$form.send_receipt.label}</td>
             <td>
-              {$form.send_receipt.html}<br />
+              {$form.send_receipt.html}
               <span class="description">
                 {ts}Automatically email a membership confirmation and receipt to {/ts}<span id="email-address"></span>? {ts}OR if the payment is from a different contact, this email will only go to them.{/ts}
                 <span class="auto-renew-text">{ts}For auto-renewing memberships the emails are sent when each payment is received{/ts}</span>
@@ -198,7 +197,7 @@
         {/if}
         <tr id="fromEmail" style="display: none" class="crm-contactEmail-form-block-fromEmailAddress crm-email-element">
           <td class="label">{$form.from_email_address.label}</td>
-          <td>{$form.from_email_address.html} {help id="id-from_email" file="CRM/Contact/Form/Task/Email.hlp" isAdmin=$isAdmin}</td>
+          <td>{$form.from_email_address.html}  {help id="id-from_email" file="CRM/Contact/Form/Task/Help/Email/id-from_email.hlp"}</td>
         </tr>
         <tr id='notice' style="display:none;">
           <td class="label">{$form.receipt_text.label}</td>
@@ -421,6 +420,7 @@
           cj('#memberStatus').hide();
           cj('#memberStatus_show').show();
           cj('#status-override-end-date').hide();
+          cj('#status_id option[selected]').removeAttr('selected');
           break;
         case '1':
           cj('#memberStatus').show();
@@ -436,6 +436,7 @@
           cj('#memberStatus').hide( );
           cj('#memberStatus_show').show( );
           cj('#status-override-end-date').hide();
+          cj('#status_id option[selected]').removeAttr('selected');
           break;
       }
     }

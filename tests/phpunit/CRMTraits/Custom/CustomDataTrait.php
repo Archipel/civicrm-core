@@ -40,7 +40,7 @@ trait CRMTraits_Custom_CustomDataTrait {
   public function createCustomGroup(array $params = []): int {
     $params = array_merge([
       'title' => 'Custom Group',
-      'extends' => $this->entity ?? 'Contact',
+      'extends' => $this->getEntity(),
       'weight' => 5,
       'style' => 'Inline',
       'max_multiple' => 0,
@@ -52,10 +52,22 @@ trait CRMTraits_Custom_CustomDataTrait {
         ->execute()
         ->first()['id'];
     }
-    catch (API_Exception $e) {
+    catch (CRM_Core_Exception $e) {
       $this->fail('Could not create group ' . $e->getMessage());
     }
     return $this->ids['CustomGroup'][$identifier];
+  }
+
+  /**
+   * Get the entity being acted on.
+   *
+   * @return string
+   */
+  protected function getEntity(): string {
+    if (property_exists($this, 'entity')) {
+      return $this->entity;
+    }
+    return 'Contact';
   }
 
   /**
@@ -94,7 +106,7 @@ trait CRMTraits_Custom_CustomDataTrait {
    *
    */
   public function createCustomGroupWithFieldOfType(array $groupParams = [], string $customFieldType = 'text', ?string $identifier = NULL, array $fieldParams = []): void {
-    $supported = ['text', 'select', 'date', 'checkbox', 'int', 'contact_reference', 'radio', 'multi_country'];
+    $supported = ['text', 'select', 'date', 'checkbox', 'int', 'contact_reference', 'radio', 'multi_country', 'boolean'];
     if (!in_array($customFieldType, $supported, TRUE)) {
       $this->fail('we have not yet extracted other custom field types from createCustomFieldsOfAllTypes, Use consistent syntax when you do');
     }
@@ -136,6 +148,9 @@ trait CRMTraits_Custom_CustomDataTrait {
         $reference = $this->createMultiCountryCustomField($fieldParams)['id'];
         return;
 
+      case 'boolean':
+        $reference = $this->createBooleanCustomField($fieldParams)['id'];
+        return;
     }
   }
 
@@ -169,10 +184,19 @@ trait CRMTraits_Custom_CustomDataTrait {
    * Generally keys map to data types.
    *
    * @param string $key
+   * @param int $version
    *
    * @return string
+   *
+   * @noinspection PhpDocMissingThrowsInspection
+   * @noinspection PhpUnhandledExceptionInspection
    */
-  protected function getCustomFieldName(string $key): string {
+  protected function getCustomFieldName(string $key = 'text', int $version = 3): string {
+    if ($version === 4) {
+      $field = CustomField::get(FALSE)->addWhere('id', '=', $this->getCustomFieldID($key))
+        ->addSelect('name', 'custom_group_id.name')->execute()->first();
+      return $field['custom_group_id.name'] . '.' . $field['name'];
+    }
     return 'custom_' . $this->getCustomFieldID($key);
   }
 
@@ -183,7 +207,7 @@ trait CRMTraits_Custom_CustomDataTrait {
    * @param array $values
    *
    * @return int
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function addOptionToCustomField(string $key, array $values): int {
     $optionGroupID = CustomField::get(FALSE)

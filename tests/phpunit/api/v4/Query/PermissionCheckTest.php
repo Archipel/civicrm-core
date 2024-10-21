@@ -19,16 +19,17 @@
 
 namespace api\v4\Query;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\API\Exception\UnauthorizedException;
 use Civi\Api4\Contact;
 use Civi\Api4\Event;
 use Civi\Api4\Participant;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class PermissionCheckTest extends UnitTestCase {
+class PermissionCheckTest extends Api4TestBase implements TransactionalInterface {
 
   /**
    * Clean up after test.
@@ -44,7 +45,7 @@ class PermissionCheckTest extends UnitTestCase {
 
   /**
    */
-  public function testGatekeeperPermissions() {
+  public function testGatekeeperPermissions(): void {
     $config = \CRM_Core_Config::singleton();
     $config->userPermissionClass->permissions = [
       'access CiviCRM',
@@ -68,7 +69,7 @@ class PermissionCheckTest extends UnitTestCase {
   /**
    * Tests that gatekeeper permissions are enforced for implicit joins
    */
-  public function testImplicitJoinPermissions() {
+  public function testImplicitJoinPermissions(): void {
     $config = \CRM_Core_Config::singleton();
     $config->userPermissionClass->permissions = [
       'access CiviCRM',
@@ -121,7 +122,7 @@ class PermissionCheckTest extends UnitTestCase {
   /**
    * Tests that gatekeeper permissions are enforced for explicit joins
    */
-  public function testExplicitJoinPermissions() {
+  public function testExplicitJoinPermissions(): void {
     $config = \CRM_Core_Config::singleton();
     $config->userPermissionClass->permissions = [
       'access CiviCRM',

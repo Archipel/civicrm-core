@@ -30,7 +30,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    *
    * @var int
    */
-  protected $_gid;
+  public $_gid;
 
   /**
    * The field id, used when editing the field
@@ -70,6 +70,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     'File' => ['File'],
     'Link' => ['Link'],
     'ContactReference' => ['Autocomplete-Select'],
+    'EntityReference' => ['Autocomplete-Select'],
   ];
 
   /**
@@ -78,8 +79,8 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    * @return void
    */
   public function preProcess() {
-    //custom field id
     $this->_id = CRM_Utils_Request::retrieve('id', 'Positive', $this);
+    $this->setAction($this->_id ? CRM_Core_Action::UPDATE : CRM_Core_Action::ADD);
 
     $this->assign('dataToHTML', self::$_dataToHTML);
 
@@ -97,13 +98,15 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
       $this->_gid = CRM_Utils_Request::retrieve('gid', 'Positive', $this);
     }
 
-    if ($isReserved = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'is_reserved', 'id')) {
+    if (CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'is_reserved')) {
+      // I think this does not have ts() because the only time you would see
+      // this is if you manually made a url you weren't supposed to.
       CRM_Core_Error::statusBounce("You cannot add or edit fields in a reserved custom field-set.");
     }
 
     if ($this->_gid) {
       $url = CRM_Utils_System::url('civicrm/admin/custom/group/field',
-        "reset=1&action=browse&gid={$this->_gid}"
+        "reset=1&gid={$this->_gid}"
       );
 
       $session = CRM_Core_Session::singleton();
@@ -192,8 +195,8 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     if ($this->_gid) {
       $this->_title = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_gid, 'title');
       $this->setTitle($this->_title . ' - ' . ($this->_id ? ts('Edit Field') : ts('New Field')));
-      $this->assign('gid', $this->_gid);
     }
+    $this->assign('gid', $this->_gid);
 
     // lets trim all the whitespace
     $this->applyFilter('__ALL__', 'trim');
@@ -226,6 +229,14 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     ];
 
     $this->add('checkbox', 'serialize', ts('Multi-Select'));
+
+    $this->addAutocomplete('fk_entity', ts('Entity'), [
+      'class' => 'twenty',
+      // Don't allow entity to be changed once field is created
+      'disabled' => $this->_action == CRM_Core_Action::UPDATE && !empty($this->_values['fk_entity']),
+      'entity' => 'Entity',
+      'select' => ['minimumInputLength' => 0],
+    ]);
 
     if ($this->_action == CRM_Core_Action::UPDATE) {
       $this->freeze('data_type');
@@ -300,7 +311,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
 
     // form fields of Custom Option rows
     $defaultOption = [];
-    $_showHide = new CRM_Core_ShowHideBlocks('', '');
+    $_showHide = new CRM_Core_ShowHideBlocks();
     for ($i = 1; $i <= self::NUM_OPTION; $i++) {
 
       //the show hide blocks
@@ -417,7 +428,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     $this->add('number', 'options_per_line', ts('Options Per Line'), ['min' => 0]);
     $this->addRule('options_per_line', ts('must be a numeric value'), 'numeric');
 
-    // default value, help pre, help post, mask, attributes, javascript ?
+    // default value, help pre, help post
     $this->add('text', 'default_value', ts('Default Value'),
       $attributes['default_value']
     );
@@ -426,9 +437,6 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     );
     $this->add('textarea', 'help_post', ts('Field Post Help'),
       $attributes['help_post']
-    );
-    $this->add('text', 'mask', ts('Mask'),
-      $attributes['mask']
     );
 
     // is active ?
@@ -476,7 +484,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
     // if view mode pls freeze it with the done button.
     if ($this->_action & CRM_Core_Action::VIEW) {
       $this->freeze();
-      $url = CRM_Utils_System::url('civicrm/admin/custom/group/field', 'reset=1&action=browse&gid=' . $this->_gid);
+      $url = CRM_Utils_System::url('civicrm/admin/custom/group/field', 'reset=1&gid=' . $this->_gid);
       $this->addElement('xbutton',
         'done',
         ts('Done'),
@@ -495,7 +503,7 @@ class CRM_Custom_Form_Field extends CRM_Core_Form {
    *   Posted values of the form.
    *
    * @param $files
-   * @param $self
+   * @param self $self
    *
    * @return array
    *   if errors then list of errors to be posted back to the form,
@@ -615,6 +623,12 @@ SELECT count(*)
       }
     }
 
+    if ($dataType === 'EntityReference' && $self->_action == CRM_Core_Action::ADD) {
+      if (empty($fields['fk_entity'])) {
+        $errors['fk_entity'] = ts('Selecting an entity is required');
+      }
+    }
+
     if ($dataType == 'Date') {
       if (!$fields['date_format']) {
         $errors['date_format'] = ts('Please select a date format.');
@@ -626,7 +640,7 @@ SELECT count(*)
      *  Incomplete row checking is also required.
      */
     $_flagOption = $_rowError = 0;
-    $_showHide = new CRM_Core_ShowHideBlocks('', '');
+    $_showHide = new CRM_Core_ShowHideBlocks();
     $htmlType = $fields['html_type'];
 
     if (isset($fields['option_type']) && $fields['option_type'] == 1) {
@@ -740,7 +754,7 @@ SELECT count(*)
       }
     }
     elseif (in_array($htmlType, self::$htmlTypesWithOptions) &&
-      !in_array($dataType, ['Boolean', 'Country', 'StateProvince', 'ContactReference'])
+      !in_array($dataType, ['Boolean', 'Country', 'StateProvince', 'ContactReference', 'EntityReference'])
     ) {
       if (!$fields['option_group_id']) {
         $errors['option_group_id'] = ts('You must select a Multiple Choice Option set if you chose Reuse an existing set.');
@@ -801,7 +815,8 @@ AND    option_group_id = %2";
     }
 
     // If switching to a new option list, validate existing data
-    if (empty($errors) && $self->_id && in_array($htmlType, self::$htmlTypesWithOptions)) {
+    if (empty($errors) && $self->_id && in_array($htmlType, self::$htmlTypesWithOptions) &&
+      !in_array($dataType, ['Boolean', 'Country', 'StateProvince', 'ContactReference', 'EntityReference'])) {
       $oldHtmlType = $self->_values['html_type'];
       $oldOptionGroup = $self->_values['option_group_id'];
       if ($oldHtmlType === 'Text' || $oldOptionGroup != $fields['option_group_id'] || $fields['option_type'] == 1) {
@@ -848,14 +863,16 @@ AND    option_group_id = %2";
 
     $filter = 'null';
     if ($params['data_type'] == 'ContactReference' && !empty($params['filter_selected'])) {
-      if ($params['filter_selected'] == 'Advance' && trim(CRM_Utils_Array::value('filter', $params))) {
+      if ($params['filter_selected'] == 'Advance' && trim($params['filter'] ?? '')) {
         $filter = trim($params['filter']);
       }
       elseif ($params['filter_selected'] == 'Group' && !empty($params['group_id'])) {
         $filter = 'action=lookup&group=' . implode(',', $params['group_id']);
       }
     }
-    $params['filter'] = $filter;
+    if ($params['data_type'] !== 'EntityReference') {
+      $params['filter'] = $filter;
+    }
 
     // fix for CRM-316
     $oldWeight = NULL;
@@ -892,12 +909,12 @@ AND    option_group_id = %2";
     if ($buttonName == $this->getButtonName('next', 'new')) {
       $msg .= '<p>' . ts("Ready to add another.") . '</p>';
       $session->replaceUserContext(CRM_Utils_System::url('civicrm/admin/custom/group/field/add',
-        'reset=1&action=add&gid=' . $this->_gid
+        'reset=1&gid=' . $this->_gid
       ));
     }
     else {
       $session->replaceUserContext(CRM_Utils_System::url('civicrm/admin/custom/group/field',
-        'reset=1&action=browse&gid=' . $this->_gid
+        'reset=1&gid=' . $this->_gid
       ));
     }
     $session->setStatus($msg, ts('Saved'), 'success');

@@ -11,9 +11,7 @@
   {include file="CRM/Contribute/Form/Contribution/PreviewHeader.tpl"}
 {/if}
 
-{include file="CRM/common/TrackingFields.tpl"}
-
-<div class="crm-contribution-page-id-{$contributionPageID} crm-block crm-contribution-thankyou-form-block">
+<div class="crm-contribution-page-id-{$contributionPageID} crm-block crm-contribution-thankyou-form-block" data-page-id="{$contributionPageID}" data-page-template="thankyou">
   {if $thankyou_text}
     <div id="thankyou_text" class="crm-section thankyou_text-section">
       {$thankyou_text}
@@ -72,39 +70,37 @@
   </div>
   <div class="spacer"></div>
 
-  {include file="CRM/Contribute/Form/Contribution/MembershipBlock.tpl" context="thankContribution"}
+  {include file="CRM/Contribute/Form/Contribution/MembershipBlock.tpl"}
 
   {if $amount GTE 0 OR $minimum_fee GTE 0 OR ( $priceSetID and $lineItem ) }
     <div class="crm-group amount_display-group">
-      {if !$useForMember}
-        <div class="header-dark">
-          {if !$membershipBlock AND $amount OR ( $priceSetID and $lineItem )}{ts}Contribution Information{/ts}{else}{ts}Membership Fee{/ts}{/if}
-        </div>
-      {/if}
+      <div class="header-dark">
+        {if !$membershipBlock AND $amount OR ( $priceSetID and $lineItem )}{ts}Contribution Information{/ts}{else}{ts}Membership Fee{/ts}{/if}
+      </div>
+
       <div class="display-block">
-        {if !$useForMember}
-          {if $lineItem and $priceSetID}
-            {if !$amount}{assign var="amount" value=0}{/if}
-            {assign var="totalAmount" value=$amount}
-            {include file="CRM/Price/Page/LineItem.tpl" context="Contribution"}
-          {elseif $membership_amount}
-            {$membership_name} {ts}Membership{/ts}: <strong>{$membership_amount|crmMoney}</strong><br />
-            {if $amount}
-              {if !$is_separate_payment}
-                {ts}Contribution Amount{/ts}: <strong>{$amount|crmMoney}</strong><br />
-              {else}
-                {ts}Additional Contribution{/ts}: <strong>{$amount|crmMoney}</strong><br />
-              {/if}
+        {if $lineItem and $priceSetID}
+          {if !$amount}{assign var="amount" value=0}{/if}
+          {assign var="totalAmount" value=$amount}
+          {include file="CRM/Price/Page/LineItem.tpl" context="Contribution"}
+        {elseif $membership_amount}
+          {$membership_name} {ts}Membership{/ts}: <strong>{$membership_amount|crmMoney}</strong><br />
+          {if $amount}
+            {if !$is_separate_payment}
+              {ts}Contribution Amount{/ts}: <strong>{$amount|crmMoney}</strong><br />
+            {else}
+              {ts}Additional Contribution{/ts}: <strong>{$amount|crmMoney}</strong><br />
             {/if}
-            <strong> -------------------------------------------</strong><br />
-            {ts}Total{/ts}: <strong>{$amount+$membership_amount|crmMoney}</strong><br />
-          {else}
-            {if $totalTaxAmount}
-              {ts}Tax Amount{/ts}: <strong>{$totalTaxAmount|crmMoney}</strong><br />
-            {/if}
-            {if $installments}{ts}Installment Amount{/ts}{else}{ts}Amount{/ts}{/if}: <strong>{$amount|crmMoney}{if $amount_level } &ndash; {$amount_level}{/if}</strong>
           {/if}
+          <strong> -------------------------------------------</strong><br />
+          {ts}Total{/ts}: <strong>{$amount+$membership_amount|crmMoney}</strong><br />
+        {else}
+          {if $totalTaxAmount}
+            {ts}Tax Amount{/ts}: <strong>{$totalTaxAmount|crmMoney}</strong><br />
+          {/if}
+          {if $installments}{ts}Installment Amount{/ts}{else}{ts}Amount{/ts}{/if}: <strong>{$amount|crmMoney:$currency}{if $amount_level } &ndash; {$amount_level}{/if}</strong>
         {/if}
+
         {if $receive_date}
           {ts}Date{/ts}: <strong>{$receive_date|crmDate}</strong><br />
         {/if}
@@ -120,10 +116,23 @@
           {if !empty($auto_renew)} {* Auto-renew membership confirmation *}
             {crmRegion name="contribution-thankyou-recur-membership"}
               <br />
-              {if $frequency_interval > 1}
-                <strong>{ts 1=$frequency_interval 2=$frequency_unit}This membership will be renewed automatically every %1 %2(s).{/ts}</strong>
+              {if $installments > 1}
+                {if $frequency_interval > 1}
+                  <strong>{ts 1=$frequency_interval 2=$frequency_unit}This membership will be renewed automatically every %1 %2(s).{/ts}</strong>
+                {else}
+                  <strong>{ts 1=$frequency_unit}This membership will be renewed automatically every %1.{/ts}</strong>
+                {/if}
               {else}
-                <strong>{ts 1=$frequency_unit}This membership will be renewed automatically every %1.{/ts}</strong>
+                  {* dev/translation#80 All 'every %1' strings are incorrectly using ts, but focusing on the most important one until we find a better fix. *}
+                  {if $frequency_unit eq 'day'}
+                    <strong>{ts}This membership will be renewed automatically every day.{/ts}</strong>
+                  {elseif $frequency_unit eq 'week'}
+                    <strong>{ts}This membership will be renewed automatically every week.{/ts}</strong>
+                  {elseif $frequency_unit eq 'month'}
+                    <strong>{ts}This membership will be renewed automatically every month.{/ts}</strong>
+                  {elseif $frequency_unit eq 'year'}
+                    <strong>{ts}This membership will be renewed automatically every year.{/ts}</strong>
+                  {/if}
               {/if}
               <div class="description crm-auto-renew-cancel-info">({ts}You will receive an email receipt which includes information about how to cancel the auto-renewal option.{/ts})</div>
             {/crmRegion}
@@ -202,7 +211,7 @@
       </div>
       <div class="display-block">
        <div class="label-left crm-section honoree_profile-section">
-          <strong>{$honorName}</strong></br>
+          <strong>{$honorName}</strong><br/>
           {include file="CRM/UF/Form/Block.tpl" fields=$honoreeProfileFields prefix='honor'}
         </div>
       </div>
@@ -215,26 +224,22 @@
     </fieldset>
   {/if}
 
-  {if $pcpBlock}
+  {if $pcpBlock && $pcp_display_in_roll}
     <div class="crm-group pcp_display-group">
       <div class="header-dark">
         {ts}Contribution Honor Roll{/ts}
       </div>
       <div class="display-block">
-        {if $pcp_display_in_roll}
-          {ts}List my contribution{/ts}
-          {if $pcp_is_anonymous}
-            <strong>{ts}anonymously{/ts}.</strong>
-          {else}
-            {ts}under the name{/ts}: <strong>{$pcp_roll_nickname}</strong><br/>
-            {if $pcp_personal_note}
-              {ts}With the personal note{/ts}: <strong>{$pcp_personal_note}</strong>
-            {else}
-              <strong>{ts}With no personal note{/ts}</strong>
-            {/if}
-          {/if}
+        {ts}List my contribution{/ts}
+        {if $pcp_is_anonymous}
+          <strong>{ts}anonymously{/ts}.</strong>
         {else}
-          {ts}Don't list my contribution in the honor roll.{/ts}
+          {ts}under the name{/ts}: <strong>{$pcp_roll_nickname}</strong><br/>
+          {if $pcp_personal_note}
+            {ts}With the personal note{/ts}: <strong>{$pcp_personal_note}</strong>
+          {else}
+            <strong>{ts}With no personal note{/ts}</strong>
+          {/if}
         {/if}
         <br />
       </div>
@@ -259,7 +264,7 @@
         </div>
       {/if}
     {/if}
-    {if $email}
+    {if !$emailExists}
       <div class="crm-group contributor_email-group">
         <div class="header-dark">
           {ts}Your Email{/ts}
@@ -272,7 +277,7 @@
     {/if}
   {/if}
 
-  {if $contributeMode eq 'direct' and ! $is_pay_later and $is_monetary and ( $amount GT 0 OR $minimum_fee GT 0 )}
+  {if in_array('credit_card_number', $form) || in_array('bank_account_number', $form) && ($amount GT 0 OR $minimum_fee GT 0)}
     {crmRegion name="contribution-thankyou-billing-block"}
       <div class="crm-group credit_card-group">
         {if $paymentFieldsetLabel}
@@ -280,7 +285,7 @@
             {$paymentFieldsetLabel}
           </div>
         {/if}
-        {if $paymentProcessor.payment_type == 2}
+          {if in_array('bank_account_number', $form) && $bank_account_number}
           <div class="display-block">
             {ts}Account Holder{/ts}: {$account_holder}<br />
             {ts}Bank Identification Number{/ts}: {$bank_identification_number}<br />

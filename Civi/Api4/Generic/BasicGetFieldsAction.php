@@ -13,6 +13,7 @@
 namespace Civi\Api4\Generic;
 
 use Civi\API\Exception\NotImplementedException;
+use Civi\Api4\Utils\CoreUtil;
 
 /**
  * Lists information about fields for the $ENTITY entity.
@@ -30,6 +31,8 @@ use Civi\API\Exception\NotImplementedException;
  * @method array getValues()
  */
 class BasicGetFieldsAction extends BasicGetAction {
+
+  use Traits\GetSetValueTrait;
 
   /**
    * Fetch option lists for fields?
@@ -88,7 +91,7 @@ class BasicGetFieldsAction extends BasicGetAction {
     catch (NotImplementedException $e) {
     }
     if (isset($actionClass) && method_exists($actionClass, 'fields')) {
-      $values = $actionClass->fields();
+      $values = $actionClass->fields($this);
     }
     else {
       $values = $this->getRecords();
@@ -139,51 +142,42 @@ class BasicGetFieldsAction extends BasicGetAction {
         $this->setFieldSuffixes($field);
       }
       if (isset($defaults['options'])) {
-        $field['options'] = $this->formatOptionList($field['options']);
+        $this->formatOptionList($field);
       }
       $field = array_diff_key($field, $internalProps);
     }
   }
 
   /**
-   * Transforms option list into the format specified in $this->loadOptions
+   * Sets `options` and `suffixes` based on pseudoconstant if given.
    *
-   * @param $options
-   * @return array|bool
+   * Transforms option list into the format specified in $this->loadOptions.
+   *
+   * @param array $field
    */
-  private function formatOptionList($options) {
-    if (!$this->loadOptions || !is_array($options)) {
-      return (bool) $options;
+  private function formatOptionList(&$field) {
+    if (empty($field['options'])) {
+      $field['options'] = !empty($field['pseudoconstant']);
     }
-    if (!$options) {
-      return $options;
+    if (!empty($field['pseudoconstant']['optionGroupName'])) {
+      $field['suffixes'] = CoreUtil::getOptionValueFields($field['pseudoconstant']['optionGroupName']);
     }
-    $formatted = [];
-    $first = reset($options);
-    // Flat array requested
-    if ($this->loadOptions === TRUE) {
-      // Convert non-associative to flat array
-      if (is_array($first) && isset($first['id'])) {
-        foreach ($options as $option) {
-          $formatted[$option['id']] = $option['label'] ?? $option['name'] ?? $option['id'];
-        }
-        return $formatted;
+    if (!$this->loadOptions || !$field['options']) {
+      $field['options'] = (bool) $field['options'];
+      return;
+    }
+    if (!empty($field['pseudoconstant'])) {
+      if (!empty($field['pseudoconstant']['optionGroupName'])) {
+        $field['options'] = self::pseudoconstantOptions($field['pseudoconstant']['optionGroupName']);
       }
-      return $options;
-    }
-    // Non-associative array of multiple properties requested
-    foreach ($options as $id => $option) {
-      // Transform a flat list
-      if (!is_array($option)) {
-        $option = [
-          'id' => $id,
-          'name' => $option,
-          'label' => $option,
-        ];
+      elseif (!empty($field['pseudoconstant']['callback'])) {
+        $field['options'] = call_user_func(\Civi\Core\Resolver::singleton()->get($field['pseudoconstant']['callback']), $field['name'], ['values' => $this->getValues()]);
       }
-      $formatted[] = array_intersect_key($option, array_flip($this->loadOptions));
+      else {
+        throw new \CRM_Core_Exception('Unsupported pseudoconstant type for field "' . $field['name'] . '"');
+      }
     }
-    return $formatted;
+    $field['options'] = CoreUtil::formatOptionList($field['options'], $this->loadOptions);
   }
 
   /**
@@ -212,17 +206,6 @@ class BasicGetFieldsAction extends BasicGetAction {
       'replace' => 'create',
     ];
     return $sub[$this->action] ?? $this->action;
-  }
-
-  /**
-   * Add an item to the values array
-   * @param string $fieldName
-   * @param mixed $value
-   * @return $this
-   */
-  public function addValue(string $fieldName, $value) {
-    $this->values[$fieldName] = $value;
-    return $this;
   }
 
   /**
@@ -282,8 +265,15 @@ class BasicGetFieldsAction extends BasicGetAction {
       ],
       [
         'name' => 'required',
+        'description' => 'Is this field required when creating a new entity',
         'data_type' => 'Boolean',
         'default_value' => FALSE,
+      ],
+      [
+        'name' => 'nullable',
+        'description' => 'Whether a null value is allowed in this field',
+        'data_type' => 'Boolean',
+        'default_value' => TRUE,
       ],
       [
         'name' => 'required_if',
@@ -293,6 +283,10 @@ class BasicGetFieldsAction extends BasicGetAction {
         'name' => 'options',
         'data_type' => 'Array',
         'default_value' => FALSE,
+      ],
+      [
+        'name' => 'pseudoconstant',
+        '@internal' => TRUE,
       ],
       [
         'name' => 'suffixes',
@@ -327,12 +321,16 @@ class BasicGetFieldsAction extends BasicGetAction {
           'ChainSelect' => ts('Chain-Select'),
           'CheckBox' => ts('Checkboxes'),
           'Date' => ts('Date Picker'),
+          'Email' => ts('Email'),
           'EntityRef' => ts('Autocomplete Entity'),
           'File' => ts('File'),
+          'Location' => ts('Address Location'),
           'Number' => ts('Number'),
           'Radio' => ts('Radio Buttons'),
+          'RichTextEditor' => ts('Rich Text Editor'),
           'Select' => ts('Select'),
-          'Text' => ts('Text'),
+          'Text' => ts('Single-Line Text'),
+          'TextArea' => ts('Multi-Line Text'),
         ],
       ],
       [
@@ -352,10 +350,24 @@ class BasicGetFieldsAction extends BasicGetAction {
         'data_type' => 'String',
       ],
       [
+        'name' => 'localizable',
+        'data_type' => 'Boolean',
+        'default_value' => FALSE,
+      ],
+      [
         'name' => 'readonly',
         'data_type' => 'Boolean',
         'description' => 'True for auto-increment, calculated, or otherwise non-editable fields.',
         'default_value' => FALSE,
+      ],
+      [
+        'name' => 'deprecated',
+        'data_type' => 'Boolean',
+        'default_value' => FALSE,
+      ],
+      [
+        'name' => 'permission',
+        'data_type' => 'Array',
       ],
       [
         'name' => 'output_formatters',

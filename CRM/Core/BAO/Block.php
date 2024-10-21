@@ -54,7 +54,7 @@ class CRM_Core_BAO_Block {
       if (!$block->contact_id) {
         throw new CRM_Core_Exception('Invalid Contact ID parameter passed');
       }
-      $blocks = self::retrieveBlock($block, $blockName);
+      $blocks = self::retrieveBlock($block);
     }
     else {
       $blockIds = self::getBlockIds($blockName, NULL, $params);
@@ -67,7 +67,7 @@ class CRM_Core_BAO_Block {
       foreach ($blockIds as $blockId) {
         $block = new $BAOString();
         $block->id = $blockId['id'];
-        $getBlocks = self::retrieveBlock($block, $blockName);
+        $getBlocks = self::retrieveBlock($block);
         $blocks[$count++] = array_pop($getBlocks);
       }
     }
@@ -81,13 +81,11 @@ class CRM_Core_BAO_Block {
    *
    * @param Object $block
    *   Typically a Phone|Email|IM|OpenID object.
-   * @param string $blockName
-   *   Name of the above object.
    *
    * @return array
    *   Array of $block objects.
    */
-  public static function retrieveBlock(&$block, $blockName) {
+  public static function retrieveBlock($block) {
     // we first get the primary location due to the order by clause
     $block->orderBy('is_primary desc, id');
     $block->find();
@@ -120,7 +118,7 @@ class CRM_Core_BAO_Block {
    */
   public static function dataExists($blockFields, &$params) {
     foreach ($blockFields as $field) {
-      if (CRM_Utils_System::isNull(CRM_Utils_Array::value($field, $params))) {
+      if (CRM_Utils_System::isNull($params[$field] ?? NULL)) {
         return FALSE;
       }
     }
@@ -234,7 +232,7 @@ class CRM_Core_BAO_Block {
       // if in some cases (eg. email used in Online Conribution Page, Profiles, etc.) id is not set
       // lets try to add using the previous method to avoid any false creation of existing data.
       foreach ($blockIds as $blockId => $blockValue) {
-        if (empty($value['id']) && $blockValue['locationTypeId'] == CRM_Utils_Array::value('location_type_id', $value) && !$isIdSet) {
+        if (empty($value['id']) && $blockValue['locationTypeId'] == ($value['location_type_id'] ?? NULL) && !$isIdSet) {
           $valueId = FALSE;
           if ($blockName == 'phone') {
             $phoneTypeBlockValue = $blockValue['phoneTypeId'] ?? NULL;
@@ -266,7 +264,7 @@ class CRM_Core_BAO_Block {
       // $updateBlankLocInfo will help take appropriate decision. CRM-5969
       if (!empty($value['id']) && !$dataExists && $updateBlankLocInfo) {
         //delete the existing record
-        $baoString::del($value['id']);
+        $baoString::deleteRecord($value);
         continue;
       }
       elseif (!$dataExists) {
@@ -284,7 +282,10 @@ class CRM_Core_BAO_Block {
       }
 
       $blockFields = array_merge($value, $contactFields);
-      $blocks[] = $baoString::create($blockFields);
+      if ($baoString === 'CRM_Core_BAO_Address') {
+        CRM_Core_BAO_Address::fixAddress($blockFields);
+      }
+      $blocks[] = $baoString::writeRecord($blockFields);
     }
 
     return $blocks;
@@ -309,7 +310,7 @@ class CRM_Core_BAO_Block {
     }
 
     $baoString = 'CRM_Core_BAO_' . $name;
-    $baoString::del($params['id']);
+    $baoString::deleteRecord($params);
   }
 
   /**
@@ -329,7 +330,7 @@ class CRM_Core_BAO_Block {
    * @param array $params
    * @param $class
    *
-   * @throws API_Exception
+   * @throws CRM_Core_Exception
    */
   public static function handlePrimary(&$params, $class) {
     if (isset($params['id']) && CRM_Utils_System::isNull($params['is_primary'] ?? NULL)) {
@@ -338,7 +339,7 @@ class CRM_Core_BAO_Block {
     }
     $table = CRM_Core_DAO_AllCoreTables::getTableForClass($class);
     if (!$table) {
-      throw new API_Exception("Failed to locate table for class [$class]");
+      throw new CRM_Core_Exception("Failed to locate table for class [$class]");
     }
 
     // contact_id in params might be empty or the string 'null' so cast to integer
@@ -404,12 +405,62 @@ class CRM_Core_BAO_Block {
   }
 
   /**
+   * Handling for is_billing.
+   * This process is a variation of handlePrimary above
+   * Find other entries with is_billing = 1 and reset them to 0
+   *
+   * @param array $params
+   * @param $class
+   *
+   * @throws CRM_Core_Exception
+   */
+  public static function handleBilling(&$params, $class) {
+    if (isset($params['id']) && CRM_Utils_System::isNull($params['is_billing'] ?? NULL)) {
+      // if id is set & is_billing isn't we can assume no change)
+      return;
+    }
+    $table = CRM_Core_DAO_AllCoreTables::getTableForClass($class);
+    if (!$table) {
+      throw new CRM_Core_Exception("Failed to locate table for class [$class]");
+    }
+
+    // contact_id in params might be empty or the string 'null' so cast to integer
+    $contactId = (int) ($params['contact_id'] ?? 0);
+    // If id is set & we haven't been passed a contact_id, retrieve it
+    if (!empty($params['id']) && !isset($params['contact_id'])) {
+      $entity = new $class();
+      $entity->id = $params['id'];
+      $entity->find(TRUE);
+      $contactId = $entity->contact_id;
+    }
+    // If entity is not associated with contact, concept of is_billing not relevant
+    if (!$contactId) {
+      return;
+    }
+
+    // if params is_billing then set all others to not be billing & exit out
+    // if is_billing = 1
+    if (!empty($params['is_billing'])) {
+      $sql = "UPDATE $table SET is_billing = 0 WHERE contact_id = %1";
+      $sqlParams = [1 => [$contactId, 'Integer']];
+      // we don't want to create unnecessary entries in the log_ tables so exclude the one we are working on
+      if (!empty($params['id'])) {
+        $sql .= " AND id <> %2";
+        $sqlParams[2] = [$params['id'], 'Integer'];
+      }
+      CRM_Core_DAO::executeQuery($sql, $sqlParams);
+      return;
+    }
+
+  }
+
+  /**
    * Sort location array so primary element is first.
    *
    * @param array $locations
    */
   public static function sortPrimaryFirst(&$locations) {
-    uasort($locations, 'self::primaryComparison');
+    uasort($locations, [__CLASS__, 'primaryComparison']);
   }
 
   /**

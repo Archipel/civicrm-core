@@ -52,7 +52,7 @@ class CRM_Dedupe_Finder {
     while ($dao->fetch()) {
       $dupes[] = [$dao->id1, $dao->id2, $dao->weight];
     }
-    CRM_Core_DAO::executeQuery(($rgBao->tableDropQuery()));
+    CRM_Core_DAO::executeQuery($rgBao->tableDropQuery());
 
     return $dupes;
   }
@@ -93,7 +93,7 @@ class CRM_Dedupe_Finder {
     if (!$params) {
       return [];
     }
-    $checkPermission = CRM_Utils_Array::value('check_permission', $params, TRUE);
+    $checkPermission = $params['check_permission'] ?? TRUE;
     // This may no longer be required - see https://github.com/civicrm/civicrm-core/pull/13176
     $params = array_filter($params);
 
@@ -122,15 +122,15 @@ class CRM_Dedupe_Finder {
     }
     $rgBao->params = $params;
     $rgBao->fillTable();
-    $dao = new CRM_Core_DAO();
-    $dao->query($rgBao->thresholdQuery($checkPermission));
+
+    $dao = CRM_Core_DAO::executeQuery($rgBao->thresholdQuery($checkPermission));
     $dupes = [];
     while ($dao->fetch()) {
       if (isset($dao->id) && $dao->id) {
         $dupes[] = $dao->id;
       }
     }
-    $dao->query($rgBao->tableDropQuery());
+    CRM_Core_DAO::executeQuery($rgBao->tableDropQuery());
     return array_diff($dupes, $except);
   }
 
@@ -220,7 +220,11 @@ class CRM_Dedupe_Finder {
     }
 
     // handle custom data
-    $tree = CRM_Core_BAO_CustomGroup::getTree($ctype, NULL, NULL, -1);
+
+    $subTypes = $fields['contact_sub_type'] ?? [];
+    // Only return custom for subType + unrestricted or return all custom
+    // fields.
+    $tree = CRM_Core_BAO_CustomGroup::getTree($ctype, NULL, NULL, -1, $subTypes, NULL, TRUE, NULL, TRUE);
     CRM_Core_BAO_CustomGroup::postProcess($tree, $fields, TRUE);
     foreach ($tree as $key => $cg) {
       if (!is_int($key)) {
@@ -258,39 +262,37 @@ class CRM_Dedupe_Finder {
     }
 
     $params = [];
-    $supportedFields = CRM_Dedupe_BAO_DedupeRuleGroup::supportedFields($ctype);
-    if (is_array($supportedFields)) {
-      foreach ($supportedFields as $table => $fields) {
-        if ($table === 'civicrm_address') {
-          // for matching on civicrm_address fields, we also need the location_type_id
-          $fields['location_type_id'] = '';
-          // FIXME: we also need to do some hacking for id and name fields, see CRM-3902’s comments
-          $fixes = [
-            'address_name' => 'name',
-            'country' => 'country_id',
-            'state_province' => 'state_province_id',
-            'county' => 'county_id',
-          ];
-          foreach ($fixes as $orig => $target) {
-            if (!empty($flat[$orig])) {
-              $params[$table][$target] = $flat[$orig];
-            }
+
+    foreach (CRM_Dedupe_BAO_DedupeRuleGroup::supportedFields($ctype) as $table => $fields) {
+      if ($table === 'civicrm_address') {
+        // for matching on civicrm_address fields, we also need the location_type_id
+        $fields['location_type_id'] = '';
+        // FIXME: we also need to do some hacking for id and name fields, see CRM-3902’s comments
+        $fixes = [
+          'address_name' => 'name',
+          'country' => 'country_id',
+          'state_province' => 'state_province_id',
+          'county' => 'county_id',
+        ];
+        foreach ($fixes as $orig => $target) {
+          if (!empty($flat[$orig])) {
+            $params[$table][$target] = $flat[$orig];
           }
         }
-        if ($table === 'civicrm_phone') {
-          $fixes = [
-            'phone' => 'phone_numeric',
-          ];
-          foreach ($fixes as $orig => $target) {
-            if (!empty($flat[$orig])) {
-              $params[$table][$target] = $flat[$orig];
-            }
+      }
+      if ($table === 'civicrm_phone') {
+        $fixes = [
+          'phone' => 'phone_numeric',
+        ];
+        foreach ($fixes as $orig => $target) {
+          if (!empty($flat[$orig])) {
+            $params[$table][$target] = $flat[$orig];
           }
         }
-        foreach ($fields as $field => $title) {
-          if (!empty($flat[$field])) {
-            $params[$table][$field] = $flat[$field];
-          }
+      }
+      foreach ($fields as $field => $title) {
+        if (!empty($flat[$field])) {
+          $params[$table][$field] = $flat[$field];
         }
       }
     }

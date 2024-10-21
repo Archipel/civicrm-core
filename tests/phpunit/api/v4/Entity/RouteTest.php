@@ -20,14 +20,14 @@
 namespace api\v4\Entity;
 
 use Civi\Api4\Route;
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 
 /**
  * @group headless
  */
-class RouteTest extends UnitTestCase {
+class RouteTest extends Api4TestBase {
 
-  public function testGet() {
+  public function testGet(): void {
     $result = Route::get()->addWhere('path', '=', 'civicrm/admin')->execute();
     $this->assertEquals(1, $result->count());
 

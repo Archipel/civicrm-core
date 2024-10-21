@@ -85,6 +85,7 @@ class CRM_Core_Form_Renderer extends HTML_QuickForm_Renderer_ArraySmarty {
     self::updateAttributes($element, $required, $error);
 
     $el = parent::_elementToArray($element, $required, $error);
+    $el['textLabel'] = $element->_label ?? NULL;
 
     // add label html
     if (!empty($el['label'])) {
@@ -109,7 +110,7 @@ class CRM_Core_Form_Renderer extends HTML_QuickForm_Renderer_ArraySmarty {
         $this->renderFrozenDatepicker($el, $element);
       }
       elseif ($element->getAttribute('type') == 'text' && $element->getAttribute('formatType')) {
-        list($date, $time) = CRM_Utils_Date::setDateDefaults($element->getValue(), $element->getAttribute('formatType'), $element->getAttribute('format'), $element->getAttribute('timeformat'));
+        [$date, $time] = CRM_Utils_Date::setDateDefaults($element->getValue(), $element->getAttribute('formatType'), $element->getAttribute('format'), $element->getAttribute('timeformat'));
         $date .= ($element->getAttribute('timeformat')) ? " $time" : '';
         $el['html'] = $date . '<input type="hidden" value="' . $element->getValue() . '" name="' . $element->getAttribute('name') . '">';
       }
@@ -164,15 +165,19 @@ class CRM_Core_Form_Renderer extends HTML_QuickForm_Renderer_ArraySmarty {
       }
     }
 
-    $class = $element->getAttribute('class');
+    $class = $element->getAttribute('class') ?? '';
     $type = $element->getType();
     if (!$class) {
       if ($type == 'text' || $type == 'password') {
         $size = $element->getAttribute('size');
         if (!empty($size)) {
-          $class = self::$_sizeMapper[$size] ?? NULL;
+          $class = self::$_sizeMapper[$size] ?? '';
         }
       }
+    }
+    // When select2 is an <input> it requires comma-separated values instead of an array
+    if (in_array($type, ['text', 'hidden']) && str_contains($class, 'crm-select2') && is_array($element->getValue())) {
+      $element->setValue(implode(',', $element->getValue()));
     }
 
     if ($type == 'select' && $element->getAttribute('multiple')) {
@@ -222,7 +227,7 @@ class CRM_Core_Form_Renderer extends HTML_QuickForm_Renderer_ArraySmarty {
     // Temporarily convert string values to an array
     if (!is_array($val)) {
       // Try to auto-detect method of serialization
-      $val = strpos($val, ',') ? explode(',', str_replace(', ', ',', $val)) : (array) CRM_Utils_Array::explodePadded($val);
+      $val = strpos(($val ?? ''), ',') ? explode(',', str_replace(', ', ',', ($val ?? ''))) : (array) CRM_Utils_Array::explodePadded($val);
     }
     if ($val) {
       $entity = $field->getAttribute('data-api-entity');
@@ -317,7 +322,7 @@ class CRM_Core_Form_Renderer extends HTML_QuickForm_Renderer_ArraySmarty {
       // Format contact as link
       if ($entity == 'Contact' && CRM_Contact_BAO_Contact_Permission::allow($val['id'], CRM_Core_Permission::VIEW)) {
         $url = CRM_Utils_System::url("civicrm/contact/view", ['reset' => 1, 'cid' => $val['id']]);
-        $val['label'] = '<a class="view-contact no-popup" href="' . $url . '" title="' . ts('View Contact') . '">' . CRM_Utils_String::purifyHTML($val['label']) . '</a>';
+        $val['label'] = '<a class="view-contact no-popup" href="' . $url . '" title="' . ts('View Contact', ['escape' => 'htmlattribute']) . '">' . CRM_Utils_String::purifyHTML($val['label']) . '</a>';
       }
       $display[] = $val['label'];
     }
@@ -395,7 +400,7 @@ HEREDOC;
     // Initially hide if not needed
     // Note: visibility:hidden prevents layout jumping around unlike display:none
     $display = $field->getValue() !== NULL ? '' : ' style="visibility:hidden;"';
-    $el['html'] .= ' <a href="#" class="crm-hover-button crm-clear-link"' . $display . ' title="' . ts('Clear') . '"><i class="crm-i fa-times" aria-hidden="true"></i></a>';
+    $el['html'] .= ' <a href="#" class="crm-hover-button crm-clear-link"' . $display . ' title="' . ts('Clear', ['escape' => 'htmlattribute']) . '"><i class="crm-i fa-times" aria-hidden="true"></i></a>';
   }
 
 }

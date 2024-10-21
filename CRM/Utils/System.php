@@ -22,21 +22,24 @@
  *
  * FIXME: This is a massive and random collection that could be split into smaller services
  *
+ * @method static void getCMSPermissionsUrlParams() Immediately stop script execution and display a 401 "Access Denied" page.
  * @method static mixed permissionDenied() Show access denied screen.
  * @method static mixed logout() Log out the current user.
  * @method static mixed updateCategories() Clear CMS caches related to the user registration/profile forms.
- * @method static appendBreadCrumb(array $breadCrumbs) Append an additional breadcrumb tag to the existing breadcrumbs.
- * @method static resetBreadCrumb() Reset an additional breadcrumb tag to the existing breadcrumb.
- * @method static addHTMLHead(string $bc) Append a string to the head of the HTML file.
+ * @method static void appendBreadCrumb(array $breadCrumbs) Append an additional breadcrumb tag to the existing breadcrumbs.
+ * @method static void resetBreadCrumb() Reset an additional breadcrumb tag to the existing breadcrumb.
+ * @method static void addHTMLHead(string $head) Append a string to the head of the HTML file.
  * @method static string postURL(int $action) Determine the post URL for a form.
  * @method static string|null getUFLocale() Get the locale of the CMS.
  * @method static bool setUFLocale(string $civicrm_language) Set the locale of the CMS.
  * @method static bool isUserLoggedIn() Check if user is logged in.
  * @method static int getLoggedInUfID() Get current logged in user id.
- * @method static setHttpHeader(string $name, string $value) Set http header.
+ * @method static void setHttpHeader(string $name, string $value) Set http header.
  * @method static array synchronizeUsers() Create CRM contacts for all existing CMS users.
- * @method static appendCoreResources(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_coreResourceList.
- * @method static alterAssetUrl(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_getAssetUrl.
+ * @method static void appendCoreResources(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_coreResourceList.
+ * @method static void alterAssetUrl(\Civi\Core\Event\GenericHookEvent $e) Callback for hook_civicrm_getAssetUrl.
+ * @method static bool shouldExitAfterFatal() Should the current execution exit after a fatal error?
+ * @method static string|null currentPath() Path of the current page e.g. 'civicrm/contact/view'
  */
 class CRM_Utils_System {
 
@@ -124,7 +127,7 @@ class CRM_Utils_System {
       for ($i = 0, $cnt = count($qs); $i < $cnt; $i++) {
         // check first if exist a pair
         if (strstr($qs[$i], '=') !== FALSE) {
-          list($name, $value) = explode('=', $qs[$i]);
+          [$name, $value] = explode('=', $qs[$i]);
           if ($name != $urlVar) {
             $name = rawurldecode($name);
             // check for arrays in parameters: site.php?foo[]=1&foo[]=2&foo[]=3
@@ -205,13 +208,13 @@ class CRM_Utils_System {
    *
    * @param array|string $query
    *
-   * @return string
+   * @return string|null
    */
   public static function makeQueryString($query) {
     if (is_array($query)) {
       $buf = '';
       foreach ($query as $key => $value) {
-        $buf .= ($buf ? '&' : '') . urlencode($key) . '=' . urlencode($value);
+        $buf .= ($buf ? '&' : '') . urlencode($key ?? '') . '=' . urlencode($value ?? '');
       }
       $query = $buf;
     }
@@ -242,14 +245,18 @@ class CRM_Utils_System {
    *   An HTML string containing a link to the given path.
    */
   public static function url(
-    $path = NULL,
-    $query = NULL,
+    $path = '',
+    $query = '',
     $absolute = FALSE,
     $fragment = NULL,
     $htmlize = TRUE,
     $frontend = FALSE,
     $forceBackend = FALSE
   ) {
+    // handle legacy null params
+    $path = $path ?? '';
+    $query = $query ?? '';
+
     $query = self::makeQueryString($query);
 
     // Legacy handling for when the system passes around html escaped strings
@@ -259,20 +266,20 @@ class CRM_Utils_System {
 
     // Extract fragment from path or query if munged together
     if ($query && strstr($query, '#')) {
-      list($path, $fragment) = explode('#', $query);
+      [$path, $fragment] = explode('#', $query);
     }
     if ($path && strstr($path, '#')) {
-      list($path, $fragment) = explode('#', $path);
+      [$path, $fragment] = explode('#', $path);
     }
 
     // Extract query from path if munged together
     if ($path && strstr($path, '?')) {
-      list($path, $extraQuery) = explode('?', $path);
+      [$path, $extraQuery] = explode('?', $path);
       $query = $extraQuery . ($query ? "&$query" : '');
     }
 
     $config = CRM_Core_Config::singleton();
-    $url = $config->userSystem->url($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+    $url = $config->userSystem->url($path, $query, $absolute, $fragment, $frontend, $forceBackend);
 
     if ($htmlize) {
       $url = htmlentities($url);
@@ -295,7 +302,7 @@ class CRM_Utils_System {
    * @param string $fragment
    *   A fragment identifier (named anchor) to append to the link.
    * @param bool $htmlize
-   *   Whether to encode special html characters such as &.
+   *   Unused param
    * @param bool $frontend
    *   This link should be to the CMS front end (applies to WP & Joomla).
    * @param bool $forceBackend
@@ -309,13 +316,13 @@ class CRM_Utils_System {
     $query = NULL,
     $absolute = FALSE,
     $fragment = NULL,
-    $htmlize = TRUE,
+    $htmlize = NULL,
     $frontend = FALSE,
     $forceBackend = FALSE
   ) {
     $config = CRM_Core_Config::singleton();
     $query = self::makeQueryString($query);
-    return $config->userSystem->getNotifyUrl($path, $query, $absolute, $fragment, $frontend, $forceBackend, $htmlize);
+    return $config->userSystem->getNotifyUrl($path, $query, $absolute, $fragment, $frontend, $forceBackend);
   }
 
   /**
@@ -428,24 +435,14 @@ class CRM_Utils_System {
   }
 
   /**
-   * Path of the current page e.g. 'civicrm/contact/view'
+   * Compose a URL. This is a wrapper for `url()` which is optimized for use in Smarty.
    *
-   * @return string|null
-   *   the current menu path
-   */
-  public static function currentPath() {
-    $config = CRM_Core_Config::singleton();
-    return isset($_GET[$config->userFrameworkURLVar]) ? trim($_GET[$config->userFrameworkURLVar], '/') : NULL;
-  }
-
-  /**
-   * Called from a template to compose a url.
-   *
+   * @see \smarty_function_crmURL()
    * @param array $params
-   *   List of parameters.
-   *
+   *   URL properties. Keys are abbreviated ("p"<=>"path").
+   *   See Smarty doc for full details.
    * @return string
-   *   url
+   *   URL
    */
   public static function crmURL($params) {
     $p = $params['p'] ?? NULL;
@@ -475,7 +472,7 @@ class CRM_Utils_System {
   public static function setTitle($title, $pageTitle = NULL) {
     self::$title = $title;
     $config = CRM_Core_Config::singleton();
-    return $config->userSystem->setTitle($title, $pageTitle);
+    return $config->userSystem->setTitle(CRM_Utils_String::purifyHtml($title), CRM_Utils_String::purifyHtml($pageTitle));
   }
 
   /**
@@ -538,7 +535,9 @@ class CRM_Utils_System {
     $url = str_replace('&amp;', '&', $url);
 
     $context['output'] = $_GET['snippet'] ?? NULL;
-
+    if ($context['noindex'] ?? FALSE) {
+      self::setHttpHeader('X-Robots-Tag', 'noindex');
+    }
     $parsedUrl = CRM_Utils_Url::parseUrl($url);
     CRM_Utils_Hook::alterRedirect($parsedUrl, $context);
     $url = CRM_Utils_Url::unparseUrl($parsedUrl);
@@ -639,7 +638,7 @@ class CRM_Utils_System {
    */
   public static function authenticateKey($abort = TRUE) {
     // also make sure the key is sent and is valid
-    $key = trim(CRM_Utils_Array::value('key', $_REQUEST));
+    $key = trim($_REQUEST['key'] ?? '');
 
     $docAdd = "More info at: " . CRM_Utils_System::docURL2('sysadmin/setup/jobs', TRUE);
 
@@ -692,8 +691,8 @@ class CRM_Utils_System {
     // auth to make sure the user has a login/password to do a shell operation
     // later on we'll link this to acl's
     if (!$name) {
-      $name = trim(CRM_Utils_Array::value('name', $_REQUEST));
-      $pass = trim(CRM_Utils_Array::value('pass', $_REQUEST));
+      $name = trim($_REQUEST['name'] ?? '');
+      $pass = trim($_REQUEST['pass'] ?? '');
     }
 
     // its ok to have an empty password
@@ -717,7 +716,7 @@ class CRM_Utils_System {
     }
     elseif ($storeInSession) {
       // lets store contact id and user id in session
-      list($userID, $ufID, $randomNumber) = $result;
+      [$userID, $ufID, $randomNumber] = $result;
       if ($userID && $ufID) {
         $config = CRM_Core_Config::singleton();
         $config->userSystem->setUserSession([$userID, $ufID]);
@@ -751,18 +750,6 @@ class CRM_Utils_System {
    */
   public static function authenticate($name, $password, $loadCMSBootstrap = FALSE, $realPath = NULL) {
     $config = CRM_Core_Config::singleton();
-
-    /* Before we do any loading, let's start the session and write to it.
-     * We typically call authenticate only when we need to bootstrap the CMS
-     * directly via Civi and hence bypass the normal CMS auth and bootstrap
-     * process typically done in CLI and cron scripts. See: CRM-12648
-     *
-     * Q: Can we move this to the userSystem class so that it can be tuned
-     * per-CMS? For example, when dealing with UnitTests UF, does it need to
-     * do this session write since the original issue was for Drupal.
-     */
-    $session = CRM_Core_Session::singleton();
-    $session->set('civicrmInitSession', TRUE);
 
     return $config->userSystem->authenticate($name, $password, $loadCMSBootstrap, $realPath);
   }
@@ -815,7 +802,7 @@ class CRM_Utils_System {
    *   The obscured credit card number.
    */
   public static function mungeCreditCard($number, $keep = 4) {
-    $number = trim($number);
+    $number = trim($number ?? '');
     if (empty($number)) {
       return NULL;
     }
@@ -949,7 +936,7 @@ class CRM_Utils_System {
    *   (optional) Whether to log the memory usage information.
    */
   public static function xMemory($title = NULL, $log = FALSE) {
-    $mem = (float ) xdebug_memory_usage() / (float ) (1024);
+    $mem = (float) xdebug_memory_usage() / (float) (1024);
     $mem = number_format($mem, 5) . ", " . time();
     if ($log) {
       echo "<p>$title: $mem<p>";
@@ -1001,7 +988,7 @@ class CRM_Utils_System {
 
     if (!array_key_exists($callback, self::$_callbacks)) {
       if (strpos($callback, '::') !== FALSE) {
-        list($className, $methodName) = explode('::', $callback);
+        [$className, $methodName] = explode('::', $callback);
         $fileName = str_replace('_', DIRECTORY_SEPARATOR, $className) . '.php';
         // ignore errors if any
         @include_once $fileName;
@@ -1040,7 +1027,7 @@ class CRM_Utils_System {
    * @return string[]
    */
   public static function explode($separator, $string, $limit) {
-    $result = explode($separator, $string, $limit);
+    $result = explode($separator, ($string ?? ''), $limit);
     for ($i = count($result); $i < $limit; $i++) {
       $result[$i] = NULL;
     }
@@ -1107,7 +1094,7 @@ class CRM_Utils_System {
    * Encode url.
    *
    * @param string $url
-   *
+   * @deprecated
    * @return null|string
    */
   public static function urlEncode($url) {
@@ -1177,7 +1164,7 @@ class CRM_Utils_System {
    * @return string
    */
   public static function majorVersion() {
-    list($a, $b) = explode('.', self::version());
+    [$a, $b] = explode('.', self::version());
     return "$a.$b";
   }
 
@@ -1246,7 +1233,7 @@ class CRM_Utils_System {
   /**
    * Redirect to SSL.
    *
-   * @param bool|FALSE $abort
+   * @param bool|false $abort
    *
    * @throws \CRM_Core_Exception
    */
@@ -1256,7 +1243,7 @@ class CRM_Utils_System {
     // FIXME: Shouldn't the X-Forwarded-Proto check be part of CRM_Utils_System::isSSL()?
     if (Civi::settings()->get('enableSSL') &&
       !self::isSSL() &&
-      strtolower(CRM_Utils_Array::value('X_FORWARDED_PROTO', $req_headers)) != 'https'
+      strtolower($req_headers['X_FORWARDED_PROTO'] ?? '') != 'https'
     ) {
       // ensure that SSL is enabled on a civicrm url (for cookie reasons etc)
       $url = "https://{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}";
@@ -1278,7 +1265,7 @@ class CRM_Utils_System {
   }
 
   /**
-   * Get logged in user's IP address.
+   * Get the client's IP address.
    *
    * Get IP address from HTTP REMOTE_ADDR header. If the CMS is Drupal then use
    * the Drupal function as this also handles reverse proxies (based on proper
@@ -1291,14 +1278,8 @@ class CRM_Utils_System {
    *   IP address of logged in user.
    */
   public static function ipAddress($strictIPV4 = TRUE) {
-    $address = $_SERVER['REMOTE_ADDR'] ?? NULL;
-
     $config = CRM_Core_Config::singleton();
-    if ($config->userSystem->is_drupal && function_exists('ip_address')) {
-      // drupal function handles the server being behind a proxy securely. We still have legacy ipn methods
-      // that reach this point without bootstrapping hence the check that the fn exists
-      $address = ip_address();
-    }
+    $address = $config->userSystem->ipAddress();
 
     // hack for safari
     if ($address == '::1') {
@@ -1360,14 +1341,13 @@ class CRM_Utils_System {
    *   Title of documentation wiki page.
    * @param bool $URLonly
    *   (optional) Whether to return URL only or full HTML link (default).
-   * @param string $text
+   * @param string|null $text
    *   (optional) Text of HTML link (no effect if $URLonly = false).
-   * @param string $title
+   * @param string|null $title
    *   (optional) Tooltip text for HTML link (no effect if $URLonly = false)
-   * @param string $style
+   * @param string|null $style
    *   (optional) Style attribute value for HTML link (no effect if $URLonly = false)
-   *
-   * @param null $resource
+   * @param string|null $resource
    *
    * @return string
    *   URL or link to documentation page, based on provided parameters.
@@ -1415,7 +1395,7 @@ class CRM_Utils_System {
       return NULL;
     }
 
-    if (CRM_Utils_Array::value('resource', $params) == 'wiki') {
+    if (($params['resource'] ?? NULL) == 'wiki') {
       $docBaseURL = self::getWikiBaseURL();
     }
     else {
@@ -1498,13 +1478,7 @@ class CRM_Utils_System {
     // a bit aggressive, but livable for now
     CRM_Utils_Cache::singleton()->flush();
 
-    // Traditionally, systems running on memory-backed caches were quite
-    // zealous about destroying *all* memory-backed caches during a flush().
-    // These flushes simulate that legacy behavior. However, they should probably
-    // be removed at some point.
-    $localDrivers = ['CRM_Utils_Cache_ArrayCache', 'CRM_Utils_Cache_NoCache'];
-    if (Civi\Core\Container::isContainerBooted()
-      && !in_array(get_class(CRM_Utils_Cache::singleton()), $localDrivers)) {
+    if (Civi\Core\Container::isContainerBooted()) {
       Civi::cache('long')->flush();
       Civi::cache('settings')->flush();
       Civi::cache('js_strings')->flush();
@@ -1514,6 +1488,7 @@ class CRM_Utils_System {
       Civi::cache('customData')->flush();
       Civi::cache('contactTypes')->clear();
       Civi::cache('metadata')->clear();
+      \Civi\Core\ClassScanner::cache('index')->flush();
       CRM_Extension_System::singleton()->getCache()->flush();
       CRM_Cxn_CiviCxnHttp::singleton()->getCache()->flush();
     }
@@ -1613,7 +1588,7 @@ class CRM_Utils_System {
    * Given a URL, return a relative URL if possible.
    *
    * @param string $url
-   *
+   * @deprecated
    * @return string
    */
   public static function relativeURL($url) {
@@ -1756,7 +1731,12 @@ class CRM_Utils_System {
     $inc_dirs = explode(PATH_SEPARATOR, get_include_path());
     foreach ($inc_dirs as $inc_dir) {
       $target_dir = $inc_dir . DIRECTORY_SEPARATOR . $relpath;
-      if (is_dir($target_dir)) {
+      // While it seems pointless to have a folder that's outside open_basedir
+      // listed in include_path and that seems more like a configuration issue,
+      // not everyone has control over the hosting provider's include_path and
+      // this does happen out in the wild, so use our wrapper to avoid flooding
+      // logs.
+      if (CRM_Utils_File::isDir($target_dir)) {
         $cur_list = scandir($target_dir);
         foreach ($cur_list as $fname) {
           if ($fname != '.' && $fname != '..') {
@@ -1824,7 +1804,7 @@ class CRM_Utils_System {
   /**
    * Evaluate any tokens in a URL.
    *
-   * @param string|FALSE $url
+   * @param string|false $url
    *
    * @return string|FALSE
    */
@@ -1842,7 +1822,7 @@ class CRM_Utils_System {
         '{sid}' => self::getSiteID(),
         '{baseUrl}' => $config->userFrameworkBaseURL,
         '{lang}' => $tsLocale,
-        '{co}' => $config->defaultContactCountry,
+        '{co}' => $config->defaultContactCountry ?? '',
       ];
       return strtr($url, array_map('urlencode', $vars));
     }

@@ -59,9 +59,8 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
    * @return array
    *   a table-keyed array of field-keyed arrays holding supported fields' titles
    */
-  public static function supportedFields($requestedType) {
-    static $fields = NULL;
-    if (!$fields) {
+  public static function supportedFields($requestedType): array {
+    if (!isset(Civi::$statics[__CLASS__]['supportedFields'])) {
       // this is needed, as we're piggy-backing importableFields() below
       $replacements = [
         'civicrm_country.name' => 'civicrm_address.country_id',
@@ -87,15 +86,15 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
         'civicrm_website',
       ];
 
-      foreach (['Individual', 'Organization', 'Household'] as $ctype) {
+      foreach (CRM_Contact_BAO_ContactType::basicTypes() as $ctype) {
         // take the table.field pairs and their titles from importableFields() if the table is supported
-        foreach (CRM_Contact_BAO_Contact::importableFields($ctype) as $iField) {
+        foreach (self::importableFields($ctype) as $iField) {
           if (isset($iField['where'])) {
             $where = $iField['where'];
             if (isset($replacements[$where])) {
               $where = $replacements[$where];
             }
-            list($table, $field) = explode('.', $where);
+            [$table, $field] = explode('.', $where);
             if (!in_array($table, $supportedTables)) {
               continue;
             }
@@ -109,8 +108,9 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
         // Justice League vs The Justice League but these could have the same sort_name if 'the the'
         // exension is installed (https://github.com/eileenmcnaughton/org.wikimedia.thethe)
         $fields[$ctype]['civicrm_contact']['sort_name'] = ts('Sort Name');
-        // add custom data fields
-        foreach (CRM_Core_BAO_CustomGroup::getTree($ctype, NULL, NULL, -1) as $key => $cg) {
+
+        // add all custom data fields including those only for sub_types.
+        foreach (CRM_Core_BAO_CustomGroup::getTree($ctype, NULL, NULL, -1, [], NULL, TRUE, NULL, TRUE) as $key => $cg) {
           if (!is_int($key)) {
             continue;
           }
@@ -119,9 +119,89 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
           }
         }
       }
+      //Does this have to run outside of cache?
+      CRM_Utils_Hook::dupeQuery(CRM_Core_DAO::$_nullObject, 'supportedFields', $fields);
+      Civi::$statics[__CLASS__]['supportedFields'] = $fields;
     }
-    CRM_Utils_Hook::dupeQuery(CRM_Core_DAO::$_nullObject, 'supportedFields', $fields);
-    return !empty($fields[$requestedType]) ? $fields[$requestedType] : [];
+
+    return Civi::$statics[__CLASS__]['supportedFields'][$requestedType] ?? [];
+
+  }
+
+  /**
+   * Combine all the importable fields from the lower levels object.
+   *
+   * @deprecated - copy of importableFields to unravel.
+   *
+   * The ordering is important, since currently we do not have a weight
+   * scheme. Adding weight is super important
+   *
+   * @param int|string $contactType contact Type
+   *
+   * @return array
+   *   array of importable Fields
+   */
+  private static function importableFields($contactType): array {
+
+    $fields = CRM_Contact_DAO_Contact::import();
+
+    // get the fields thar are meant for contact types
+    if (in_array($contactType, [
+      'Individual',
+      'Household',
+      'Organization',
+      'All',
+    ])) {
+      $fields = array_merge($fields, CRM_Core_OptionValue::getFields('', $contactType));
+    }
+
+    $locationFields = array_merge(CRM_Core_DAO_Address::import(),
+      CRM_Core_DAO_Phone::import(),
+      CRM_Core_DAO_Email::import(),
+      CRM_Core_DAO_IM::import(TRUE),
+      CRM_Core_DAO_OpenID::import()
+    );
+
+    $locationFields = array_merge($locationFields,
+      CRM_Core_BAO_CustomField::getFieldsForImport('Address',
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE
+      )
+    );
+
+    foreach ($locationFields as $key => $field) {
+      $locationFields[$key]['hasLocationType'] = TRUE;
+    }
+
+    $fields = array_merge($fields, $locationFields);
+
+    $fields = array_merge($fields, CRM_Contact_DAO_Contact::import());
+    $fields = array_merge($fields, CRM_Core_DAO_Note::import());
+
+    //website fields
+    $fields = array_merge($fields, CRM_Core_DAO_Website::import());
+    $fields['url']['hasWebsiteType'] = TRUE;
+
+    $fields = array_merge($fields,
+      CRM_Core_BAO_CustomField::getFieldsForImport($contactType,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE
+      )
+    );
+    // Unset the fields which are not related to their contact type.
+    foreach (CRM_Contact_DAO_Contact::import() as $name => $value) {
+      if (!empty($value['contactType']) && $value['contactType'] !== $contactType) {
+        unset($fields[$name]);
+      }
+    }
+
+    //Sorting fields in alphabetical order(CRM-1507)
+    return CRM_Utils_Array::crmArraySortByField($fields, 'title');
   }
 
   /**
@@ -135,7 +215,7 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
    * Return a set of SQL queries whose cummulative weights will mark matched
    * records for the RuleGroup::threasholdQuery() to retrieve.
    */
-  public function tableQuery() {
+  private function tableQuery() {
     // make sure we've got a fetched dbrecord, not sure if this is enforced
     if (!$this->name == NULL || $this->is_reserved == NULL) {
       $this->find(TRUE);
@@ -216,7 +296,7 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
     CRM_Utils_Hook::dupeQuery($this, 'table', $tableQueries);
 
     while (!empty($tableQueries)) {
-      list($isInclusive, $isDie) = self::isQuerySetInclusive($tableQueries, $this->threshold, $exclWeightSum);
+      [$isInclusive, $isDie] = self::isQuerySetInclusive($tableQueries, $this->threshold, $exclWeightSum);
 
       if ($isInclusive) {
         // order queries by table count
@@ -259,7 +339,7 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
           $query = "{$insertClause} {$query} {$groupByClause} ON DUPLICATE KEY UPDATE weight = weight + VALUES(weight)";
           $dao = CRM_Core_DAO::executeQuery($query);
 
-          // FIXME: we need to be more acurate with affected rows, especially for insert vs duplicate insert.
+          // FIXME: we need to be more accurate with affected rows, especially for insert vs duplicate insert.
           // And that will help optimize further.
           $affectedRows = $dao->affectedRows();
 
@@ -333,28 +413,31 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
   }
 
   /**
-   * sort queries by number of records for the table associated with them.
-   * @param $tableQueries
+   * Sort queries by number of records for the table associated with them.
+   *
+   * @param array $tableQueries
    */
-  public static function orderByTableCount(&$tableQueries) {
-    static $tableCount = [];
+  public static function orderByTableCount(array &$tableQueries): void {
+    uksort($tableQueries, [__CLASS__, 'isTableBigger']);
+  }
 
-    $tempArray = [];
-    foreach ($tableQueries as $key => $query) {
-      $table = explode(".", $key);
-      $table = $table[0];
-      if (!array_key_exists($table, $tableCount)) {
-        $query = "SELECT COUNT(*) FROM {$table}";
-        $tableCount[$table] = CRM_Core_DAO::singleValueQuery($query);
-      }
-      $tempArray[$key] = $tableCount[$table];
+  /**
+   * Is the table extracted from the first string larger than the second string.
+   *
+   * @param string $a
+   *   e.g civicrm_contact.first_name
+   * @param string $b
+   *   e.g civicrm_address.street_address
+   *
+   * @return int
+   */
+  private static function isTableBigger(string $a, string $b): int {
+    $tableA = explode('.', $a)[0];
+    $tableB = explode('.', $b)[0];
+    if ($tableA === $tableB) {
+      return 0;
     }
-
-    asort($tempArray);
-    foreach ($tempArray as $key => $count) {
-      $tempArray[$key] = $tableQueries[$key];
-    }
-    $tableQueries = $tempArray;
+    return CRM_Core_BAO_SchemaHandler::getRowCountForTable($tableA) <=> CRM_Core_BAO_SchemaHandler::getRowCountForTable($tableB);
   }
 
   /**
@@ -375,7 +458,7 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
 
     if ($this->params && !$this->noRules) {
       if ($checkPermission) {
-        list($this->_aclFrom, $aclWhere) = CRM_Contact_BAO_Contact_Permission::cacheClause('civicrm_contact');
+        [$this->_aclFrom, $aclWhere] = CRM_Contact_BAO_Contact_Permission::cacheClause('civicrm_contact');
         $aclWhere = $aclWhere ? "AND {$aclWhere}" : '';
       }
       $query = "SELECT {$this->temporaryTables['dedupe']}.id1 as id
@@ -386,7 +469,7 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
     else {
       $aclWhere = '';
       if ($checkPermission) {
-        list($this->_aclFrom, $aclWhere) = CRM_Contact_BAO_Contact_Permission::cacheClause(['c1', 'c2']);
+        [$this->_aclFrom, $aclWhere] = CRM_Contact_BAO_Contact_Permission::cacheClause(['c1', 'c2']);
         $aclWhere = $aclWhere ? "AND {$aclWhere}" : '';
       }
       $query = "SELECT IF({$this->temporaryTables['dedupe']}.id1 < {$this->temporaryTables['dedupe']}.id2, {$this->temporaryTables['dedupe']}.id1, {$this->temporaryTables['dedupe']}.id2) as id1,
@@ -472,10 +555,10 @@ class CRM_Dedupe_BAO_DedupeRuleGroup extends CRM_Dedupe_DAO_DedupeRuleGroup {
    *   Individual, Household or Organization.
    *
    *
-   * @return array
+   * @return array|string[]
    *   id => "nice name" of rule group
    */
-  public static function getByType($contactType = NULL) {
+  public static function getByType($contactType = NULL): array {
     $dao = new CRM_Dedupe_DAO_DedupeRuleGroup();
 
     if ($contactType) {

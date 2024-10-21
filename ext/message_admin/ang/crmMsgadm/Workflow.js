@@ -7,24 +7,18 @@
         controller: 'MsgtpluiListCtrl',
         controllerAs: '$ctrl',
         templateUrl: function() {
-          // The original drafts had a mode where the "Translate" button was conditioned on some kind of language-opt-in.
-          // However, uiLanguages isn't giving that signal anymore, and that opt-in isn't strictly needed since htis
-          // is currently packaged as an opt-in extension. Maybe we should just remove `~/crmMsgadm/Workflow.html` in a few months.
-          // But for the moment, keep it around it in case we have to pivot.
-
-          // var supportsTranslation = CRM.crmMsgadm.uiLanguages && _.size(CRM.crmMsgadm.uiLanguages) > 1;
-          // return supportsTranslation ? '~/crmMsgadm/WorkflowTranslated.html' : '~/crmMsgadm/Workflow.html';
-          return '~/crmMsgadm/WorkflowTranslated.html';
+          var supportsTranslation = CRM.crmMsgadm.allLanguages && _.size(CRM.crmMsgadm.allLanguages) > 1;
+          return supportsTranslation ? '~/crmMsgadm/WorkflowTranslated.html' : '~/crmMsgadm/Workflow.html';
         },
         resolve: {
           prefetch: function(crmApi4, crmStatus) {
             var q = crmApi4({
               records: ['MessageTemplate', 'get', {
-                select: ["id", "msg_title", "is_default", "is_active"],
+                select: ["id", "msg_title", "is_default", "is_active", "workflow_name"],
                 where: [["workflow_name", "IS NOT EMPTY"], ["is_reserved", "=", "0"]]
               }],
               translations: ['MessageTemplate', 'get', {
-                select: ["id", "msg_title", "is_default", "is_active", "tx.language:label", "tx.language"],
+                select: ["id", "msg_title", "is_default", "is_active", "workflow_name", "tx.language:label", "tx.language"],
                 join: [["Translation AS tx", "INNER", null, ["tx.entity_table", "=", "'civicrm_msg_template'"], ["tx.entity_id", "=", "id"]]],
                 where: [["workflow_name", "IS NOT EMPTY"], ["is_reserved", "=", "0"]],
                 groupBy: ["id", "tx.language"],

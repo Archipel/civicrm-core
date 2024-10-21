@@ -29,7 +29,7 @@ class CRM_Price_Form_FieldTest extends CiviUnitTestCase {
     ]);
   }
 
-  public function testPublicFieldWithOnlyAdminOptionsIsNotAllowed() {
+  public function testPublicFieldWithOnlyAdminOptionsIsNotAllowed(): void {
     $this->publicFieldParams['option_label'][1] = 'Admin Price';
     $this->publicFieldParams['option_amount'][1] = 10;
     $this->publicFieldParams['option_visibility_id'][1] = $this->visibilityOptionsKeys['admin'];
@@ -43,7 +43,7 @@ class CRM_Price_Form_FieldTest extends CiviUnitTestCase {
     $this->assertTrue(array_key_exists('visibility_id', $validationResult));
   }
 
-  public function testAdminFieldDoesNotAllowPublicOptions() {
+  public function testAdminFieldDoesNotAllowPublicOptions(): void {
     $this->adminFieldParams['option_label'][1] = 'Admin Price';
     $this->adminFieldParams['option_amount'][1] = 10;
     $this->adminFieldParams['option_visibility_id'][1] = $this->visibilityOptionsKeys['public'];
@@ -95,9 +95,11 @@ class CRM_Price_Form_FieldTest extends CiviUnitTestCase {
       'weight' => 1,
       'options_per_line' => 1,
       'is_enter_qty' => 1,
-      'financial_type_id' => $this->getFinancialTypeId('Event Fee'),
+      'financial_type_id' => $this->getFinancialTypeID('Event Fee'),
       'visibility_id' => $this->visibilityOptionsKeys['public'],
       'price' => 10,
+      'active_on' => date('Y-m-d'),
+      'expire_on' => '',
     ];
 
     for ($index = 1; $index <= CRM_Price_Form_Field::NUM_OPTION; $index++) {
@@ -117,12 +119,12 @@ class CRM_Price_Form_FieldTest extends CiviUnitTestCase {
    *
    * @throws \CRM_Core_Exception
    */
-  public function testPriceFieldFormRuleOnMembership() {
+  public function testPriceFieldFormRuleOnMembership(): void {
     $membershipTypeID = $this->membershipTypeCreate();
     $membershipTypeID2 = $this->membershipTypeCreate(['member_of_contact_id' => $this->setupIDs['contact']]);
 
     $priceSetID = $this->callAPISuccess('PriceSet', 'create', ['title' => 'blah', 'extends' => 'CiviMember'])['id'];
-    /* @var \CRM_Price_Form_Field $form */
+    /** @var \CRM_Price_Form_Field $form */
     $form = $this->getFormObject('CRM_Price_Form_Field');
     $_REQUEST['sid'] = $priceSetID;
     $form->preProcess();
@@ -298,6 +300,32 @@ class CRM_Price_Form_FieldTest extends CiviUnitTestCase {
     $this->assertEquals([
       '_qf_default' => 'You have selected multiple memberships for the same organization or entity. Please review your selections and choose only one membership per entity.',
     ], $errors);
+  }
+
+  /**
+   * Test end date not allowed with only 'time' part.
+   */
+  public function testEndDateWithoutDateNotAllowed(): void {
+    $form = new CRM_Price_Form_Field();
+    $form->_action = CRM_Core_Action::ADD;
+    $values = $this->initializeFieldParameters([
+      'expire_on' => '00:01',
+    ]);
+    $validationResult = \CRM_Price_Form_Field::formRule($values, [], $form);
+    $this->assertArrayHasKey('expire_on', $validationResult);
+  }
+
+  /**
+   * Test end date must be after start date.
+   */
+  public function testEndDateBeforeStartDateNotAllowed(): void {
+    $form = new CRM_Price_Form_Field();
+    $form->_action = CRM_Core_Action::ADD;
+    $values = $this->initializeFieldParameters([
+      'expire_on' => '1900-01-01 00:00',
+    ]);
+    $validationResult = \CRM_Price_Form_Field::formRule($values, [], $form);
+    $this->assertArrayHasKey('expire_on', $validationResult);
   }
 
 }

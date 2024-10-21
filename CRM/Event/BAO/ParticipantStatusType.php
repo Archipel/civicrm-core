@@ -19,7 +19,7 @@ class CRM_Event_BAO_ParticipantStatusType extends CRM_Event_DAO_ParticipantStatu
   /**
    * @param array $params
    *
-   * @return this|null
+   * @return self|null
    */
   public static function add(&$params) {
     if (empty($params)) {
@@ -33,7 +33,7 @@ class CRM_Event_BAO_ParticipantStatusType extends CRM_Event_DAO_ParticipantStatu
   /**
    * @param array $params
    *
-   * @return this|null
+   * @return self|null
    */
   public static function &create(&$params) {
     $transaction = new CRM_Core_Transaction();
@@ -71,31 +71,23 @@ class CRM_Event_BAO_ParticipantStatusType extends CRM_Event_DAO_ParticipantStatu
   }
 
   /**
+   * @deprecated
    * @param array $params
-   * @param $defaults
-   *
-   * @return CRM_Event_DAO_ParticipantStatusType|null
+   * @param array $defaults
+   * @return self|null
    */
-  public static function retrieve(&$params, &$defaults) {
-    $result = NULL;
-
-    $dao = new CRM_Event_DAO_ParticipantStatusType();
-    $dao->copyValues($params);
-    if ($dao->find(TRUE)) {
-      CRM_Core_DAO::storeValues($dao, $defaults);
-      $result = $dao;
-    }
-
-    return $result;
+  public static function retrieve($params, &$defaults) {
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
+   * @deprecated - this bypasses hooks.
    * @param int $id
-   * @param $isActive
-   *
+   * @param bool $isActive
    * @return bool
    */
   public static function setIsActive($id, $isActive) {
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
     return CRM_Core_DAO::setFieldValue('CRM_Event_BAO_ParticipantStatusType', $id, 'is_active', $isActive);
   }
 

@@ -8,7 +8,7 @@
  +--------------------------------------------------------------------+
 *}
 <div class="crm-block crm-form-block crm-group-search-form-block">
-  <div class="crm-accordion-wrapper crm-search_builder-accordion {if $rows and empty($showSearchForm)}collapsed{/if}">
+  <div class="crm-accordion-wrapper crm-search_builder-accordion">
     <div class="crm-accordion-header crm-master-accordion-header">
       {ts}Find Groups{/ts}
     </div>
@@ -18,36 +18,24 @@
           <tr>
             <td>
               {$form.title.label}<br />
-              {$form.title.html}<br />
-              <span class="description font-italic">
-                {ts}Complete OR partial group name.{/ts}
-              </span>
+              {$form.title.html}
             </td>
             {if !empty($form.created_by)}
               <td>
                 {$form.created_by.label}<br />
-                {$form.created_by.html}<br />
-                <span class="description font-italic">
-                  {ts}Complete OR partial creator name.{/ts}
-                </span>
+                {$form.created_by.html}
               </td>
             {/if}
             <td>
               {$form.visibility.label}<br />
-              {$form.visibility.html}<br />
-              <span class="description font-italic">
-               {ts}Filter search by visibility.{/ts}
-              </span>
+              {$form.visibility.html}
             </td>
           </tr>
           <tr>
             {if !empty($form.group_type_search)}
               <td id="group_type-block">
                 {$form.group_type_search.label}<br />
-                {$form.group_type_search.html}<br />
-                <span class="description font-italic">
-                  {ts}Filter search by group type(s).{/ts}
-                </span>
+                {$form.group_type_search.html}
               </td>
             {/if}
             {if !empty($form.group_status)}
@@ -91,7 +79,7 @@
       <th data-data="description" data-orderable="false" cell-class="crm-group-description crmf-description {$editableClass}" class='crm-group-description'>{ts}Description{/ts}</th>
       <th data-data="group_type" cell-class="crm-group-group_type" class='crm-group-group_type'>{ts}Group Type{/ts}</th>
       <th data-data="visibility" cell-class="crm-group-visibility crmf-visibility {$editableClass}" cell-data-type="select" class='crm-group-visibility'>{ts}Visibility{/ts}</th>
-      {if !empty($showOrgInfo)}
+      {if $showOrgInfo}
         <th data-data="org_info" data-orderable="false" cell-class="crm-group-org_info" class='crm-group-org_info'>{ts}Organization{/ts}</th>
       {/if}
       <th data-data="links" data-orderable="false" cell-class="crm-group-group_links" class='crm-group-group_links'>&nbsp;</th>
@@ -136,7 +124,7 @@
           d.status = groupStatus,
           d.savedSearch = $('.crm-group-search-form-block select#saved_search').val(),
           d.component_mode = $(".crm-group-search-form-block select#component_mode").val(),
-          d.showOrgInfo = {/literal}{if isset($showOrgInfo)}"{$showOrgInfo}"{else}"0"{/if}{literal},
+          d.showOrgInfo = {/literal}{if $showOrgInfo}"{$showOrgInfo}"{else}"0"{/if}{literal},
           d.parentsOnly = parentsOnly
         }
       },
@@ -186,7 +174,7 @@
     // show hide children
     var context = $('#crm-main-content-wrapper');
     $('table.crm-group-selector', context).on( 'click', 'span.show-children', function(){
-      var showOrgInfo = {/literal}{if isset($showOrgInfo)}"{$showOrgInfo}"{else}"0"{/if}{literal};
+      var showOrgInfo = {/literal}{if $showOrgInfo}true{else}false{/if}{literal};
       var rowID = $(this).parents('tr').prop('id');
       var parentRow = rowID.split('_');
       var parent_id = parentRow[1];

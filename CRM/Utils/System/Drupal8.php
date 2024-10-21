@@ -23,7 +23,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
   /**
    * @inheritDoc
    */
-  public function createUser(&$params, $mail) {
+  public function createUser(&$params, $mailParam) {
     $user = \Drupal::currentUser();
     $user_register_conf = \Drupal::config('user.settings')->get('register');
     $verify_mail_conf = \Drupal::config('user.settings')->get('verify_mail');
@@ -35,7 +35,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     /** @var \Drupal\user\Entity\User $account */
     $account = \Drupal::entityTypeManager()->getStorage('user')->create();
-    $account->setUsername($params['cms_name'])->setEmail($params[$mail]);
+    $account->setUsername($params['cms_name'])->setEmail($params[$mailParam]);
 
     // Allow user to set password only if they are an admin or if
     // the site settings don't require email verification.
@@ -114,6 +114,9 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     if ($user && $user->getEmail() != $email) {
       $user->setEmail($email);
 
+      // Skip requirement for password when changing the current user fields
+      $user->_skipProtectedUserFieldConstraint = TRUE;
+
       if (!count($user->validate())) {
         $user->save();
       }
@@ -121,16 +124,9 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
   }
 
   /**
-   * Check if username and email exists in the drupal db.
-   *
-   * @param array $params
-   *   Array of name and mail values.
-   * @param array $errors
-   *   Errors.
-   * @param string $emailName
-   *   Field label for the 'email'.
+   * @inheritdoc
    */
-  public static function checkUserNameEmailExists(&$params, &$errors, $emailName = 'email') {
+  public function checkUserNameEmailExists(&$params, &$errors, $emailName = 'email') {
     // If we are given a name, let's check to see if it already exists.
     if (!empty($params['name'])) {
       $name = $params['name'];
@@ -252,7 +248,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
    * FIXME: This is not a legacy function and the above is not a safe assumption.
    * External urls are allowed by CRM_Core_Resources and this needs to return the correct value.
    *
-   * @param $url
+   * @param string $url
    *
    * @return bool
    */
@@ -284,8 +280,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     $absolute = FALSE,
     $fragment = NULL,
     $frontend = FALSE,
-    $forceBackend = FALSE,
-    $htmlize = TRUE
+    $forceBackend = FALSE
   ) {
     $query = html_entity_decode($query);
 
@@ -296,11 +291,11 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     // Not all links that CiviCRM generates are Drupal routes, so we use the weaker ::fromUri method.
     try {
-      $url = \Drupal\Core\Url::fromUri("{$base}{$url['path']}", array(
+      $url = \Drupal\Core\Url::fromUri("{$base}{$url['path']}", [
         'query' => $url['query'],
         'fragment' => $fragment,
         'absolute' => $absolute,
-      ))->toString();
+      ])->toString();
     }
     catch (Exception $e) {
       \Drupal::logger('civicrm')->error($e->getMessage());
@@ -313,6 +308,14 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
    * @inheritDoc
    */
   public function authenticate($name, $password, $loadCMSBootstrap = FALSE, $realPath = NULL) {
+    /* Before we do any loading, let's start the session and write to it.
+     * We typically call authenticate only when we need to bootstrap the CMS
+     * directly via Civi and hence bypass the normal CMS auth and bootstrap
+     * process typically done in CLI and cron scripts. See: CRM-12648
+     */
+    $session = CRM_Core_Session::singleton();
+    $session->set('civicrmInitSession', TRUE);
+
     $system = new CRM_Utils_System_Drupal8();
     $system->loadBootStrap([], FALSE);
 
@@ -356,7 +359,8 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
    * @return int|null
    */
   public function getUfId($username) {
-    if ($id = user_load_by_name($username)->id()) {
+    $user = user_load_by_name($username);
+    if ($user && $id = $user->id()) {
       return $id;
     }
   }
@@ -418,8 +422,8 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     $kernel->preHandle($request);
     $container = $kernel->rebuildContainer();
     // Add our request to the stack and route context.
-    $request->attributes->set(\Symfony\Cmf\Component\Routing\RouteObjectInterface::ROUTE_OBJECT, new \Symfony\Component\Routing\Route('<none>'));
-    $request->attributes->set(\Symfony\Cmf\Component\Routing\RouteObjectInterface::ROUTE_NAME, '<none>');
+    $request->attributes->set(\Drupal\Core\Routing\RouteObjectInterface::ROUTE_OBJECT, new \Symfony\Component\Routing\Route('<none>'));
+    $request->attributes->set(\Drupal\Core\Routing\RouteObjectInterface::ROUTE_NAME, '<none>');
     $container->get('request_stack')->push($request);
     $container->get('router.request_context')->fromRequest($request);
 
@@ -428,6 +432,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     // We need to call the config hook again, since we now know
     // all the modules that are listening on it (CRM-8655).
+    $config = CRM_Core_Config::singleton();
     CRM_Utils_Hook::config($config);
 
     if ($loadUser) {
@@ -535,6 +540,19 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
   /**
    * @inheritDoc
    */
+  public function logger($message, $priority = NULL) {
+    if (CRM_Core_Config::singleton()->userFrameworkLogging) {
+      // dev/core#3438 Prevent cv fatal if logging before CMS bootstrap
+      if (!class_exists('Drupal') || !\Drupal::hasContainer()) {
+        return;
+      }
+      \Drupal::logger('civicrm')->log($priority ?? \Drupal\Core\Logger\RfcLogLevel::DEBUG, '%message', ['%message' => $message]);
+    }
+  }
+
+  /**
+   * @inheritDoc
+   */
   public function flush() {
     // CiviCRM and Drupal both provide (different versions of) Symfony (and possibly share other classes too).
     // If we call drupal_flush_all_caches(), Drupal will attempt to rediscover all of its classes, use Civicrm's
@@ -552,9 +570,8 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     $module_data = \Drupal::service('extension.list.module')->reset()->getList();
     foreach ($module_data as $module_name => $extension) {
-      if (!isset($extension->info['hidden']) && $extension->origin != 'core') {
-        $extension->schema_version = drupal_get_installed_schema_version($module_name);
-        $modules[] = new CRM_Core_Module('drupal.' . $module_name, ($extension->status == 1));
+      if (!isset($extension->info['hidden']) && $extension->origin != 'core' && $extension->status == 1) {
+        $modules[] = new CRM_Core_Module('drupal.' . $module_name, TRUE);
       }
     }
     return $modules;
@@ -881,6 +898,64 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     if (class_exists('\Drupal') && \Drupal::hasContainer()) {
       \Drupal::service('router.builder')->rebuild();
     }
+  }
+
+  public function getVersion() {
+    if (class_exists('\Drupal')) {
+      return \Drupal::VERSION;
+    }
+    return 'Unknown';
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function suppressProfileFormErrors():bool {
+    // Suppress the errors if they are displayed using
+    // setErrorByName method on FormStateInterface.
+    $current_path = \Drupal::service('path.current')->getPath();
+    $path_args = explode('/', $current_path);
+    if ($path_args[1] == 'user' || ($path_args[1] == 'admin' && $path_args[2] == 'people')) {
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function viewsIntegration(): string {
+    return '<p><strong>' . ts('To enable CiviCRM Views integration, install the <a %1>CiviCRM Entity</a> module.', [1 => 'href="https://www.drupal.org/project/civicrm_entity"']) . '</strong></p>';
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function theme(&$content, $print = FALSE, $maintenance = FALSE) {
+    // @todo use Drupal "maintenance page" template and theme during installation
+    // or upgrade.
+    print $content;
+    return NULL;
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function ipAddress():?string {
+    return class_exists('Drupal') ? \Drupal::request()->getClientIp() : ($_SERVER['REMOTE_ADDR'] ?? NULL);
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function mailingWorkflowIsEnabled():bool {
+    if (!\Drupal::moduleHandler()->moduleExists('rules')) {
+      return FALSE;
+    }
+
+    $enableWorkflow = Civi::settings()->get('civimail_workflow');
+
+    return (bool) $enableWorkflow;
   }
 
 }

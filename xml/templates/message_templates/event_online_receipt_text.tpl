@@ -1,4 +1,4 @@
-{assign var="greeting" value="{contact.email_greeting}"}{if $greeting}{$greeting},{/if}
+{assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}{$greeting},{/if}
 {if !empty($event.confirm_email_text) AND (empty($isOnWaitlist) AND empty($isRequireApproval))}
 {$event.confirm_email_text}
 
@@ -14,7 +14,7 @@
 
 {ts}You have been added to the WAIT LIST for this event.{/ts}
 
-{if !empty($isPrimary)}
+{if $isPrimary}
 {ts}If space becomes available you will receive an email with a link to a web page where you can complete your registration.{/ts}
 {/if}
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
@@ -24,7 +24,7 @@
 
 {ts}Your registration has been submitted.{/ts}
 
-{if !empty($isPrimary)}
+{if $isPrimary}
 {ts}Once your registration has been reviewed, you will receive an email with a link to a web page where you can complete the registration process.{/ts}
 
 {/if}
@@ -34,7 +34,7 @@
 
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
 
-{if isset($pay_later_receipt)}{$pay_later_receipt}{/if}
+{if {event.pay_later_receipt|boolean}}{event.pay_later_receipt}{/if}
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
 
 {/if}
@@ -46,18 +46,18 @@
 
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
 
-{$event.event_title}
-{$event.event_start_date|date_format:"%A"} {$event.event_start_date|crmDate}{if $event.event_end_date}-{if $event.event_end_date|date_format:"%Y%m%d" == $event.event_start_date|date_format:"%Y%m%d"}{$event.event_end_date|crmDate:0:1}{else}{$event.event_end_date|date_format:"%A"} {$event.event_end_date|crmDate}{/if}{/if}
+{event.title}
+{event.start_date|crmDate:"%A"} {event.start_date|crmDate}{if $event.event_end_date}-{if $event.event_end_date|crmDate:"%Y%m%d" == $event.event_start_date|crmDate:"%Y%m%d"}{$event.event_end_date|crmDate:0:1}{else}{$event.event_end_date|crmDate:"%A"} {$event.event_end_date|crmDate}{/if}{/if}
 {if !empty($conference_sessions)}
 
 
 {ts}Your schedule:{/ts}
 {assign var='group_by_day' value='NA'}
 {foreach from=$conference_sessions item=session}
-{if $session.start_date|date_format:"%Y/%m/%d" != $group_by_day|date_format:"%Y/%m/%d"}
+{if $session.start_date|crmDate:"%Y/%m/%d" != $group_by_day|crmDate:"%Y/%m/%d"}
 {assign var='group_by_day' value=$session.start_date}
 
-{$group_by_day|date_format:"%m/%d/%Y"}
+{$group_by_day|crmDate:"%m/%d/%Y"}
 
 
 {/if}
@@ -74,23 +74,23 @@
 {$location.address.1.display|strip_tags:false}
 {/if}{*End of isShowLocation condition*}
 
-{if !empty($location.phone.1.phone) || !empty($location.email.1.email)}
+{if {event.loc_block_id.phone_id.phone|boolean} || {event.loc_block_id.email_id.email|boolean}}
 
 {ts}Event Contacts:{/ts}
-{foreach from=$location.phone item=phone}
-{if $phone.phone}
-
-{if $phone.phone_type}{$phone.phone_type_display}{else}{ts}Phone{/ts}{/if}: {$phone.phone}{/if} {if $phone.phone_ext} {ts}ext.{/ts} {$phone.phone_ext}{/if}
-{/foreach}
+{if {event.loc_block_id.phone_id.phone|boolean}}
+  {if {event.loc_block_id.phone_id.phone_type_id|boolean}}{event.loc_block_id.phone_id.phone_type_id:label}{else}{ts}Phone{/ts}{/if} {event.loc_block_id.phone_id.phone} {if {event.loc_block_id.phone_id.phone_ext|boolean}} {ts}ext.{/ts} {event.loc_block_id.phone_id.phone_ext}{/if}
+{/if}
 {foreach from=$location.email item=eventEmail}
 {if $eventEmail.email}
 
 {ts}Email{/ts}: {$eventEmail.email}{/if}{/foreach}
 {/if}
 
-{if !empty($event.is_public)}
+{if {event.is_public|boolean}}
 {capture assign=icalFeed}{crmURL p='civicrm/event/ical' q="reset=1&id=`$event.id`" h=0 a=1 fe=1}{/capture}
-{ts}Download iCalendar File:{/ts} {$icalFeed}
+{ts}Download iCalendar entry for this event.{/ts} {$icalFeed}
+{capture assign=gCalendar}{crmURL p='civicrm/event/ical' q="gCalendar=1&reset=1&id=`$event.id`" h=0 a=1 fe=1}{/capture}
+{ts}Add event to Google Calendar{/ts} {$gCalendar}
 {/if}
 
 {if !empty($payer.name)}
@@ -106,7 +106,7 @@ You were registered by: {$payer.name}
 {if !empty($lineItem)}{foreach from=$lineItem item=value key=priceset}
 
 {if $value neq 'skip'}
-{if !empty($isPrimary)}
+{if $isPrimary}
 {if $lineItem|@count GT 1} {* Header for multi participant registration cases. *}
 {ts 1=$priceset+1}Participant %1{/ts} {if !empty($part.$priceset)}{$part.$priceset.info}{/if}
 
@@ -117,19 +117,19 @@ You were registered by: {$payer.name}
 {capture assign=ts_item}{ts}Item{/ts}{/capture}
 {capture assign=ts_qty}{ts}Qty{/ts}{/capture}
 {capture assign=ts_each}{ts}Each{/ts}{/capture}
-{if !empty($dataArray)}
+{if $isShowTax && {contribution.tax_amount|boolean}}
 {capture assign=ts_subtotal}{ts}Subtotal{/ts}{/capture}
 {capture assign=ts_taxRate}{ts}Tax Rate{/ts}{/capture}
 {capture assign=ts_taxAmount}{ts}Tax Amount{/ts}{/capture}
 {/if}
 {capture assign=ts_total}{ts}Total{/ts}{/capture}
 {if !empty($pricesetFieldsCount) }{capture assign=ts_participant_total}{ts}Total Participants{/ts}{/capture}{/if}
-{$ts_item|string_format:"%-30s"} {$ts_qty|string_format:"%5s"} {$ts_each|string_format:"%10s"} {if !empty($dataArray)} {$ts_subtotal|string_format:"%10s"} {$ts_taxRate|string_format:"%10s"} {$ts_taxAmount|string_format:"%10s"} {/if} {$ts_total|string_format:"%10s"} {if !empty($ts_participant_total)}{$ts_participant_total|string_format:"%10s"}{/if}
+{$ts_item|string_format:"%-30s"} {$ts_qty|string_format:"%5s"} {$ts_each|string_format:"%10s"} {if $isShowTax && {contribution.tax_amount|boolean}} {$ts_subtotal|string_format:"%10s"} {$ts_taxRate|string_format:"%10s"} {$ts_taxAmount|string_format:"%10s"} {/if} {$ts_total|string_format:"%10s"} {if !empty($ts_participant_total)}{$ts_participant_total|string_format:"%10s"}{/if}
 -----------------------------------------------------------{if !empty($pricesetFieldsCount)}-----------------------------------------------------{/if}
 
 {foreach from=$value item=line}
 {if !empty($pricesetFieldsCount) }{capture assign=ts_participant_count}{$line.participant_count}{/capture}{/if}
-{capture assign=ts_item}{if $line.html_type eq 'Text'}{$line.label}{else}{$line.field_title} - {$line.label}{/if} {if $line.description} {$line.description}{/if}{/capture}{$ts_item|truncate:30:"..."|string_format:"%-30s"} {$line.qty|string_format:"%5s"} {$line.unit_price|crmMoney:$currency|string_format:"%10s"} {if !empty($dataArray)} {$line.unit_price*$line.qty|crmMoney:$currency|string_format:"%10s"} {if isset($line.tax_rate) and ($line.tax_rate != "" || $line.tax_amount != "")}  {$line.tax_rate|string_format:"%.2f"} %  {$line.tax_amount|crmMoney:$currency|string_format:"%10s"} {else}                  {/if}  {/if} {$line.line_total+$line.tax_amount|crmMoney:$currency|string_format:"%10s"}{if !empty($ts_participant_count)}{$ts_participant_count|string_format:"%10s"}{/if}
+{capture assign=ts_item}{if $line.html_type eq 'Text'}{$line.label}{else}{$line.field_title} - {$line.label}{/if} {if $line.description} {$line.description}{/if}{/capture}{$ts_item|truncate:30:"..."|string_format:"%-30s"} {$line.qty|string_format:"%5s"} {$line.unit_price|crmMoney:$currency|string_format:"%10s"} {if $isShowTax && {contribution.tax_amount|boolean}} {$line.unit_price*$line.qty|crmMoney:$currency|string_format:"%10s"} {if $line.tax_rate || $line.tax_amount != ""}  {$line.tax_rate|string_format:"%.2f"} %  {$line.tax_amount|crmMoney:$currency|string_format:"%10s"} {else}                  {/if}  {/if} {$line.line_total+$line.tax_amount|crmMoney:$currency|string_format:"%10s"}{if !empty($ts_participant_count)}{$ts_participant_count|string_format:"%10s"}{/if}
 {/foreach}
 ----------------------------------------------------------------------------------------------------------------
 {if !empty($individual)}{ts}Participant Total{/ts} {$individual.$priceset.totalAmtWithTax-$individual.$priceset.totalTaxAmt|crmMoney:$currency|string_format:"%29s"} {$individual.$priceset.totalTaxAmt|crmMoney:$currency|string_format:"%33s"} {$individual.$priceset.totalAmtWithTax|crmMoney:$currency|string_format:"%12s"}{/if}
@@ -138,17 +138,11 @@ You were registered by: {$payer.name}
 {/foreach}
 {""|string_format:"%120s"}
 
-{if !empty($dataArray)}
-{if isset($totalAmount) and isset($totalTaxAmount)}
-{ts}Amount before Tax{/ts}: {$totalAmount-$totalTaxAmount|crmMoney:$currency}
-{/if}
-
-{foreach from=$dataArray item=value key=priceset}
-{if $priceset || $priceset == 0}
-{if isset($taxTerm)}{$taxTerm}{/if} {$priceset|string_format:"%.2f"}%: {$value|crmMoney:$currency}
-{else}
-{ts}No{/ts} {if isset($taxTerm)}{$taxTerm}{/if}: {$value|crmMoney:$currency}
-{/if}
+{if $isShowTax && {contribution.tax_amount|boolean}}
+{ts}Amount before Tax:{/ts} {if $isPrimary}{contribution.tax_exclusive_amount}{else}{$participant.totals.total_amount_exclusive|crmMoney}{/if}
+{if !$isPrimary}{* Use the participant specific tax rate breakdown *}{assign var=taxRateBreakdown value=$participant.tax_rate_breakdown}{/if}
+{foreach from=$taxRateBreakdown item=taxDetail key=taxRate}
+{if $taxRate == 0}{ts}No{/ts} {$taxTerm}{else}{$taxTerm} {$taxDetail.percentage}%{/if}   {$valueStyle}>{$taxDetail.amount|crmMoney:'{contribution.currency}'}
 {/foreach}
 {/if}
 {/if}
@@ -158,10 +152,10 @@ You were registered by: {$payer.name}
 {/foreach}
 {/if}
 
-{if isset($totalTaxAmount)}
-{ts}Total Tax Amount{/ts}: {$totalTaxAmount|crmMoney:$currency}
+{if $isShowTax && {contribution.tax_amount|boolean}}
+{ts}Total Tax Amount{/ts}: {if $isPrimary}{contribution.tax_amount}{else}{$participant.totals.tax_amount|crmMoney}{/if}
 {/if}
-{if !empty($isPrimary) }
+{if $isPrimary}
 
 {ts}Total Amount{/ts}: {if !empty($totalAmount)}{$totalAmount|crmMoney:$currency}{/if} {if !empty($hookDiscount.message)}({$hookDiscount.message}){/if}
 
@@ -235,9 +229,7 @@ You were registered by: {$payer.name}
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
 
 {foreach from=$customPr item=customValue key=customName}
-{if ( !empty($trackingFields) and ! in_array( $customName, $trackingFields ) ) or empty($trackingFields)}
  {$customName}: {$customValue}
-{/if}
 {/foreach}
 {/foreach}
 {/if}
@@ -250,9 +242,7 @@ You were registered by: {$payer.name}
 ==========================================================={if !empty($pricesetFieldsCount)}===================={/if}
 
 {foreach from=$customPos item=customValue key=customName}
-{if ( !empty($trackingFields) and ! in_array( $customName, $trackingFields ) ) or empty($trackingFields)}
  {$customName}: {$customValue}
-{/if}
 {/foreach}
 {/foreach}
 {/if}
@@ -282,6 +272,6 @@ You were registered by: {$payer.name}
 
 {if !empty($event.allow_selfcancelxfer) }
 {ts 1=$selfcancelxfer_time 2=$selfservice_preposition}You may transfer your registration to another participant or cancel your registration up to %1 hours %2 the event.{/ts} {if !empty($totalAmount)}{ts}Cancellations are not refundable.{/ts}{/if}
-   {capture assign=selfService}{crmURL p='civicrm/event/selfsvcupdate' q="reset=1&pid=`$participant.id`&{contact.checksum}"  h=0 a=1 fe=1}{/capture}
+   {capture assign=selfService}{crmURL p='civicrm/event/selfsvcupdate' q="reset=1&pid={participant.id}&{contact.checksum}"  h=0 a=1 fe=1}{/capture}
 {ts}Transfer or cancel your registration:{/ts} {$selfService}
 {/if}

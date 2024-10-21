@@ -20,7 +20,7 @@ class CRM_Utils_Check_Component_Schema extends CRM_Utils_Check_Component {
    * Check defined indices exist.
    *
    * @return CRM_Utils_Check_Message[]
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function checkIndices() {
     $messages = [];
@@ -38,14 +38,14 @@ class CRM_Utils_Check_Component_Schema extends CRM_Utils_Check_Component {
           $html .= "<tr><td>{$tableName}</td><td>{$index['name']}</td><td>$fields</td>";
         }
       }
-      $message = "<p>The following tables have missing indices. Click 'Update Indices' button to create them.<p>
-        <p><table><thead><tr><th>Table Name</th><th>Key Name</th><th>Expected Indices</th>
-        </tr></thead><tbody>
-        $html
-        </tbody></table></p>";
+      $message = '<p>' . ts("The following tables have missing indices. Click 'Update Indices' button to create them.") . '<p>'
+        . '<p><table><thead><tr><th>' . ts('Table Name') . '</th><th>' . ts('Key Name') . '</th><th>' . ts('Expected Indices') . '</th>'
+        . '</tr></thead><tbody>'
+        . $html
+        . '</tbody></table></p>';
       $msg = new CRM_Utils_Check_Message(
         __FUNCTION__,
-        ts($message),
+        $message,
         ts('Performance warning: Missing indices'),
         \Psr\Log\LogLevel::WARNING,
         'fa-server'
@@ -106,7 +106,7 @@ class CRM_Utils_Check_Component_Schema extends CRM_Utils_Check_Component {
         'options' => ['limit' => 0],
       ]);
     }
-    catch (CiviCRM_API3_Exception $e) {
+    catch (CRM_Core_Exception $e) {
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__,
         ts('The smart group check was unable to run. This is likely to because a database upgrade is pending.'),
@@ -146,39 +146,68 @@ class CRM_Utils_Check_Component_Schema extends CRM_Utils_Check_Component {
               'sequential' => 1,
               'id' => $field['cfid'],
             ]);
-            $fieldName = ts('<a href="%1" title="Edit Custom Field"> %2 </a>', [
-              1 => CRM_Utils_System::url('civicrm/admin/custom/group/field/update',
-                "action=update&reset=1&gid={$customField['custom_group_id']}&id={$field['cfid']}", TRUE
-              ),
-              2 => $customField['label'],
-            ]);
+            $url = CRM_Utils_System::url('civicrm/admin/custom/group/field/update', "action=update&reset=1&gid={$customField['custom_group_id']}&id={$field['cfid']}", TRUE);
+            $fieldName = '<a href="' . $url . '" title="' . ts('Edit Custom Field', ['escape' => 'htmlattribute']) . '">' . $customField['label'] . '</a>';
           }
-          catch (CiviCRM_API3_Exception $e) {
-            $fieldName = ' <span style="color:red"> - Deleted - </span> ';
+          catch (CRM_Core_Exception $e) {
+            $fieldName = '<span style="color:red">' . ts('Deleted') . ' - ' . ts('Field ID %1', [1 => $field['cfid']]) . '</span> ';
           }
         }
-        $groupEdit = '<a href="' . CRM_Utils_System::url('civicrm/contact/search/advanced', "?reset=1&ssID={$field['ssid']}", TRUE) . '" title="' . ts('Edit search criteria') . '"> <i class="crm-i fa-pencil" aria-hidden="true"></i> </a>';
-        $groupConfig = '<a href="' . CRM_Utils_System::url('civicrm/group', "?reset=1&action=update&id={$id}", TRUE) . '" title="' . ts('Group settings') . '"> <i class="crm-i fa-gear" aria-hidden="true"></i> </a>';
+        $groupEdit = '<a href="' . CRM_Utils_System::url('civicrm/contact/search/advanced', "reset=1&ssID={$field['ssid']}", TRUE) . '" title="' . ts('Edit search criteria', ['escape' => 'htmlattribute']) . '"> <i class="crm-i fa-pencil" aria-hidden="true"></i> </a>';
+        $groupConfig = '<a href="' . CRM_Utils_System::url('civicrm/group/edit', "reset=1&action=update&id={$id}", TRUE) . '" title="' . ts('Group settings', ['escape' => 'htmlattribute']) . '"> <i class="crm-i fa-gear" aria-hidden="true"></i> </a>';
         $html .= "<tr><td>{$id} - {$field['title']} </td><td>{$groupEdit} {$groupConfig}</td><td class='disabled'>{$fieldName}</td>";
       }
 
-      $message = "<p>The following smart groups include custom fields which are disabled/deleted from the database. This may cause errors on group page.
-        You might need to edit their search criteria and update them to clean outdated fields from saved search OR disable them in order to fix the error.</p>
-        <p><table><thead><tr><th>Group</th><th></th><th>Custom Field</th>
-        </tr></thead><tbody>
-        $html
-        </tbody></table></p>
-       ";
+      $message = "<p>" . ts('The following smart groups include custom fields which are disabled or deleted from the database. Missing fields should automatically be ignored from the smart group criteria, but you may want to review and update their search criteria to remove the outdated fields.') . '</p>'
+        . '<p><table><thead><tr><th>' . ts('Group') . '</th><th></th><th>' . ts('Custom Field') . '</th>'
+        . '</tr></thead><tbody>'
+        . $html
+        . '</tbody></table></p>';
 
       $msg = new CRM_Utils_Check_Message(
         __FUNCTION__,
-        ts($message),
+        $message,
         ts('Disabled/Deleted fields on Smart Groups'),
         \Psr\Log\LogLevel::WARNING,
         'fa-server'
       );
       $messages[] = $msg;
     }
+    return $messages;
+  }
+
+  /**
+   * The column 'civicrm_activity.original_id' should not have 'ON DELETE CASCADE'.
+   * It is OK to have 'ON DELETE SET NULL' or to have no constraint.
+   *
+   * @return CRM_Utils_Check_Message[]
+   */
+  public function checkOldAcitvityCascade(): array {
+    $messages = [];
+
+    $sql = "SELECT CONSTRAINT_NAME, DELETE_RULE
+      FROM information_schema.referential_constraints
+      WHERE CONSTRAINT_SCHEMA=database() AND TABLE_NAME='civicrm_activity' AND CONSTRAINT_NAME='FK_civicrm_activity_original_id'
+    ";
+    $cascades = CRM_Core_DAO::executeQuery($sql, [], FALSE, NULL, FALSE, FALSE)
+      ->fetchMap('CONSTRAINT_NAME', 'DELETE_RULE');
+    $cascade = $cascades['FK_civicrm_activity_original_id'] ?? NULL;
+    if ($cascade === 'CASCADE') {
+      $docUrl = 'https://civicrm.org/redirect/activities-5.57';
+      $messages[] = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        ts(
+          '<p>The table <code>%1</code> includes an incorrect constraint. <a %2>Learn how to fix this.</a>', [
+            1 => 'civicrm_activity',
+            2 => 'target="_blank" href="' . htmlentities($docUrl) . '"',
+          ]
+        ),
+        ts('Schema Error'),
+        \Psr\Log\LogLevel::WARNING,
+        'fa-server'
+      );
+    }
+
     return $messages;
   }
 
@@ -220,7 +249,37 @@ class CRM_Utils_Check_Component_Schema extends CRM_Utils_Check_Component {
       );
       $msg->addAction(
         ts('Rebuild triggers (also re-builds the phone number function)'),
-        ts('Create missing function now? This may take few minutes.'),
+        ts('Create missing function now? This may take a few minutes.'),
+        'api3',
+        ['System', 'flush', ['triggers' => TRUE]]
+      );
+      return [$msg];
+    }
+    return [];
+  }
+
+  /**
+   * Check the function to populate phone_numeric exists.
+   *
+   * @return array|\CRM_Utils_Check_Message[]
+   */
+  public function checkRelationshipCacheTriggers():array {
+    if (\Civi::settings()->get('logging_no_trigger_permission')) {
+      // The mysql user does not have permission to view whether the trigger exists.
+      return [];
+    }
+    $dao = CRM_Core_DAO::executeQuery("SHOW TRIGGERS WHERE (`Table` = 'civicrm_relationship' OR `Table` = 'civicrm_relationship_type') AND `Statement` LIKE '%civicrm_relationship_cache%';");
+    if ($dao->N !== 3) {
+      $msg = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        ts("Your database is missing functionality to populate the relationship cache."),
+        ts('Missing Relationship Cache Trigger'),
+        \Psr\Log\LogLevel::WARNING,
+        'fa-server'
+      );
+      $msg->addAction(
+        ts('Rebuild triggers'),
+        ts('Create missing triggers now? This may take a few minutes.'),
         'api3',
         ['System', 'flush', ['triggers' => TRUE]]
       );

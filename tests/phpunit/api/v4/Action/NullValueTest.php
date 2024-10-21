@@ -21,20 +21,21 @@ namespace api\v4\Action;
 
 use Civi\Api4\Activity;
 use Civi\Api4\Contact;
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class NullValueTest extends UnitTestCase {
+class NullValueTest extends Api4TestBase implements TransactionalInterface {
 
-  public function setUpHeadless() {
+  public function setUp(): void {
     $format = '{contact.first_name}{ }{contact.last_name}';
     \Civi::settings()->set('display_name_format', $format);
-    return parent::setUpHeadless();
+    parent::setUp();
   }
 
-  public function testStringNull() {
+  public function testStringNull(): void {
     $contact = Contact::create(FALSE)
       ->addValue('first_name', 'Joseph')
       ->addValue('last_name', 'null')
@@ -46,7 +47,7 @@ class NullValueTest extends UnitTestCase {
     $this->assertSame('Joseph Null', $contact['display_name']);
   }
 
-  public function testSettingToNull() {
+  public function testSettingToNull(): void {
     $contact = Contact::create(FALSE)
       ->addValue('first_name', 'ILoveMy')
       ->addValue('last_name', 'LastName')
@@ -67,7 +68,7 @@ class NullValueTest extends UnitTestCase {
     $this->assertSame('ILoveMy', $contact['display_name']);
   }
 
-  public function testSaveWithReload() {
+  public function testSaveWithReload(): void {
     $contact = Contact::create(FALSE)
       ->addValue('first_name', 'Firsty')
       ->addValue('last_name', 'Lasty')

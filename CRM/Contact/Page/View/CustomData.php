@@ -28,18 +28,12 @@ class CRM_Contact_Page_View_CustomData extends CRM_Core_Page {
   public $_groupId;
 
   /**
-   * Class constructor.
+   * Run the page.
    *
-   * @return CRM_Contact_Page_View_CustomData
+   * This method is called after the page is created. It checks for the
+   * type of action and executes that action.
    */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
-   * Add a few specific things to view contact.
-   */
-  public function preProcess() {
+  public function run() {
     $this->_groupId = CRM_Utils_Request::retrieve('gid', 'Positive', $this, TRUE);
     $this->assign('groupId', $this->_groupId);
 
@@ -67,16 +61,6 @@ class CRM_Contact_Page_View_CustomData extends CRM_Core_Page {
 
     $this->_multiRecordDisplay = CRM_Utils_Request::retrieve('multiRecordDisplay', 'String', $this, FALSE);
     $this->_cgcount = CRM_Utils_Request::retrieve('cgcount', 'Positive', $this, FALSE);
-  }
-
-  /**
-   * Run the page.
-   *
-   * This method is called after the page is created. It checks for the
-   * type of action and executes that action.
-   */
-  public function run() {
-    $this->preProcess();
 
     //set the userContext stack
     $doneURL = 'civicrm/contact/view';
@@ -96,8 +80,7 @@ class CRM_Contact_Page_View_CustomData extends CRM_Core_Page {
 
       if ($this->_multiRecordDisplay != 'single') {
         $id = "custom_{$this->_groupId}";
-        $tableName = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $this->_groupId, 'table_name');
-        $this->ajaxResponse['tabCount'] = CRM_Contact_BAO_Contact::getCountComponent($id, $this->_contactId, $tableName);
+        $this->ajaxResponse['tabCount'] = CRM_Contact_BAO_Contact::getCountComponent($id, $this->_contactId);
       }
 
       if ($displayStyle === 'Tab with table' && $this->_multiRecordDisplay != 'single') {

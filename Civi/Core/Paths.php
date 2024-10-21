@@ -232,7 +232,7 @@ class Paths {
    *   The result data may not meet the preference -- if the setting
    *   refers to an external domain, then the result will be
    *   absolute (regardless of preference).
-   * @param bool|NULL $ssl
+   * @param bool|null $ssl
    *   NULL to autodetect. TRUE to force to SSL.
    * @return FALSE|string
    *   The URL for $value (string), or FALSE if the $value is not specified.
@@ -256,10 +256,7 @@ class Paths {
     $value = rtrim($this->getVariable($defaultContainer, 'url'), '/') . ($isDot ? '' : "/$value");
 
     if ($preferFormat === 'relative') {
-      $parsed = parse_url($value);
-      if (isset($_SERVER['HTTP_HOST']) && isset($parsed['host']) && $_SERVER['HTTP_HOST'] == $parsed['host']) {
-        $value = $parsed['path'];
-      }
+      $value = \CRM_Utils_Url::toRelative($value);
     }
 
     if ($ssl || ($ssl === NULL && \CRM_Utils_System::isSSL())) {

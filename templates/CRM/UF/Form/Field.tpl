@@ -14,11 +14,10 @@
     {ts}WARNING: Deleting this profile field will remove it from Profile forms and listings. If this field is used in any 'stand-alone' Profile forms, you will need to update those forms to remove this field.{/ts} {ts}Do you want to continue?{/ts}
   </div>
 {else}
-  <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
   <table class="form-layout-compressed">
     <tr class="crm-uf-field-form-block-field_name">
       <td class="label">{$form.field_name.label} {help id='field_name_0'}</td>
-      <td>{$form.field_name.html}<br />
+      <td>{$form.field_name.html|smarty:nodefaults}<br />
         <span class="description">&nbsp;{ts}Select the type of CiviCRM record and the field you want to include in this Profile.{/ts}</span></td>
     </tr>
     <tr class="crm-uf-field-form-block-label">
@@ -70,7 +69,7 @@
   <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="bottom"}</div>
 </div>
 
-{$initHideBoxes}
+{$initHideBoxes|smarty:nodefaults}
 
 {literal}
 <script type="text/javascript">
@@ -154,9 +153,9 @@ function showLabel( ) {
 }
 
 {/literal}{if $action neq 8}{literal}
-showHideSeletorSearch();
+showHideSelectorSearch();
 
-function showHideSeletorSearch() {
+function showHideSelectorSearch() {
   var is_search = cj('#is_search_label, #is_search_html');
   var in_selector = cj('#in_selector_label, #in_selector_html');
   if (cj("#visibility").val() == "User and User Admin Only") {
@@ -179,7 +178,7 @@ function showHideSeletorSearch() {
 }
 
 cj("#field_name_1").bind( 'change blur', function( ) {
-  showHideSeletorSearch( );
+  showHideSelectorSearch( );
 });
 
 CRM.$(function($) {

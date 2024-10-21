@@ -19,16 +19,19 @@
 
 namespace api\v4\Action;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Api4\MockBasicEntity;
 use Civi\Api4\Utils\CoreUtil;
 use Civi\Core\Event\GenericHookEvent;
+use Civi\Test\CiviEnvBuilder;
 use Civi\Test\HookInterface;
+use Civi\Test\Invasive;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class BasicActionsTest extends UnitTestCase implements HookInterface {
+class BasicActionsTest extends Api4TestBase implements HookInterface, TransactionalInterface {
 
   /**
    * Listens for civi.api4.entityTypes event to manually add this nonstandard entity
@@ -39,7 +42,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $e->entities['MockBasicEntity'] = MockBasicEntity::getInfo();
   }
 
-  public function setUpHeadless() {
+  public function setUpHeadless(): CiviEnvBuilder {
     // Ensure MockBasicEntity gets added via above listener
     \Civi::cache('metadata')->clear();
     return parent::setUpHeadless();
@@ -52,14 +55,14 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     }
   }
 
-  public function testGetInfo() {
+  public function testGetInfo(): void {
     $info = MockBasicEntity::getInfo();
     $this->assertEquals('MockBasicEntity', $info['name']);
     $this->assertEquals(['identifier'], $info['primary_key']);
     $this->assertEquals('identifier', CoreUtil::getIdFieldName('MockBasicEntity'));
   }
 
-  public function testCrud() {
+  public function testCrud(): void {
     MockBasicEntity::delete()->addWhere('identifier', '>', 0)->execute();
 
     $id1 = MockBasicEntity::create()->addValue('foo', 'one')->execute()->first()['identifier'];
@@ -128,7 +131,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('one updated', $result->first()['foo']);
   }
 
-  public function testReplace() {
+  public function testReplace(): void {
     $objects = [
       ['group' => 'one', 'color' => 'red'],
       ['group' => 'one', 'color' => 'blue'],
@@ -160,7 +163,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('two', $newObjects[$objects[3]['identifier']]['group']);
   }
 
-  public function testBatchFrobnicate() {
+  public function testBatchFrobnicate(): void {
     $objects = [
       ['group' => 'one', 'color' => 'red', 'number' => 10],
       ['group' => 'one', 'color' => 'blue', 'number' => 20],
@@ -174,7 +177,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals([400, 1600], \CRM_Utils_Array::collect('frobnication', (array) $result));
   }
 
-  public function testGetFields() {
+  public function testGetFields(): void {
     $getFields = MockBasicEntity::getFields()->execute()->indexBy('name');
 
     $this->assertCount(8, $getFields);
@@ -212,7 +215,8 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     // Simple options should be expanded to non-assoc array
     $this->assertCount(2, $getFields);
     $this->assertEquals('one', $getFields['group']['options'][0]['id']);
-    $this->assertEquals('First', $getFields['group']['options'][0]['name']);
+    // Name is interchangeable with id
+    $this->assertEquals('one', $getFields['group']['options'][0]['name']);
     $this->assertEquals('First', $getFields['group']['options'][0]['label']);
     $this->assertFalse(isset($getFields['group']['options'][0]['color']));
     // Complex options should give all requested properties
@@ -220,7 +224,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('yellow', $getFields['fruit']['options'][2]['color']);
   }
 
-  public function testItemsToGet() {
+  public function testItemsToGet(): void {
     $get = MockBasicEntity::get()
       ->addWhere('color', 'NOT IN', ['yellow'])
       ->addWhere('color', 'IN', ['red', 'blue'])
@@ -229,48 +233,46 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
       ->addWhere('size', 'LIKE', 'big')
       ->addWhere('shape', 'LIKE', '%a');
 
-    $itemsToGet = new \ReflectionMethod($get, '_itemsToGet');
-    $itemsToGet->setAccessible(TRUE);
+    $itemsToGet = [$get, '_itemsToGet'];
 
-    $this->assertEquals(['red', 'blue'], $itemsToGet->invoke($get, 'color'));
-    $this->assertEquals(['one'], $itemsToGet->invoke($get, 'group'));
-    $this->assertEquals(['big'], $itemsToGet->invoke($get, 'size'));
-    $this->assertEmpty($itemsToGet->invoke($get, 'shape'));
-    $this->assertEmpty($itemsToGet->invoke($get, 'weight'));
+    $this->assertEquals(['red', 'blue'], Invasive::call($itemsToGet, ['color']));
+    $this->assertEquals(['one'], Invasive::call($itemsToGet, ['group']));
+    $this->assertEquals(['big'], Invasive::call($itemsToGet, ['size']));
+    $this->assertEmpty(Invasive::call($itemsToGet, ['shape']));
+    $this->assertEmpty(Invasive::call($itemsToGet, ['weight']));
   }
 
-  public function testFieldsToGet() {
+  public function testFieldsToGet(): void {
     $get = MockBasicEntity::get()
       ->addWhere('color', '!=', 'green');
 
-    $isFieldSelected = new \ReflectionMethod($get, '_isFieldSelected');
-    $isFieldSelected->setAccessible(TRUE);
+    $isFieldSelected = [$get, '_isFieldSelected'];
 
     // If no "select" is set, should always return true
-    $this->assertTrue($isFieldSelected->invoke($get, 'color'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'shape'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'size', 'color', 'shape'));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['color']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['shape']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['size', 'color', 'shape']));
 
     // With a non-empty "select" fieldsToSelect() will return fields needed to evaluate each clause.
     $get->addSelect('identifier');
-    $this->assertTrue($isFieldSelected->invoke($get, 'color', 'shape', 'size'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'identifier'));
-    $this->assertFalse($isFieldSelected->invoke($get, 'shape', 'size', 'weight'));
-    $this->assertFalse($isFieldSelected->invoke($get, 'group'));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['color', 'shape', 'size']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['identifier']));
+    $this->assertFalse(Invasive::call($isFieldSelected, ['shape', 'size', 'weight']));
+    $this->assertFalse(Invasive::call($isFieldSelected, ['group']));
 
     $get->addClause('OR', ['shape', '=', 'round'], ['AND', [['size', '=', 'big'], ['weight', '!=', 'small']]]);
-    $this->assertTrue($isFieldSelected->invoke($get, 'color'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'identifier'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'shape'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'size'));
-    $this->assertTrue($isFieldSelected->invoke($get, 'group', 'weight'));
-    $this->assertFalse($isFieldSelected->invoke($get, 'group'));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['color']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['identifier']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['shape']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['size']));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['group', 'weight']));
+    $this->assertFalse(Invasive::call($isFieldSelected, ['group']));
 
     $get->addOrderBy('group');
-    $this->assertTrue($isFieldSelected->invoke($get, 'group'));
+    $this->assertTrue(Invasive::call($isFieldSelected, ['group']));
   }
 
-  public function testWildcardSelect() {
+  public function testWildcardSelect(): void {
     $records = [
       ['group' => 'one', 'color' => 'red', 'shape' => 'round', 'size' => 'med', 'weight' => 10],
       ['group' => 'two', 'color' => 'blue', 'shape' => 'round', 'size' => 'med', 'weight' => 20],
@@ -279,7 +281,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
 
     foreach (MockBasicEntity::get()->addSelect('*')->execute() as $result) {
       ksort($result);
-      $this->assertEquals(['color', 'group', 'identifier', 'shape', 'size', 'weight'], array_keys($result));
+      $this->assertEquals(['color', 'foo', 'fruit', 'group', 'identifier', 'shape', 'size', 'weight'], array_keys($result));
     }
 
     $result = MockBasicEntity::get()
@@ -289,7 +291,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals(['shape', 'size', 'weight'], array_keys($result));
   }
 
-  public function testEmptyAndNullOperators() {
+  public function testEmptyAndNullOperators(): void {
     $records = [
       ['id' => NULL],
       ['color' => '', 'weight' => 0],
@@ -334,7 +336,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertArrayHasKey($records[2]['identifier'], (array) $result);
   }
 
-  public function testContainsOperator() {
+  public function testContainsOperators(): void {
     $records = [
       ['group' => 'one', 'fruit:name' => ['apple', 'pear'], 'weight' => 11],
       ['group' => 'two', 'fruit:name' => ['pear', 'banana'], 'weight' => 12],
@@ -348,9 +350,20 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('one', $result->first()['group']);
 
     $result = MockBasicEntity::get()
+      ->addWhere('fruit:name', 'NOT CONTAINS', 'apple')
+      ->execute();
+    $this->assertCount(1, $result);
+    $this->assertEquals('two', $result->first()['group']);
+
+    $result = MockBasicEntity::get()
       ->addWhere('fruit:name', 'CONTAINS', 'pear')
       ->execute();
     $this->assertCount(2, $result);
+
+    $result = MockBasicEntity::get()
+      ->addWhere('fruit:name', 'NOT CONTAINS', 'pear')
+      ->execute();
+    $this->assertCount(0, $result);
 
     $result = MockBasicEntity::get()
       ->addWhere('group', 'CONTAINS', 'o')
@@ -358,9 +371,19 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertCount(2, $result);
 
     $result = MockBasicEntity::get()
+      ->addWhere('group', 'NOT CONTAINS', 'w')
+      ->execute();
+    $this->assertCount(1, $result);
+
+    $result = MockBasicEntity::get()
       ->addWhere('weight', 'CONTAINS', 1)
       ->execute();
     $this->assertCount(2, $result);
+
+    $result = MockBasicEntity::get()
+      ->addWhere('weight', 'NOT CONTAINS', 2)
+      ->execute();
+    $this->assertCount(1, $result);
 
     $result = MockBasicEntity::get()
       ->addWhere('fruit:label', 'CONTAINS', 'Banana')
@@ -369,13 +392,25 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('two', $result->first()['group']);
 
     $result = MockBasicEntity::get()
+      ->addWhere('fruit:label', 'NOT CONTAINS', 'Banana')
+      ->execute();
+    $this->assertCount(1, $result);
+    $this->assertEquals('one', $result->first()['group']);
+
+    $result = MockBasicEntity::get()
       ->addWhere('weight', 'CONTAINS', 2)
       ->execute();
     $this->assertCount(1, $result);
     $this->assertEquals('two', $result->first()['group']);
+
+    $result = MockBasicEntity::get()
+      ->addWhere('weight', 'NOT CONTAINS', 2)
+      ->execute();
+    $this->assertCount(1, $result);
+    $this->assertEquals('one', $result->first()['group']);
   }
 
-  public function testRegexpOperators() {
+  public function testRegexpOperators(): void {
     $records = [
       ['color' => 'red'],
       ['color' => 'blue'],
@@ -397,10 +432,10 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('red', $result[0]['color']);
   }
 
-  public function testPseudoconstantMatch() {
+  public function testPseudoconstantMatch(): void {
     $records = [
       ['group:label' => 'First', 'shape' => 'round', 'fruit:name' => 'banana'],
-      ['group:name' => 'Second', 'shape' => 'square', 'fruit:label' => 'Pear'],
+      ['group:name' => 'two', 'shape' => 'square', 'fruit:label' => 'Pear'],
     ];
     $this->replaceRecords($records);
 
@@ -412,7 +447,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     $this->assertEquals('round', $results[0]['shape']);
     $this->assertEquals('one', $results[0]['group']);
     $this->assertEquals('First', $results[0]['group:label']);
-    $this->assertEquals('First', $results[0]['group:name']);
+    $this->assertEquals('one', $results[0]['group:name']);
     $this->assertEquals(3, $results[0]['fruit']);
     $this->assertEquals('Banana', $results[0]['fruit:label']);
     $this->assertEquals('banana', $results[0]['fruit:name']);
@@ -428,7 +463,7 @@ class BasicActionsTest extends UnitTestCase implements HookInterface {
     try {
       MockBasicEntity::create()->addValue('fruit:color', 'yellow')->execute();
     }
-    catch (\API_Exception $createError) {
+    catch (\CRM_Core_Exception $createError) {
     }
     $this->assertStringContainsString('Illegal expression', $createError->getMessage());
   }

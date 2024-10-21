@@ -8,7 +8,7 @@
       entity: '<'
     },
     require: {editor: '^^afGuiEditor'},
-    controller: function ($scope, $timeout, afGui) {
+    controller: function ($scope, $timeout, afGui, formatForSelect2) {
       var ts = $scope.ts = CRM.ts('org.civicrm.afform_admin');
       var ctrl = this;
       $scope.controls = {};
@@ -24,10 +24,6 @@
 
       $scope.getMeta = function() {
         return afGui.meta.entities[ctrl.getEntityType()];
-      };
-
-      $scope.getAdminTpl = function() {
-        return $scope.getMeta().admin_tpl || '~/afGuiEditor/entityConfig/Generic.html';
       };
 
       $scope.getField = afGui.getField;
@@ -107,6 +103,7 @@
               item['af-join'] = block.join_entity;
               item['#children'] = [{"#tag": directive}];
               item['af-repeat'] = ts('Add');
+              item['af-copy'] = ts('Copy');
               item.min = '1';
               if (typeof joinEntity.repeat_max === 'number') {
                 item.max = '' + joinEntity.repeat_max;
@@ -122,7 +119,9 @@
         $scope.elementList.length = 0;
         $scope.elementTitles.length = 0;
         _.each(afGui.meta.elements, function(element, name) {
-          if (!search || _.contains(name, search) || _.contains(element.title.toLowerCase(), search)) {
+          if (
+            (!element.afform_type || _.contains(element.afform_type, 'form')) &&
+            (!search || _.contains(name, search) || _.contains(element.title.toLowerCase(), search))) {
             var node = _.cloneDeep(element.element);
             if (name === 'fieldset') {
               if (!ctrl.editor.allowEntityConfig) {
@@ -194,6 +193,15 @@
         return found.match;
       }
 
+      this.addValue = function(fieldName) {
+        if (fieldName) {
+          if (!ctrl.entity.data) {
+            ctrl.entity.data = {};
+          }
+          ctrl.entity.data[fieldName] = '';
+        }
+      };
+
       this.$onInit = function() {
         // When a new block is saved, update the list
         this.meta = afGui.meta;
@@ -202,15 +210,11 @@
           ctrl.buildPaletteLists();
         });
 
-        $scope.$watch('controls.addValue', function(fieldName) {
-          if (fieldName) {
-            if (!ctrl.entity.data) {
-              ctrl.entity.data = {};
-            }
-            ctrl.entity.data[fieldName] = '';
-            $scope.controls.addValue = '';
-          }
-        });
+        ctrl.behaviors = _.transform(CRM.afGuiEditor.behaviors[ctrl.getEntityType()], function(behaviors, behavior) {
+          var item = _.cloneDeep(behavior);
+          item.options = formatForSelect2(item.modes, 'name', 'label', ['description', 'icon']);
+          behaviors.push(item);
+        }, []);
       };
     }
   });

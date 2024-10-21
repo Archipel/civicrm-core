@@ -31,10 +31,10 @@
             <th></th>
         </tr>
         {foreach from=$rows item=row}
-        <tr id="paymentProcessorType-{$row.id}" class="{cycle values="odd-row,even-row"}{if !empty($row.class)} {$row.class}{/if} crm-entity {if NOT $row.is_active} disabled{/if}">
+        <tr id="paymentProcessorType-{$row.id}" class="{cycle values="odd-row,even-row"} {$row.class} crm-entity {if NOT $row.is_active} disabled{/if}">
           <td class="crm-paymentProcessorType-name">{$row.name}</td>
           <td class="crm-paymentProcessorType-title crm-editable" data-field="title">{$row.title}</td>
-            <td class="crm-paymentProcessorType-description">{if isset($row.description)}{$row.description}{/if}</td>
+            <td class="crm-paymentProcessorType-description">{$row.description}</td>
           <td id="row_{$row.id}_status" class="crm-paymentProcessorType-is_active">{if $row.is_active eq 1} {ts}Yes{/ts} {else} {ts}No{/ts} {/if}</td>
             <td class="crm-paymentProcessorType-is_default">{icon condition=$row.is_default}{ts}Default{/ts}{/icon}&nbsp;</td>
           <td>{$row.action}</td>
@@ -45,7 +45,7 @@
 
         {if $action ne 1 and $action ne 2}
         <div class="action-link">
-          <a href="{crmURL q="action=add&reset=1"}" id="newPaymentProcessor"><i class="crm-i fa-chevron-right" aria-hidden="true"></i> {ts}New Payment Processor{/ts}</a>
+          <a class="button" href="{crmURL q="action=add&reset=1"}" id="newPaymentProcessor"><i class="crm-i fa-plus-circle" aria-hidden="true"></i> {ts}New Payment Processor{/ts}</a>
           {crmButton p="civicrm/admin" q="reset=1" class="cancel" icon="times"}{ts}Done{/ts}{/crmButton}
         </div>
         {/if}

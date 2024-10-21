@@ -17,11 +17,13 @@
 
 use Civi\Api4\Contribution;
 use Civi\Api4\LineItem;
+use Civi\Core\Event\PostEvent;
+use Civi\Core\HookInterface;
 
 /**
  * This class contains Contribution Page related functions.
  */
-class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_ContributionPage {
+class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_ContributionPage implements HookInterface {
 
   /**
    * Creates a contribution page.
@@ -31,41 +33,32 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
    * @return CRM_Contribute_DAO_ContributionPage
    */
   public static function create($params) {
-    $financialTypeId = NULL;
-    if (!empty($params['id']) && !CRM_Price_BAO_PriceSet::getFor('civicrm_contribution_page', $params['id'], NULL, 1)) {
-      $financialTypeId = CRM_Core_DAO::getFieldValue('CRM_Contribute_DAO_ContributionPage', $params['id'], 'financial_type_id');
-    }
-
+    // @todo  - this implode is probably handled by writeRecord - test & remove.
     if (isset($params['payment_processor']) && is_array($params['payment_processor'])) {
       $params['payment_processor'] = implode(CRM_Core_DAO::VALUE_SEPARATOR, $params['payment_processor']);
     }
-    $hook = empty($params['id']) ? 'create' : 'edit';
-    CRM_Utils_Hook::pre($hook, 'ContributionPage', CRM_Utils_Array::value('id', $params), $params);
-    $dao = new CRM_Contribute_DAO_ContributionPage();
-    $dao->copyValues($params);
-    $dao->save();
-    if ($financialTypeId && !empty($params['financial_type_id']) && $financialTypeId != $params['financial_type_id']) {
-      CRM_Price_BAO_PriceFieldValue::updateFinancialType($params['id'], 'civicrm_contribution_page', $params['financial_type_id']);
-    }
-    CRM_Utils_Hook::post($hook, 'ContributionPage', $dao->id, $dao);
-    CRM_Core_PseudoConstant::flush();
-    return $dao;
+    return self::writeRecord($params);
   }
 
   /**
-   * Update the is_active flag in the db.
+   * Callback for hook_civicrm_post().
    *
+   * @param \Civi\Core\Event\PostEvent $event
+   *
+   * @noinspection PhpUnusedParameterInspection
+   */
+  public static function self_hook_civicrm_post(PostEvent $event): void {
+    CRM_Core_PseudoConstant::flush();
+  }
+
+  /**
    * @deprecated - this bypasses hooks.
-   *
    * @param int $id
-   *   Id of the database record.
    * @param bool $is_active
-   *   Value we want to set the is_active field.
-   *
    * @return bool
-   *   true if we found and updated the object, else false
    */
   public static function setIsActive($id, $is_active) {
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
     return CRM_Core_DAO::setFieldValue('CRM_Contribute_DAO_ContributionPage', $id, 'is_active', $is_active);
   }
 
@@ -259,13 +252,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
     }
 
     if ($isTest && !empty($params['custom_post_id'])) {
-      $params['custom_post_id'][] = [
-        'contribution_test',
-        '=',
-        1,
-        0,
-        0,
-      ];
+      $params['custom_post_id'][] = ['contribution_test', '=', 1, 0, 0];
     }
 
     if (!$returnMessageText && !empty($gIds)) {
@@ -304,7 +291,8 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       //profile is of Individual ( including the custom data of membership/contribution )
       //IF Individual type not present in profile then it is consider as Organization data.
       $userID = $contactID;
-      if ($preID = CRM_Utils_Array::value('custom_pre_id', $values)) {
+      $preID = $values['custom_pre_id'] ?? NULL;
+      if ($preID) {
         if (!empty($values['related_contact'])) {
           $preProfileTypes = CRM_Core_BAO_UFGroup::profileGroups($preID);
           if (in_array('Individual', $preProfileTypes) || in_array('Contact', $preProfileTypes)) {
@@ -315,7 +303,8 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         [$values['customPre_grouptitle'], $values['customPre']] = self::getProfileNameAndFields($preID, $userID, $params['custom_pre_id']);
       }
       $userID = $contactID;
-      if ($postID = CRM_Utils_Array::value('custom_post_id', $values)) {
+      $postID = $values['custom_post_id'] ?? NULL;
+      if ($postID) {
         if (!empty($values['related_contact'])) {
           $postProfileTypes = CRM_Core_BAO_UFGroup::profileGroups($postID);
           if (in_array('Individual', $postProfileTypes) || in_array('Contact', $postProfileTypes)) {
@@ -323,8 +312,12 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
             $userID = $values['related_contact'] ?? NULL;
           }
         }
-        list($values['customPost_grouptitle'], $values['customPost']) = self::getProfileNameAndFields($postID, $userID, $params['custom_post_id']);
+        [$values['customPost_grouptitle'], $values['customPost']] = self::getProfileNameAndFields($postID, $userID, $params['custom_post_id']);
       }
+      // Assign honoree values for the receipt. But first, stop any leaks from
+      // previously assigned values.
+      $template->assign('honoreeProfile', []);
+      $template->assign('honorName', NULL);
       if (isset($values['honor'])) {
         $honorValues = $values['honor'];
         $template->_values = ['honoree_profile_id' => $values['honoree_profile_id']];
@@ -376,12 +369,14 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         $tplParams['contributionTypeName'] = $tplParams['financialTypeName'];
       }
 
-      if ($contributionPageId = CRM_Utils_Array::value('id', $values)) {
+      $contributionPageId = $values['id'] ?? NULL;
+      if ($contributionPageId) {
         $tplParams['contributionPageId'] = $contributionPageId;
       }
 
       // address required during receipt processing (pdf and email receipt)
-      if ($displayAddress = CRM_Utils_Array::value('address', $values)) {
+      $displayAddress = $values['address'] ?? NULL;
+      if ($displayAddress) {
         $tplParams['address'] = $displayAddress;
       }
 
@@ -392,7 +387,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       // signs up. Is used for cases like - on behalf of
       // contribution / signup ..etc
       if (array_key_exists('related_contact', $values)) {
-        list($ccDisplayName, $ccEmail) = CRM_Contact_BAO_Contact_Location::getEmailDetails($values['related_contact']);
+        [$ccDisplayName, $ccEmail] = CRM_Contact_BAO_Contact_Location::getEmailDetails($values['related_contact']);
         $ccMailId = "{$ccDisplayName} <{$ccEmail}>";
 
         //@todo - this is the only place in this function where  $values is altered - but I can't find any evidence it is used
@@ -411,16 +406,16 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
 
       // use either the contribution or membership receipt, based on whether it’s a membership-related contrib or not
       $sendTemplateParams = [
-        'groupName' => !empty($values['isMembership']) ? 'msg_tpl_workflow_membership' : 'msg_tpl_workflow_contribution',
-        'valueName' => !empty($values['isMembership']) ? 'membership_online_receipt' : 'contribution_online_receipt',
+        'workflow' => !empty($values['isMembership']) ? 'membership_online_receipt' : 'contribution_online_receipt',
         'contactId' => $contactID,
         'tplParams' => $tplParams,
+        'tokenContext' => $tplParams['contributionID'] ? ['contributionId' => (int) $tplParams['contributionID'], 'contactId' => $contactID] : ['contactId' => $contactID],
         'isTest' => $isTest,
         'PDFFilename' => 'receipt.pdf',
       ];
 
       if ($returnMessageText) {
-        list($sent, $subject, $message, $html) = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);
+        [$sent, $subject, $message, $html] = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);
         return [
           'subject' => $subject,
           'body' => $message,
@@ -430,11 +425,11 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       }
 
       if (empty($values['receipt_from_name']) && empty($values['receipt_from_name'])) {
-        list($values['receipt_from_name'], $values['receipt_from_email']) = CRM_Core_BAO_Domain::getNameAndEmail();
+        [$values['receipt_from_name'], $values['receipt_from_email']] = CRM_Core_BAO_Domain::getNameAndEmail();
       }
 
       if ($values['is_email_receipt']) {
-        $sendTemplateParams['from'] = CRM_Utils_Array::value('receipt_from_name', $values) . ' <' . $values['receipt_from_email'] . '>';
+        $sendTemplateParams['from'] = ($values['receipt_from_name'] ?? '') . ' <' . $values['receipt_from_email'] . '>';
         $sendTemplateParams['toName'] = $displayName;
         $sendTemplateParams['toEmail'] = $email;
         $sendTemplateParams['cc'] = $values['cc_receipt'] ?? NULL;
@@ -444,13 +439,13 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
           $sendTemplateParams['isEmailPdf'] = TRUE;
           $sendTemplateParams['contributionId'] = $values['contribution_id'];
         }
-        list($sent, $subject, $message) = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);
+        [$sent, $subject, $message] = CRM_Core_BAO_MessageTemplate::sendTemplate($sendTemplateParams);
       }
 
       // send duplicate alert, if dupe match found during on-behalf-of processing.
       if (!empty($values['onbehalf_dupe_alert'])) {
         $sendTemplateParams['groupName'] = 'msg_tpl_workflow_contribution';
-        $sendTemplateParams['valueName'] = 'contribution_dupalert';
+        $sendTemplateParams['workflow'] = 'contribution_dupalert';
         $sendTemplateParams['from'] = ts('Automatically Generated') . " <{$values['receipt_from_email']}>";
         $sendTemplateParams['toName'] = $values['receipt_from_name'] ?? NULL;
         $sendTemplateParams['toEmail'] = $values['receipt_from_email'] ?? NULL;
@@ -513,7 +508,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
    *   Contribution page id.
    * @param object $recur
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public static function recurringNotify($contributionID, $type, $recur): void {
     $contribution = Contribution::get(FALSE)
@@ -550,7 +545,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
       [$displayName, $email] = CRM_Contact_BAO_Contact_Location::getEmailDetails($contribution['contact_id'], FALSE);
       $templatesParams = [
         'groupName' => 'msg_tpl_workflow_contribution',
-        'valueName' => 'contribution_recurring_notify',
+        'workflow' => 'contribution_recurring_notify',
         'contactId' => $contribution['contact_id'],
         'tplParams' => [
           'recur_frequency_interval' => $recur->frequency_interval,
@@ -587,7 +582,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
         $template->assign('updateSubscriptionUrl', $url);
       }
 
-      list($sent) = CRM_Core_BAO_MessageTemplate::sendTemplate($templatesParams);
+      [$sent] = CRM_Core_BAO_MessageTemplate::sendTemplate($templatesParams);
 
       if ($sent) {
         CRM_Core_Error::debug_log_message('Success: mail sent for recurring notification.');
@@ -618,7 +613,7 @@ class CRM_Contribute_BAO_ContributionPage extends CRM_Contribute_DAO_Contributio
    * @param array|null $fieldTypes
    */
   public static function buildCustomDisplay($gid, $name, $cid, &$template, &$params, $fieldTypes = NULL) {
-    list($groupTitle, $values) = self::getProfileNameAndFields($gid, $cid, $params, $fieldTypes);
+    [$groupTitle, $values] = self::getProfileNameAndFields($gid, $cid, $params, $fieldTypes);
     if (!empty($values)) {
       $template->assign($name, $values);
     }
@@ -720,7 +715,7 @@ WHERE entity_table = 'civicrm_contribution_page'
 
     $copy->save();
 
-    CRM_Utils_Hook::copy('ContributionPage', $copy);
+    CRM_Utils_Hook::copy('ContributionPage', $copy, $id);
 
     return $copy;
   }
@@ -812,11 +807,13 @@ LEFT JOIN  civicrm_premiums            ON ( civicrm_premiums.entity_id = civicrm
     // Special logic for fields whose options depend on context or properties
     switch ($fieldName) {
       case 'financial_type_id':
-        // @fixme - this is going to ignore context, better to get conditions, add params, and call PseudoConstant::get
-        // @fixme - https://lab.civicrm.org/dev/core/issues/547 if CiviContribute not enabled this causes an invalid query
-        //   because $relationTypeId is not set in CRM_Financial_BAO_FinancialType::getIncomeFinancialType()
-        if (array_key_exists('CiviContribute', CRM_Core_Component::getEnabledComponents())) {
-          return CRM_Financial_BAO_FinancialType::getIncomeFinancialType();
+        // https://lab.civicrm.org/dev/core/issues/547 if CiviContribute not enabled this causes an invalid query
+        // @todo - the component is enabled check should be done within getIncomeFinancialType
+        // It looks to me like test cover was NOT added to cover the change
+        // that added this so we need to assume there is no test cover
+        if (CRM_Core_Component::isEnabled('CiviContribute')) {
+          // if check_permission has been passed in (not Null) then restrict.
+          return CRM_Financial_BAO_FinancialType::getIncomeFinancialType($props['check_permissions'] ?? TRUE);
         }
         return [];
     }
@@ -911,7 +908,7 @@ LEFT JOIN  civicrm_premiums            ON ( civicrm_premiums.entity_id = civicrm
       $ufJoinDAO->module = $module;
       $ufJoinDAO->entity_id = $params['id'];
       $ufJoinDAO->find(TRUE);
-      $jsonData = json_decode($ufJoinDAO->module_data);
+      $jsonData = json_decode($ufJoinDAO->module_data ?? '');
       if ($jsonData) {
         $json[$module] = array_merge((array) $jsonData->$module, $json[$module]);
       }
@@ -946,8 +943,10 @@ LEFT JOIN  civicrm_premiums            ON ( civicrm_premiums.entity_id = civicrm
    *
    * @return bool
    *   isSeparateMembershipPayment
+   * @deprecated
    */
   public static function getIsMembershipPayment($id) {
+    CRM_Core_Error::deprecatedFunctionWarning('api');
     $membershipBlocks = civicrm_api3('membership_block', 'get', [
       'entity_table' => 'civicrm_contribution_page',
       'entity_id' => $id,

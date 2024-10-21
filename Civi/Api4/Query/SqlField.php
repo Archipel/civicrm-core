@@ -11,8 +11,6 @@
 
 namespace Civi\Api4\Query;
 
-use Civi\API\Exception\UnauthorizedException;
-
 /**
  * Sql column expression
  */
@@ -21,24 +19,19 @@ class SqlField extends SqlExpression {
   public $supportsExpansion = TRUE;
 
   protected function initialize() {
-    if ($this->alias && $this->alias !== $this->expr) {
-      throw new \API_Exception("Aliasing field names is not allowed, only expressions can have an alias.");
+    if ($this->alias && $this->alias !== $this->expr && !strpos($this->expr, ':')) {
+      throw new \CRM_Core_Exception("Aliasing field names is not allowed, only expressions can have an alias.");
     }
     $this->fields[] = $this->expr;
   }
 
-  public function render(array $fieldList): string {
-    if (!isset($fieldList[$this->expr])) {
-      throw new \API_Exception("Invalid field '{$this->expr}'");
+  public function render(Api4Query $query, bool $includeAlias = FALSE): string {
+    $field = $query->getField($this->expr, TRUE);
+    $rendered = $field['sql_name'];
+    if (!empty($field['sql_renderer'])) {
+      $rendered = $field['sql_renderer']($field, $query);
     }
-    if ($fieldList[$this->expr] === FALSE) {
-      throw new UnauthorizedException("Unauthorized field '{$this->expr}'");
-    }
-    if (!empty($fieldList[$this->expr]['sql_renderer'])) {
-      $renderer = $fieldList[$this->expr]['sql_renderer'];
-      return $renderer($fieldList[$this->expr]);
-    }
-    return $fieldList[$this->expr]['sql_name'];
+    return $rendered . ($includeAlias ? " AS `{$this->getAlias()}`" : '');
   }
 
   public static function getTitle(): string {

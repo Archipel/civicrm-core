@@ -52,7 +52,7 @@ abstract class AbstractEntity {
    * @return \Civi\Api4\Generic\CheckAccessAction
    */
   public static function checkAccess() {
-    return new CheckAccessAction(self::getEntityName(), __FUNCTION__);
+    return new CheckAccessAction(static::getEntityName(), __FUNCTION__);
   }
 
   /**
@@ -64,7 +64,7 @@ abstract class AbstractEntity {
     $permissions = \CRM_Core_Permission::getEntityActionPermissions();
 
     // For legacy reasons the permissions are keyed by lowercase entity name
-    $lcentity = \CRM_Core_DAO_AllCoreTables::convertEntityNameToLower(self::getEntityName());
+    $lcentity = \CRM_Core_DAO_AllCoreTables::convertEntityNameToLower(static::getEntityName());
     // Merge permissions for this entity with the defaults
     return ($permissions[$lcentity] ?? []) + $permissions['default'];
   }
@@ -74,7 +74,7 @@ abstract class AbstractEntity {
    *
    * @return string
    */
-  protected static function getEntityName() {
+  public static function getEntityName(): string {
     return self::stripNamespace(static::class);
   }
 
@@ -153,16 +153,38 @@ abstract class AbstractEntity {
       $info['icon'] = $dao::$_icon;
       $info['label_field'] = $dao::$_labelField;
       $info['dao'] = $dao;
+      $info['table_name'] = $dao::$_tableName;
+      $info['icon_field'] = (array) ($dao::fields()['icon']['name'] ?? NULL);
     }
     foreach (ReflectionUtils::getTraits(static::class) as $trait) {
       $info['type'][] = self::stripNamespace($trait);
     }
+    // Get DocBlock from APIv4 Entity class
     $reflection = new \ReflectionClass(static::class);
-    $info = array_merge($info, ReflectionUtils::getCodeDocs($reflection, NULL, ['entity' => $info['name']]));
+    $docBlock = ReflectionUtils::getCodeDocs($reflection, NULL, ['entity' => $info['name']]);
+    // Convert docblock keys to snake_case
+    foreach ($docBlock as $key => $val) {
+      $docBlock[\CRM_Utils_String::convertStringToSnakeCase($key)] = $val;
+    }
+    // Filter docblock to only declared entity fields
+    foreach (\Civi\Api4\Entity::$entityFields as $field) {
+      if (isset($docBlock[$field['name']])) {
+        $val = $docBlock[$field['name']];
+        // Convert to array if data_type == Array
+        if (isset($field['data_type']) && $field['data_type'] === 'Array' && is_string($val)) {
+          $val = \CRM_Core_DAO::unSerializeField($val, \CRM_Core_DAO::SERIALIZE_COMMA);
+        }
+        $info[$field['name']] = $val;
+      }
+    }
+    // search_fields defaults to label_field
+    if (empty($info['search_fields']) && !empty($info['label_field'])) {
+      $info['search_fields'] = [$info['label_field']];
+    }
     if ($dao) {
       $info['description'] = $dao::getEntityDescription() ?? $info['description'] ?? NULL;
     }
-    unset($info['package'], $info['method']);
+
     return $info;
   }
 

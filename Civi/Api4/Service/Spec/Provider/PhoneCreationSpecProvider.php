@@ -14,13 +14,18 @@ namespace Civi\Api4\Service\Spec\Provider;
 
 use Civi\Api4\Service\Spec\RequestSpec;
 
-class PhoneCreationSpecProvider implements Generic\SpecProviderInterface {
+/**
+ * @service
+ * @internal
+ */
+class PhoneCreationSpecProvider extends \Civi\Core\Service\AutoService implements Generic\SpecProviderInterface {
 
   /**
    * @inheritDoc
    */
   public function modifySpec(RequestSpec $spec) {
     $spec->getFieldByName('phone')->setRequired(TRUE);
+    $spec->getFieldByName('is_primary')->setRequired(FALSE);
   }
 
   /**

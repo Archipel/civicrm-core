@@ -17,7 +17,10 @@
 class CRM_Report_Form_Activity extends CRM_Report_Form {
   protected $_selectAliasesTotal = [];
 
-  protected $_customGroupExtends = ['Activity'];
+  protected $_customGroupExtends = [
+    'Activity',
+    'Individual',
+  ];
 
   protected $_nonDisplayFields = [];
 
@@ -397,7 +400,7 @@ class CRM_Report_Form_Activity extends CRM_Report_Form {
    * @todo get rid of $recordType param. It's only because 3 separate contact tables
    * are mis-declared as one that we need it.
    *
-   * @param null $recordType deprecated
+   * @param string $recordType deprecated
    *   Parameter to hack around the bad decision made in construct to misrepresent
    *   different tables as the same table.
    */
@@ -541,7 +544,7 @@ class CRM_Report_Form_Activity extends CRM_Report_Form {
           ) {
             continue;
           }
-          if (CRM_Utils_Array::value('type', $field) & CRM_Utils_Type::T_DATE) {
+          if (($field['type'] ?? 0) & CRM_Utils_Type::T_DATE) {
             $relative = $this->_params["{$fieldName}_relative"] ?? NULL;
             $from = $this->_params["{$fieldName}_from"] ?? NULL;
             $to = $this->_params["{$fieldName}_to"] ?? NULL;
@@ -574,7 +577,7 @@ class CRM_Report_Form_Activity extends CRM_Report_Form {
           }
 
           if ($field['name'] == 'current_user') {
-            if (CRM_Utils_Array::value("{$fieldName}_value", $this->_params) ==
+            if (($this->_params["{$fieldName}_value"] ?? NULL) ==
               1
             ) {
               // get current user
@@ -619,7 +622,7 @@ class CRM_Report_Form_Activity extends CRM_Report_Form {
   /**
    * Build ACL clause.
    *
-   * @param string $tableAlias
+   * @param array $tableAlias
    *
    * @throws \CRM_Core_Exception
    */
@@ -654,7 +657,7 @@ class CRM_Report_Form_Activity extends CRM_Report_Form {
    * @throws Exception
    */
   public function add2group($groupID) {
-    if (CRM_Utils_Array::value("contact_target_op", $this->_params) == 'nll') {
+    if (($this->_params["contact_target_op"] ?? NULL) == 'nll') {
       CRM_Core_Error::statusBounce(ts('Current filter criteria didn\'t have any target contact to add to group'));
     }
 
@@ -694,14 +697,13 @@ GROUP BY civicrm_activity_id $having {$this->_orderBy}";
   /**
    * @param $fields
    * @param $files
-   * @param $self
+   * @param self $self
    *
    * @return array
    */
   public static function formRule($fields, $files, $self) {
     $errors = [];
-    $config = CRM_Core_Config::singleton();
-    if (in_array("CiviCase", $config->enableComponents)) {
+    if (CRM_Core_Component::isEnabled('CiviCase')) {
       $componentId = CRM_Core_Component::getComponentID('CiviCase');
       $caseActivityTypes = CRM_Core_OptionGroup::values('activity_type', TRUE, FALSE, FALSE, " AND v.component_id={$componentId}");
       if (!empty($fields['activity_type_id_value']) && is_array($fields['activity_type_id_value']) && empty($fields['include_case_activities_value'])) {
@@ -727,12 +729,12 @@ GROUP BY civicrm_activity_id $having {$this->_orderBy}";
     //Assign those recordtype to array which have filter operator as 'Is not empty' or 'Is empty'
     $nullFilters = [];
     foreach (['target', 'source', 'assignee'] as $type) {
-      if (CRM_Utils_Array::value("contact_{$type}_op", $this->_params) ==
+      if (($this->_params["contact_{$type}_op"] ?? NULL) ==
         'nnll' || !empty($this->_params["contact_{$type}_value"])
       ) {
         $nullFilters[] = " civicrm_contact_contact_{$type}_id IS NOT NULL ";
       }
-      elseif (CRM_Utils_Array::value("contact_{$type}_op", $this->_params) ==
+      elseif (($this->_params["contact_{$type}_op"] ?? NULL) ==
         'nll'
       ) {
         $nullFilters[] = " civicrm_contact_contact_{$type}_id IS NULL ";

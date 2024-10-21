@@ -14,6 +14,7 @@ namespace Civi\Api4;
  * RelationshipCache - readonly table to facilitate joining and finding contacts by relationship.
  *
  * @searchable secondary
+ * @searchFields near_contact_id.sort_name,near_relation:label,far_contact_id.sort_name
  * @see \Civi\Api4\Relationship
  * @ui_join_filters near_relation
  * @since 5.29
@@ -47,9 +48,19 @@ class RelationshipCache extends Generic\AbstractEntity {
     $info = parent::getInfo();
     $info['bridge_title'] = ts('Relationship');
     $info['bridge'] = [
-      'near_contact_id' => ['description' => ts('One or more contacts with a relationship to this contact')],
-      'far_contact_id' => ['description' => ts('One or more contacts with a relationship to this contact')],
+      'near_contact_id' => [
+        'to' => 'far_contact_id',
+        'label' => ts('Related Contacts'),
+        'description' => ts('One or more related contacts'),
+      ],
     ];
+    if (\CRM_Core_Component::isEnabled('CiviCase')) {
+      $info['bridge']['case_id'] = [
+        'to' => 'far_contact_id',
+        'label' => ts('Case Roles'),
+        'description' => ts('Cases in which this contact has a role'),
+      ];
+    }
     return $info;
   }
 

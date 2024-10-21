@@ -75,15 +75,15 @@ class CRM_Logging_Schema {
    * @param array $fieldSpec
    *
    * @return bool
-   * @throws API_Exception
+   * @throws CRM_Core_Exception
    */
   public static function checkLoggingSupport(&$value, $fieldSpec) {
     if (!(CRM_Core_DAO::checkTriggerViewPermission(FALSE)) && $value) {
-      throw new API_Exception(ts("In order to use this functionality, the installation's database user must have privileges to create triggers and views (if binary logging is enabled – this means the SUPER privilege). This install does not have the required privilege(s) enabled."));
+      throw new CRM_Core_Exception(ts("In order to use this functionality, the installation's database user must have privileges to create triggers and views (if binary logging is enabled – this means the SUPER privilege). This install does not have the required privilege(s) enabled."));
     }
     // dev/core#1812 Disable logging in a multilingual environment.
     if (CRM_Core_I18n::isMultilingual() && $value) {
-      throw new API_Exception(ts("Logging is not supported in a multilingual environment!"));
+      throw new CRM_Core_Exception(ts("Logging is not supported in a multilingual environment!"));
     }
     return TRUE;
   }
@@ -142,12 +142,13 @@ AND    TABLE_NAME LIKE 'civicrm_%'
     }
 
     // do not log temp import, cache, menu and log tables
-    $this->tables = preg_grep('/^civicrm_import_job_/', $this->tables, PREG_GREP_INVERT);
     $this->tables = preg_grep('/_cache$/', $this->tables, PREG_GREP_INVERT);
     $this->tables = preg_grep('/_log/', $this->tables, PREG_GREP_INVERT);
     $this->tables = preg_grep('/^civicrm_queue_/', $this->tables, PREG_GREP_INVERT);
     //CRM-14672
     $this->tables = preg_grep('/^civicrm_menu/', $this->tables, PREG_GREP_INVERT);
+    // CiviCRM no longer creates temp tables with `_temp` - they are `tmp` - but this is being left in
+    // in case extensions do - since we don't want to suddenly start logging them.
     $this->tables = preg_grep('/_temp_/', $this->tables, PREG_GREP_INVERT);
     // CRM-18178
     $this->tables = preg_grep('/_bak$/', $this->tables, PREG_GREP_INVERT);
@@ -318,7 +319,7 @@ AND    (TABLE_NAME LIKE 'log_civicrm_%' $nonStandardTableNameString )
    *     'forceEngineMigration' - force engine upgrade from ARCHIVE to InnoDB?
    *
    * @return int $updateTablesCount
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function updateLogTableSchema($params) {
     $updateLogConn = FALSE;
@@ -336,7 +337,7 @@ AND    (TABLE_NAME LIKE 'log_civicrm_%' $nonStandardTableNameString )
       $engineChanged = isset($tableSpec['engine']) && (strtoupper($tableSpec['engine']) != $currentEngine);
       $engineConfigChanged = isset($tableSpec['engine_config']) && (strtoupper($tableSpec['engine_config']) != $this->getEngineConfigForLogTable($logTable));
       if ($engineChanged || ($engineConfigChanged && $params['updateChangedEngineConfig'])) {
-        $alterSql[] = "ENGINE=" . $tableSpec['engine'] . " " . CRM_Utils_Array::value('engine_config', $tableSpec);
+        $alterSql[] = "ENGINE=" . $tableSpec['engine'] . " " . ($tableSpec['engine_config'] ?? '');
       }
       if (!empty($tableSpec['indexes'])) {
         $indexes = $this->getIndexesForTable($logTable);
@@ -512,7 +513,7 @@ AND    (TABLE_NAME LIKE 'log_civicrm_%' $nonStandardTableNameString )
    * Get column query.
    *
    * @param string $col
-   * @param bool $createQuery
+   * @param array $createQuery
    *
    * @return array|mixed|string
    */
@@ -721,7 +722,7 @@ WHERE  table_schema IN ('{$this->db}', '{$civiDB}')";
       if (!empty($specDiff) && $col !== 'id' && !in_array($col, $diff['ADD'])) {
         if (empty($colSpecs['EXTRA']) || (!empty($colSpecs['EXTRA']) && $colSpecs['EXTRA'] !== 'auto_increment')) {
           // ignore 'id' column for any spec changes, to avoid any auto-increment mysql errors
-          if ($civiTableSpecs[$col]['DATA_TYPE'] != CRM_Utils_Array::value('DATA_TYPE', $logTableSpecs[$col])
+          if ($civiTableSpecs[$col]['DATA_TYPE'] != ($logTableSpecs[$col]['DATA_TYPE'] ?? NULL)
             // We won't alter the log if the length is decreased in case some of the existing data won't fit.
             || CRM_Utils_Array::value('LENGTH', $civiTableSpecs[$col]) > CRM_Utils_Array::value('LENGTH', $logTableSpecs[$col])
           ) {
@@ -729,12 +730,12 @@ WHERE  table_schema IN ('{$this->db}', '{$civiDB}')";
             $diff['MODIFY'][] = $col;
           }
           elseif ($civiTableSpecs[$col]['DATA_TYPE'] === 'enum' &&
-            CRM_Utils_Array::value('ENUM_VALUES', $civiTableSpecs[$col]) != CRM_Utils_Array::value('ENUM_VALUES', $logTableSpecs[$col])
+            ($civiTableSpecs[$col]['ENUM_VALUES'] ?? NULL) != ($logTableSpecs[$col]['ENUM_VALUES'] ?? NULL)
           ) {
             // column is enum and the permitted values have changed
             $diff['MODIFY'][] = $col;
           }
-          elseif ($civiTableSpecs[$col]['IS_NULLABLE'] != CRM_Utils_Array::value('IS_NULLABLE', $logTableSpecs[$col]) &&
+          elseif ($civiTableSpecs[$col]['IS_NULLABLE'] != ($logTableSpecs[$col]['IS_NULLABLE'] ?? NULL) &&
             $logTableSpecs[$col]['IS_NULLABLE'] === 'NO'
           ) {
             // if is-null property is different, and log table's column is NOT-NULL, surely consider the column
@@ -742,7 +743,7 @@ WHERE  table_schema IN ('{$this->db}', '{$civiDB}')";
           }
           elseif (
             $civiTableSpecs[$col]['COLUMN_DEFAULT'] != ($logTableSpecs[$col]['COLUMN_DEFAULT'] ?? NULL)
-            && !stristr($civiTableSpecs[$col]['COLUMN_DEFAULT'], 'timestamp')
+            && !stristr(($civiTableSpecs[$col]['COLUMN_DEFAULT'] ?? ''), 'timestamp')
             && !($civiTableSpecs[$col]['COLUMN_DEFAULT'] === NULL && ($logTableSpecs[$col]['COLUMN_DEFAULT'] ?? NULL) === 'NULL')
           ) {
             // if default property is different, and its not about a timestamp column, consider it
@@ -924,7 +925,7 @@ COLS;
    * Get trigger info.
    *
    * @param array $info
-   * @param null $tableName
+   * @param string|null $tableName
    * @param bool $force
    */
   public function triggerInfo(&$info, $tableName = NULL, $force = FALSE) {

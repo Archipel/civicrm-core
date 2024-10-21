@@ -35,14 +35,9 @@ class CRM_Profile_Form_Edit extends CRM_Profile_Form {
   /**
    * Pre processing work done here.
    *
-   * @param
-   *
    */
   public function preProcess() {
     $this->_mode = CRM_Profile_Form::MODE_CREATE;
-
-    $this->_onPopupClose = CRM_Utils_Request::retrieve('onPopupClose', 'String', $this);
-    $this->assign('onPopupClose', $this->_onPopupClose);
 
     //set the context for the profile
     $this->_context = CRM_Utils_Request::retrieve('context', 'Alphanumeric', $this);
@@ -134,7 +129,7 @@ SELECT module,is_reserved
    * Build the form object.
    *
    */
-  public function buildQuickForm() {
+  public function buildQuickForm(): void {
     if (empty($this->_ufGroup['id'])) {
       CRM_Core_Error::statusBounce(ts('Invalid'));
     }
@@ -151,8 +146,8 @@ SELECT module,is_reserved
     $this->assign('recentlyViewed', FALSE);
 
     if ($this->_context !== 'dialog') {
-      $this->_postURL = $this->_ufGroup['post_URL'];
-      $this->_cancelURL = $this->_ufGroup['cancel_URL'];
+      $this->_postURL = $this->_ufGroup['post_url'];
+      $this->_cancelURL = $this->_ufGroup['cancel_url'];
 
       $gidString = $this->_gid;
       if (!empty($this->_profileIds)) {
@@ -183,8 +178,8 @@ SELECT module,is_reserved
       }
 
       // we do this gross hack since qf also does entity replacement
-      $this->_postURL = str_replace('&amp;', '&', $this->_postURL);
-      $this->_cancelURL = str_replace('&amp;', '&', $this->_cancelURL);
+      $this->_postURL = str_replace('&amp;', '&', ($this->_postURL ?? ''));
+      $this->_cancelURL = str_replace('&amp;', '&', ($this->_cancelURL ?? ''));
 
       // also retain error URL if set
       $this->_errorURL = $_POST['errorURL'] ?? NULL;
@@ -243,9 +238,7 @@ SELECT module,is_reserved
   /**
    * Process the user submitted custom data values.
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function postProcess() {
     parent::postProcess();

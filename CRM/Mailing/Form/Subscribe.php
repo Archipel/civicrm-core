@@ -89,8 +89,8 @@ ORDER BY title";
       while ($dao->fetch()) {
         $row = [];
         $row['id'] = $dao->id;
-        $row['title'] = $dao->frontend_title ?? $dao->title;
-        $row['description'] = $dao->frontend_description ?? $dao->description;
+        $row['title'] = $dao->frontend_title;
+        $row['description'] = $dao->frontend_description;
         $row['checkbox'] = CRM_Core_Form::CB_PREFIX . $row['id'];
         $this->addElement('checkbox',
           $row['checkbox'],
@@ -105,23 +105,11 @@ ORDER BY title";
       $this->addFormRule(['CRM_Mailing_Form_Subscribe', 'formRule']);
     }
 
-    // CRM-11316 Enable ReCAPTCHA for anonymous visitors
-    $session = CRM_Core_Session::singleton();
-    $contactID = $session->get('userID');
-
-    if (!$contactID) {
-      CRM_Utils_ReCAPTCHA::enableCaptchaOnForm($this);
-    }
-
     $this->addButtons([
       [
         'type' => 'next',
         'name' => ts('Subscribe'),
         'isDefault' => TRUE,
-      ],
-      [
-        'type' => 'cancel',
-        'name' => ts('Cancel'),
       ],
     ]);
   }
@@ -155,7 +143,7 @@ ORDER BY title";
       }
     }
 
-    CRM_Mailing_Event_BAO_Subscribe::commonSubscribe($groups, $params);
+    CRM_Mailing_Event_BAO_MailingEventSubscribe::commonSubscribe($groups, $params);
   }
 
 }

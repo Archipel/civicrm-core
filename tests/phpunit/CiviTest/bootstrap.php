@@ -12,6 +12,17 @@ if (file_exists('/etc/timezone')) {
   }
 }
 
+$GLOBALS['CIVICRM_FORCE_MODULES'][] = 'civitest';
+
+function civitest_civicrm_scanClasses(array &$classes): void {
+  $phpunit = \Civi::paths()->getPath('[civicrm.root]/tests/phpunit');
+  if (strpos(get_include_path(), $phpunit) !== FALSE) {
+    \Civi\Core\ClassScanner::scanFolders($classes, $phpunit, 'CRM/*/WorkflowMessage', '_', '/Test$/');
+    \Civi\Core\ClassScanner::scanFolders($classes, $phpunit, 'Civi/*/WorkflowMessage', '\\', '/Test$/');
+    // Exclude all `*Test.php` files - if we load them, then phpunit gets confused.
+  }
+}
+
 # Crank up the memory
 ini_set('memory_limit', '2G');
 define('CIVICRM_TEST', 1);
@@ -26,6 +37,11 @@ if (CIVICRM_UF === 'UnitTests') {
 spl_autoload_register(function($class) {
   _phpunit_mockoloader('api\\v4\\', "tests/phpunit/api/v4/", $class);
   _phpunit_mockoloader('Civi\\Api4\\', "tests/phpunit/api/v4/Mock/Api4/", $class);
+  if (substr($class, 0, 13) === 'CRM_Fake_DAO_') {
+    // phpcs:disable
+    eval('namespace { class ' . $class . ' extends \CRM_Core_DAO { public static function &fields() { $r = []; return $r; }}}');
+    // phpcs:enable
+  }
 });
 
 // ------------------------------------------------------------------------------

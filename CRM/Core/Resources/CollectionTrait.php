@@ -9,6 +9,8 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Core\Event\GenericHookEvent;
+
 /**
  * Class CRM_Core_Resources_CollectionTrait
  *
@@ -100,6 +102,9 @@ trait CRM_Core_Resources_CollectionTrait {
           $snippet['name'] = $snippet['sortId'];
           break;
       }
+    }
+    if (!empty($snippet['esm'])) {
+      Civi::dispatcher()->dispatch('civi.esm.useModule', GenericHookEvent::create(['snippet' => &$snippet]));
     }
 
     if ($snippet['type'] === 'scriptFile' && !isset($snippet['scriptFileUrls'])) {
@@ -386,7 +391,7 @@ trait CRM_Core_Resources_CollectionTrait {
     $s = &$this->findCreateSettingSnippet();
     $result = $s['settings'];
     foreach ($s['settingsFactories'] as $callable) {
-      $result = CRM_Core_Resources_CollectionAdderTrait::mergeSettings($result, $callable());
+      $result = self::mergeSettings($result, $callable());
     }
     CRM_Utils_Hook::alterResourceSettings($result);
     return $result;

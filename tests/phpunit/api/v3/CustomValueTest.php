@@ -19,8 +19,6 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
 
   protected $optionGroup;
 
-  public $DBResetRequired = FALSE;
-
   /**
    * @throws \CRM_Core_Exception
    */
@@ -88,16 +86,16 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
     parent::tearDown();
   }
 
-  public function testCreateCustomValue() {
+  public function testCreateCustomValue(): void {
     $this->_populateOptionAndCustomGroup();
     $this->_customField = $this->customFieldCreate(['custom_group_id' => $this->ids['string']['custom_group_id']]);
     $this->_customFieldID = $this->_customField['id'];
 
-    $customFieldDataType = CRM_Core_BAO_CustomField::dataType();
+    $customFieldDataType = array_column(CRM_Core_BAO_CustomField::dataType(), 'id');
     $dataToHtmlTypes = CRM_Custom_Form_Field::$_dataToHTML;
     $optionSupportingHTMLTypes = CRM_Custom_Form_Field::$htmlTypesWithOptions;
 
-    foreach ($customFieldDataType as $dataType => $label) {
+    foreach ($customFieldDataType as $dataType) {
       switch ($dataType) {
         // skipping File data-type & state province due to caching issues
         // case 'Country':
@@ -338,9 +336,9 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
    *
    * @link https://issues.civicrm.org/jira/browse/CRM-11856
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
-  public function testAlterOptionValue() {
+  public function testAlterOptionValue(): void {
     $this->_populateOptionAndCustomGroup('string');
 
     $selectField = $this->customFieldCreate([
@@ -421,7 +419,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
     $this->assertEquals([$params[$radioName], $params[$controlFieldName]], $result[$multiSelectName]);
   }
 
-  public function testGettree() {
+  public function testGettree(): void {
     $cg = $this->callAPISuccess('CustomGroup', 'create', [
       'title' => 'TestGettree',
       'extends' => 'Individual',
@@ -478,7 +476,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
 
   }
 
-  public function testGettree_getfields() {
+  public function testGettree_getfields(): void {
     $fields = $this->callAPISuccess('CustomValue', 'getfields', ['api_action' => 'gettree']);
     $fields = $fields['values'];
     $this->assertTrue((bool) $fields['entity_id']['api.required']);
@@ -491,12 +489,12 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
   /**
    * Test that custom fields in greeting strings are updated.
    */
-  public function testUpdateCustomGreetings() {
+  public function testUpdateCustomGreetings(): void {
     // Create a custom group with one field.
     $customGroupResult = $this->callAPISuccess('CustomGroup', 'create', [
       'sequential' => 1,
-      'title' => "test custom group",
-      'extends' => "Individual",
+      'title' => 'test custom group',
+      'extends' => 'Individual',
     ]);
     $customFieldResult = $this->callAPISuccess('CustomField', 'create', [
       'custom_group_id' => $customGroupResult['id'],
@@ -509,21 +507,20 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
     // Create a contact with an email greeting format that includes the new custom field.
     $contactResult = $this->callAPISuccess('Contact', 'create', [
       'contact_type' => 'Individual',
-      'email' => substr(sha1(rand()), 0, 7) . '@yahoo.com',
-      'email_greeting_id' => "Customized",
+      'email' => 'her@yahoo.com',
+      'email_greeting_id' => 'Customized',
       'email_greeting_custom' => "Dear {contact.custom_{$customFieldId}}",
     ]);
     $cid = $contactResult['id'];
 
     // Define testing values.
-    $uniq = uniqid();
-    $testGreetingValue = "Dear $uniq";
+    $testGreetingValue = 'Dear custom field';
 
     // Update contact's custom field with CustomValue.create
-    $customValueResult = $this->callAPISuccess('CustomValue', 'create', [
+    $this->callAPISuccess('CustomValue', 'create', [
       'entity_id' => $cid,
-      "custom_{$customFieldId}" => $uniq,
-      'entity_table' => "civicrm_contact",
+      "custom_{$customFieldId}" => 'custom field',
+      'entity_table' => 'civicrm_contact',
     ]);
 
     $contact = $this->callAPISuccessGetSingle('Contact', ['id' => $cid, 'return' => 'email_greeting']);
@@ -563,7 +560,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
    * Test that specific custom values can be retrieved while using return with comma separated values as genererated by the api explorer.
    * ['return' => 'custom_1,custom_2']
    */
-  public function testGetCustomValueReturnMultipleApiExplorer() {
+  public function testGetCustomValueReturnMultipleApiExplorer(): void {
     [$cid, $customFieldValues] = $this->_testGetCustomValueMultiple();
     $result = $this->callAPISuccess('CustomValue', 'get', [
       'return' => implode(',', array_keys($customFieldValues)),
@@ -576,7 +573,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
    * Test that specific custom values can be retrieved while using return with array style syntax.
    * ['return => ['custom_1', 'custom_2']]
    */
-  public function testGetCustomValueReturnMultipleArray() {
+  public function testGetCustomValueReturnMultipleArray(): void {
     [$cid, $customFieldValues] = $this->_testGetCustomValueMultiple();
     $result = $this->callAPISuccess('CustomValue', 'get', [
       'return' => array_keys($customFieldValues),
@@ -589,7 +586,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
    * Test that specific custom values can be retrieved while using a list of return parameters.
    * [['return.custom_1' => '1'], ['return.custom_2' => '1']]
    */
-  public function testGetCustomValueReturnMultipleList() {
+  public function testGetCustomValueReturnMultipleList(): void {
     [$cid, $customFieldValues] = $this->_testGetCustomValueMultiple();
     $returnArray = [];
     foreach ($customFieldValues as $field => $value) {
@@ -603,7 +600,7 @@ class api_v3_CustomValueTest extends CiviUnitTestCase {
    * Test getdisplayvalue api and verify if it returns
    * the custom text for display.
    */
-  public function testGetDisplayValue() {
+  public function testGetDisplayValue(): void {
     [$cid, $customFieldValues] = $this->_testGetCustomValueMultiple();
     foreach ($customFieldValues as $field => $value) {
       [, $customFieldID] = explode("_", $field);

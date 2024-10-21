@@ -13,9 +13,9 @@
 
     crmApi4(this.entity, 'getFields', {
       action: 'update',
-      select: ['name', 'label', 'description', 'input_type', 'data_type', 'serialize', 'options', 'fk_entity'],
+      select: ['name', 'label', 'description', 'input_type', 'data_type', 'serialize', 'options', 'fk_entity', 'nullable'],
       loadOptions: ['id', 'name', 'label', 'description', 'color', 'icon'],
-      where: [["readonly", "=", false]],
+      where: [['deprecated', '=', false], ["readonly", "=", false]],
     }).then(function(fields) {
         ctrl.fields = fields;
       });

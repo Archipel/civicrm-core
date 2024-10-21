@@ -8,8 +8,8 @@ class CRM_OAuth_MailSetup {
    * @see CRM_Utils_Hook::mailSetupActions()
    */
   public static function buildSetupLinks() {
-    $clients = Civi\Api4\OAuthClient::get(0)->addWhere('is_active', '=', 1)->execute();
-    $providers = Civi\Api4\OAuthProvider::get(0)->execute()->indexBy('name');
+    $clients = Civi\Api4\OAuthClient::get(FALSE)->addWhere('is_active', '=', 1)->execute();
+    $providers = Civi\Api4\OAuthProvider::get(FALSE)->execute()->indexBy('name');
 
     $setupActions = [];
     foreach ($clients as $client) {
@@ -23,6 +23,7 @@ class CRM_OAuth_MailSetup {
           'title' => sprintf('%s (ID #%s)', $provider['title'] ?? $provider['name'] ?? ts('OAuth2'), $client['id']),
           'callback' => ['CRM_OAuth_MailSetup', 'setup'],
           'oauth_client_id' => $client['id'],
+          'prompt' => $provider['options']['prompt'] ?? NULL,
         ];
       }
     }
@@ -46,7 +47,7 @@ class CRM_OAuth_MailSetup {
       ->addWhere('id', '=', $setupAction['oauth_client_id'])
       ->setStorage('OAuthSysToken')
       ->setTag('MailSettings:setup')
-      ->setPrompt('select_account')
+      ->setPrompt($setupAction['prompt'] ?? 'select_account')
       ->execute()
       ->single();
 
@@ -68,15 +69,15 @@ class CRM_OAuth_MailSetup {
       return;
     }
 
-    $client = \Civi\Api4\OAuthClient::get(0)->addWhere('id', '=', $token['client_id'])->execute()->single();
-    $provider = \Civi\Api4\OAuthProvider::get(0)->addWhere('name', '=', $client['provider'])->execute()->single();
+    $client = \Civi\Api4\OAuthClient::get(FALSE)->addWhere('id', '=', $token['client_id'])->execute()->single();
+    $provider = \Civi\Api4\OAuthProvider::get(FALSE)->addWhere('name', '=', $client['provider'])->execute()->single();
 
     $vars = ['token' => $token, 'client' => $client, 'provider' => $provider];
     $mailSettings = civicrm_api4('MailSettings', 'create', [
       'values' => self::evalArrayTemplate($provider['mailSettingsTemplate'], $vars),
     ])->single();
 
-    \Civi\Api4\OAuthSysToken::update(0)
+    \Civi\Api4\OAuthSysToken::update(FALSE)
       ->addWhere('id', '=', $token['id'])
       ->setValues(['tag' => 'MailSettings:' . $mailSettings['id']])
       ->execute();
@@ -89,7 +90,7 @@ class CRM_OAuth_MailSetup {
       'info'
     );
 
-    $nextUrl = CRM_Utils_System::url('civicrm/admin/mailSettings', [
+    $nextUrl = CRM_Utils_System::url('civicrm/admin/mailSettings/edit', [
       'action' => 'update',
       'id' => $mailSettings['id'],
       'reset' => 1,
@@ -158,8 +159,8 @@ class CRM_OAuth_MailSetup {
       return;
     }
     // Not certain if 'refresh' will complain about staleness. Doesn't hurt to double-check.
-    if (empty($token['access_token']) || $token['expires'] < CRM_Utils_Time::getTimeRaw()) {
-      throw new \OAuthException("Found invalid token for mail store #" . $mailSettings['id']);
+    if (empty($token['access_token']) || $token['expires'] < CRM_Utils_Time::time()) {
+      throw new \Civi\OAuth\OAuthException("Found invalid token for mail store #" . $mailSettings['id']);
     }
 
     $mailSettings['auth'] = 'XOAuth2';

@@ -10,7 +10,6 @@
 {* this template is used for adding/editing a tag (admin)  *}
 <div class="crm-block crm-form-block crm-tag-form-block">
   {if $action eq 1 or $action eq 2 }
-    <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
     <table class="form-layout-compressed">
        <tr class="crm-tag-form-block-label">
           <td class="label">{$form.name.label}</td>
@@ -31,10 +30,7 @@
           <td class="label">{$form.used_for.label}</td>
           <td>{$form.used_for.html} <br />
             <span class="description">
-              {* @TODO: I don't think is_parent is ever true because this form is never used for editing a tag itself, and you can't nest tagsets. And when used to add a new child tag, the used_for element doesn't exist. *}
-              {if !empty($is_parent)}{ts}You can change the types of records which this tag can be used for by editing the 'Parent' tag.{/ts}
-              {else}{ts}What types of record(s) can this tag be used for?{/ts}
-              {/if}
+              {ts}What types of record(s) can this tag be used for?{/ts}
             </span>
           </td>
         </tr>

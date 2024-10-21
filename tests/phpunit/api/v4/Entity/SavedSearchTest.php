@@ -19,17 +19,18 @@
 
 namespace api\v4\Entity;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Api4\Contact;
 use Civi\Api4\Email;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class SavedSearchTest extends UnitTestCase {
+class SavedSearchTest extends Api4TestBase implements TransactionalInterface {
 
   /**
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\NotImplementedException
    */
   public function testContactSmartGroup(): void {
@@ -64,7 +65,7 @@ class SavedSearchTest extends UnitTestCase {
     $this->assertArrayNotHasKey($in['id'], (array) $outs);
   }
 
-  public function testEmailSmartGroup() {
+  public function testEmailSmartGroup(): void {
     $in = Contact::create(FALSE)->addValue('first_name', 'yep')->execute()->first();
     $out = Contact::create(FALSE)->addValue('first_name', 'nope')->execute()->first();
     $email = uniqid() . '@' . uniqid();
@@ -99,7 +100,7 @@ class SavedSearchTest extends UnitTestCase {
     $this->assertArrayNotHasKey($in['id'], (array) $outs);
   }
 
-  public function testSmartGroupWithHaving() {
+  public function testSmartGroupWithHaving(): void {
     $in = Contact::create(FALSE)->addValue('first_name', 'yes')->addValue('last_name', 'siree')->execute()->first();
     $in2 = Contact::create(FALSE)->addValue('first_name', 'yessir')->addValue('last_name', 'ee')->execute()->first();
     $out = Contact::create(FALSE)->addValue('first_name', 'yess')->execute()->first();
@@ -138,7 +139,7 @@ class SavedSearchTest extends UnitTestCase {
     $this->assertArrayNotHasKey($in2['id'], (array) $outs);
   }
 
-  public function testMultipleSmartGroups() {
+  public function testMultipleSmartGroups(): void {
     $inGroup = $outGroup = [];
     $inName = uniqid('inGroup');
     $outName = uniqid('outGroup');

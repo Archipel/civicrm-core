@@ -25,9 +25,12 @@ if (!isVersionValid($oldVersion)) {
   fatal("failed to read old version from \"xml/version.xml\"\n");
 }
 
-/** @var string $newVersion */
-/** @var bool $doCommit */
-/** @var bool $doSql */
+/**
+ * @var string $newVersion */
+/**
+ * @var bool $doCommit */
+/**
+ * @var bool $doSql */
 extract(parseArgs($argv));
 
 if (!isVersionValid($newVersion)) {
@@ -40,12 +43,14 @@ if (!isVersionValid($newVersion)) {
 echo "Changing version from $oldVersion to $newVersion...\n";
 
 $verName = makeVerName($newVersion);
-$phpFile = initFile("CRM/Upgrade/Incremental/php/{$verName}.php", function () use ($verName) {
+$phpFile = initFile("CRM/Upgrade/Incremental/php/{$verName}.php", function () use ($verName, $newVersion) {
   ob_start();
   global $camelNumber;
+  global $versionNumber;
   $camelNumber = $verName;
+  $versionNumber = $newVersion;
   require 'CRM/Upgrade/Incremental/php/Template.php';
-  unset($camelNumber);
+  unset($camelNumber, $versionNumber);
   return ob_get_clean();
 });
 
@@ -54,6 +59,9 @@ if ($doSql === TRUE || ($doSql === 'auto' && preg_match(';alpha;', $newVersion))
   $sqlFile = initFile("CRM/Upgrade/Incremental/sql/{$newVersion}.mysql.tpl", function () use ($newVersion) {
     return "{* file to handle db changes in $newVersion during upgrade *}\n";
   });
+}
+else {
+  $sqlFile = NULL;
 }
 
 updateFile("xml/version.xml", function ($content) use ($newVersion, $oldVersion) {
@@ -74,20 +82,32 @@ updateFile("sql/test_data_second_domain.mysql", function ($content) use ($newVer
   return str_replace($oldVersion, $newVersion, $content);
 });
 
+// Update core extension info
 $infoXmls = findCoreInfoXml();
 foreach ($infoXmls as $infoXml) {
   updateXmlFile($infoXml, function (DOMDocument $dom) use ($newVersion) {
+    // Update extension version
+    /** @var \DOMNode $tag */
     foreach ($dom->getElementsByTagName('version') as $tag) {
-      /** @var \DOMNode $tag */
       $tag->textContent = $newVersion;
+    }
+    // Update compatability - set to major version of core
+    /** @var \DOMNode $compat */
+    foreach ($dom->getElementsByTagName('compatibility') as $compat) {
+      /** @var \DOMNode $tag */
+      foreach ($compat->getElementsByTagName('ver') as $tag) {
+        $tag->textContent = implode('.', array_slice(explode('.', $newVersion), 0, 2));
+      }
     }
   });
 }
 
 if ($doCommit) {
   $files = array_filter(
-    array_merge(['xml/version.xml', 'sql/civicrm_generated.mysql', 'sql/test_data_second_domain.mysql', $phpFile, @$sqlFile], $infoXmls),
-    'file_exists'
+    array_merge(['xml/version.xml', 'sql/civicrm_generated.mysql', 'sql/test_data_second_domain.mysql', $phpFile, $sqlFile], $infoXmls),
+    function($file) {
+      return $file && file_exists($file);
+    }
   );
   $filesEsc = implode(' ', array_map('escapeshellarg', $files));
   passthru("git add $filesEsc");
@@ -186,10 +206,10 @@ function fatal($error) {
 }
 
 /**
-* @param array $argv
+ * @param array $argv
  *  Ex: ['myscript.php', '--no-commit', '5.6.7']
  * @return array
- *  Ex: ['scriptFile' => 'myscript.php', 'doCommit' => FALSE, 'newVersion' => '5.6.7']
+ *   Ex: ['scriptFile' => 'myscript.php', 'doCommit' => FALSE, 'newVersion' => '5.6.7']
  */
 function parseArgs($argv) {
   $parsed = [];

@@ -9,7 +9,9 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\Contribution;
 use Civi\Api4\ContributionRecur;
+use Civi\Api4\LineItem;
 
 /**
  * Class CRM_Contribute_BAO_ContributionRecurTest
@@ -24,7 +26,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
   /**
    * Set up for test.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setUp(): void {
     parent::setUp();
@@ -98,8 +100,6 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
 
   /**
    * Test checking if contribution recur object can allow for changes to financial types.
-   *
-   * @throws \CRM_Core_Exception|\CiviCRM_API3_Exception
    */
   public function testSupportFinancialTypeChange(): void {
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $this->_params);
@@ -117,31 +117,46 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test we don't change unintended fields on API edit
+   * Test we don't change unintended fields on the recurring contribution.
+   *
+   * This tests two scenarios
+   *  - editing a contribution_recur and changing unrelated fields should leave the
+   *    currency unchanged
+   *  - Adding (or editing) contributions on the recurring should only alter
+   *    it if the contribution is a template contribution.
    *
    * @throws \CRM_Core_Exception
    */
   public function testUpdateRecur(): void {
     $createParams = $this->_params;
     $createParams['currency'] = 'XAU';
-    $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $createParams);
-    $editParams = [
-      'id' => $contributionRecur['id'],
+    $contributionRecurID = $this->callAPISuccess('ContributionRecur', 'create', $createParams)['id'];
+    $contributionID = Contribution::create()->setValues([
+      'contribution_recur_id' => $contributionRecurID,
+      'total_amount' => 5,
+      'currency' => 'USD',
+      'contact_id' => $this->_params['contact_id'],
+      'financial_type_id:name' => 'Donation',
+    ])->execute()->first()['id'];
+    $this->assertContributionRecurValues($contributionRecurID, 3, 'XAU', 'a non template contribution should not change the recurring amount details');
+
+    Contribution::update()->setValues(['receive_date' => 'yesterday'])->addWhere('id', '=', $contributionID)->execute();
+    $this->assertContributionRecurValues($contributionRecurID, 3, 'XAU', 'a non template contribution should not change the recurring amount details');
+
+    $contributionRecurID = $this->callAPISuccess('ContributionRecur', 'create', [
+      'id' => $contributionRecurID,
       'end_date' => '+ 4 weeks',
-    ];
-    $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $editParams);
-    $dao = new CRM_Contribute_BAO_ContributionRecur();
-    $dao->id = $contributionRecur['id'];
-    $dao->find(TRUE);
-    $this->assertEquals('XAU', $dao->currency, 'Edit clobbered recur currency');
+    ])['id'];
+    $this->assertContributionRecurValues($contributionRecurID, 3, 'XAU', 'an unrelated contribution recur update should not change the amount details');
+
+    Contribution::update()->setValues(['is_template' => TRUE])->addWhere('id', '=', $contributionID)->execute();
+    $this->assertContributionRecurValues($contributionRecurID, 5, 'USD', 'a change to a template contribution should change the recurring amount details');
   }
 
   /**
    * Check test contributions aren't picked up as template for non-test recurs
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testGetTemplateContributionMatchTest1(): void {
@@ -176,9 +191,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
   /**
    * Check non-test contributions aren't picked up as template for test recurs
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testGetTemplateContributionMatchTest(): void {
@@ -224,14 +237,13 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
    * Then we delete the template contribution and make sure a new one exists.
    * At that time the second contribution should be used a template as that is the most recent one (according to the date).
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testCreateTemplateContributionFromFirstContributionTest(): void {
     $custom_group = $this->customGroupCreate(['extends' => 'Contribution', 'name' => 'template']);
     $custom_field = $this->customFieldCreate(['custom_group_id' => $custom_group['id'], 'name' => 'field']);
+    $custom_field2 = $this->customFieldCreate(['custom_group_id' => $custom_group['id'], 'name' => 'field2', 'label' => 'Field 2']);
 
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $this->_params);
     // Create a first test contrib
@@ -246,6 +258,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
       'contribution_status_id' => 1,
       'receive_date' => $date->format('YmdHis'),
       'custom_' . $custom_field['id'] => 'First Contribution',
+      'custom_' . $custom_field2['id'] => 'First Contribution custom field 2',
     ]);
     $date->modify('+2 days');
     $secondContrib = $this->callAPISuccess('Contribution', 'create', [
@@ -258,6 +271,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
       'contribution_status_id' => 1,
       'receive_date' => $date->format('YmdHis'),
       'custom_' . $custom_field['id'] => 'Second and most recent Contribution',
+      'custom_' . $custom_field2['id'] => 'Second and most recent Contribution field 2',
     ]);
 
     $date->modify('-1 week');
@@ -271,12 +285,17 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
       'contribution_status_id' => 1,
       'receive_date' => $date->format('YmdHis'),
       'custom_' . $custom_field['id'] => 'Third Contribution',
+      'custom_' . $custom_field2['id'] => 'Third Contribution field 2',
     ]);
+
+    // Register "contribution create" hook
+    $this->hookClass->setHook('civicrm_post', array($this, 'implementHookPost'));
+    \Civi::$statics['testCreateTemplateContributionFromFirstContributionTest']['custom_field_id'] = $custom_field['id'];
 
     // Make sure a template contribution exists.
     $templateContributionId = CRM_Contribute_BAO_ContributionRecur::ensureTemplateContributionExists($contributionRecur['id']);
     $fetchedTemplate = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($contributionRecur['id']);
-    $templateContribution = \Civi\Api4\Contribution::get(FALSE)
+    $templateContribution = Contribution::get(FALSE)
       ->addSelect('*', 'custom.*')
       ->addWhere('contribution_recur_id', '=', $contributionRecur['id'])
       ->addWhere('is_template', '=', 1)
@@ -294,15 +313,29 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
     $templateContribution = $templateContribution->first();
     $this->assertNotNull($templateContribution['template.field']);
     $this->assertEquals('Second and most recent Contribution', $templateContribution['template.field']);
+    $this->assertEquals('Template contribution custom data inserted by hook', $templateContribution['template.field2']);
     $this->callAPISuccess('CustomField', 'delete', ['id' => $custom_field['id']]);
     $this->callAPISuccess('CustomGroup', 'delete', ['id' => $custom_group['id']]);
+  }
+
+  public function implementHookPost($op, $objectName, $objectId, &$objectRef) {
+    if ($objectName !== 'Contribution') {
+      return;
+    }
+    if ($op !== 'create') {
+      return;
+    }
+
+    // Simulate an extension updating the custom data on the new contribution
+    $contributionParams['entity_id'] = $objectId;
+    $contributionParams['custom_2'] = 'Template contribution custom data inserted by hook';
+    civicrm_api3('CustomValue', 'create', $contributionParams);
   }
 
   /**
    * Test that is_template contribution is used where available
    *
-   * @throws \API_Exception
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testGetTemplateContributionNewTemplate(): void {
@@ -345,9 +378,64 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test that is_template contribution is used where available
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function testTemplateContributionUpdatesRecur(): void {
+    $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', $this->_params);
+    $contributionRecur = reset($contributionRecur['values']);
+    // Create the template
+    $templateContribution = $this->callAPISuccess('Contribution', 'create', [
+      'contribution_recur_id' => $contributionRecur['id'],
+      'total_amount' => '3.00',
+      'financial_type_id' => 1,
+      'source' => 'Template Contribution',
+      'payment_instrument_id' => 1,
+      'currency' => 'AUD',
+      'contact_id' => $this->individualCreate(),
+      'contribution_status_id' => 1,
+      'receive_date' => 'yesterday',
+      'is_template' => 1,
+    ]);
+    // Now update the template amount so we can test that this route updates the recur.
+    $this->callAPISuccess('Contribution', 'create', [
+      'id' => $templateContribution['id'],
+      'contribution_recur_id' => $contributionRecur['id'],
+      'total_amount' => '2.00',
+      'currency' => 'USD',
+    ]);
+    $updatedContributionRecur = ContributionRecur::get()
+      ->addWhere('id', '=', $contributionRecur['id'])
+      ->execute()
+      ->first();
+    $this->assertEquals('USD', $updatedContributionRecur['currency']);
+    $this->assertEquals('2.00', $updatedContributionRecur['amount']);
+    $this->assertGreaterThan(
+      strtotime($contributionRecur['modified_date']),
+      strtotime($updatedContributionRecur['modified_date'])
+    );
+    // Now check the reverse - update the recur & the template should update as there
+    // is a single line item.
+    ContributionRecur::update()
+      ->addWhere('id', '=', $contributionRecur['id'])
+      ->setValues(['amount' => 6])
+      ->execute();
+
+    $this->assertEquals(6, Contribution::get()
+      ->addWhere('id', '=', $templateContribution['id'])
+      ->addSelect('total_amount')->execute()->first()['total_amount']);
+    $this->assertEquals(6, LineItem::get()
+      ->addWhere('contribution_id', '=', $templateContribution['id'])
+      ->addGroupBy('contribution_id')
+      ->addSelect('SUM(line_total) AS total_amount')->execute()->first()['total_amount']);
+  }
+
+  /**
    * Test to check if correct membership is auto renewed.
    *
-   * @throws \CRM_Core_Exception|\CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testAutoRenewalWhenOneMemberIsDeceased(): void {
     $contactId1 = $this->individualCreate();
@@ -666,6 +754,25 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
     $recurring3 = $this->callAPISuccess('ContributionRecur', 'create', $createParams);
     $recurring3Get = $this->callAPISuccess('ContributionRecur', 'getsingle', ['id' => $recurring3['id']]);
     $this->assertEquals('0', $recurring3Get['is_email_receipt']);
+  }
+
+  /**
+   * Assert the contribution recur values match.
+   *
+   * @param int $contributionRecurID
+   * @param int $amount
+   * @param string $currency
+   * @param string $message
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function assertContributionRecurValues(int $contributionRecurID, int $amount, string $currency, string $message = ''): void {
+    $contributionRecur = ContributionRecur::get()->setSelect([
+      'amount',
+      'currency',
+    ])->addWhere('id', '=', $contributionRecurID)->execute()->first();
+    $this->assertEquals($currency, $contributionRecur['currency'], $message);
+    $this->assertEquals($amount, $contributionRecur['amount'], $message);
   }
 
 }

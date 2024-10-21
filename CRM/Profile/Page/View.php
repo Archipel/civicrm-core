@@ -161,11 +161,14 @@ class CRM_Profile_Page_View extends CRM_Core_Page {
   }
 
   /**
-   * @param string $suffix
+   * Check template file exists.
    *
-   * @return null|string
+   * @param string|null $suffix
+   *
+   * @return string|null
+   *   Template file path, else null
    */
-  public function checkTemplateFileExists($suffix = '') {
+  public function checkTemplateFileExists($suffix = NULL) {
     if ($this->_gid) {
       $templateFile = "CRM/Profile/Page/{$this->_gid}/View.{$suffix}tpl";
       $template = CRM_Core_Page::getTemplate();
@@ -192,7 +195,7 @@ class CRM_Profile_Page_View extends CRM_Core_Page {
    */
   public function getTemplateFileName() {
     $fileName = $this->checkTemplateFileExists();
-    return $fileName ? $fileName : parent::getTemplateFileName();
+    return $fileName ?: parent::getTemplateFileName();
   }
 
   /**
@@ -203,7 +206,7 @@ class CRM_Profile_Page_View extends CRM_Core_Page {
    */
   public function overrideExtraTemplateFileName() {
     $fileName = $this->checkTemplateFileExists('extra.');
-    return $fileName ? $fileName : parent::overrideExtraTemplateFileName();
+    return $fileName ?: parent::overrideExtraTemplateFileName();
   }
 
 }

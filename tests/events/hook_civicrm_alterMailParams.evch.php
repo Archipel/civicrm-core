@@ -27,6 +27,7 @@ return new class() extends EventCheck implements HookInterface {
     'autoSubmitted' => ['type' => 'bool', 'for' => 'messageTemplate'],
     'Message-ID' => ['type' => 'string', 'for' => ['messageTemplate', 'singleEmail']],
     'messageId' => ['type' => 'string', 'for' => ['messageTemplate', 'singleEmail']],
+    'contactId' => ['type' => 'int|NULL', 'for' => ['messageTemplate' /* deprecated in favor of tokenContext[contactId] */, 'singleEmail']],
 
     // ## Envelope: CiviMail/Flexmailer
 
@@ -39,6 +40,9 @@ return new class() extends EventCheck implements HookInterface {
     'Precedence' => ['type' => 'string|NULL', 'for' => ['civimail', 'flexmailer'], 'regex' => '/(bulk|first-class|list)/'],
     'job_id' => ['type' => 'int|NULL', 'for' => ['civimail', 'flexmailer']],
 
+    // ## Language
+    'language' => ['type' => 'string|NULL', 'for' => ['messageTemplate']],
+
     // ## Content
 
     'subject' => ['for' => ['messageTemplate', 'singleEmail'], 'type' => 'string'],
@@ -49,7 +53,6 @@ return new class() extends EventCheck implements HookInterface {
 
     'tokenContext' => ['type' => 'array', 'for' => 'messageTemplate'],
     'tplParams' => ['type' => 'array', 'for' => 'messageTemplate'],
-    'contactId' => ['type' => 'int|NULL', 'for' => 'messageTemplate' /* deprecated in favor of tokenContext[contactId] */],
     'workflow' => [
       'regex' => '/^([a-zA-Z_]+)$/',
       'type' => 'string',
@@ -104,7 +107,7 @@ return new class() extends EventCheck implements HookInterface {
     $msg = 'Non-conforming hook_civicrm_alterMailParams(..., $context)';
     $dump = print_r($params, 1);
 
-    $this->assertRegExp('/^(messageTemplate|civimail|singleEmail|flexmailer)$/',
+    $this->assertMatchesRegularExpression('/^(messageTemplate|civimail|singleEmail|flexmailer)$/',
       $context, "$msg: Unrecognized context ($context)\n$dump");
 
     $contexts = [$context];
@@ -128,7 +131,7 @@ return new class() extends EventCheck implements HookInterface {
         $this->assertType($paramSpecs[$key]['type'], $value, "$msg: Bad data-type found in param ($key)\n$dump");
       }
       if (isset($paramSpecs[$key]['regex']) && $value !== NULL) {
-        $this->assertRegExp($paramSpecs[$key]['regex'], $value, "Parameter [$key => $value] should match regex ({$paramSpecs[$key]['regex']})");
+        $this->assertMatchesRegularExpression($paramSpecs[$key]['regex'], $value, "Parameter [$key => $value] should match regex ({$paramSpecs[$key]['regex']})");
       }
     }
 

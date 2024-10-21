@@ -16,7 +16,7 @@
  */
 
 /**
- * Event Info Page - Summmary about the event
+ * Event Info Page - Summary about the event
  */
 class CRM_Event_Page_EventInfo extends CRM_Core_Page {
 
@@ -47,6 +47,7 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
     $this->assign('context', $context);
 
     $this->assign('iCal', CRM_Event_BAO_Event::getICalLinks($this->_id));
+    $this->assign('isShowICalIconsInline', TRUE);
 
     // Sometimes we want to suppress the Event Full msg
     $noFullMsg = CRM_Utils_Request::retrieve('noFullMsg', 'String', $this, FALSE, 'false');
@@ -58,9 +59,10 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
 
     //retrieve event information
     $params = ['id' => $this->_id];
+    $values = ['event' => NULL];
     CRM_Event_BAO_Event::retrieve($params, $values['event']);
 
-    if (!$values['event']['is_active']) {
+    if (!$values['event'] || !$values['event']['is_active']) {
       CRM_Utils_System::setUFMessage(ts('The event you requested is currently unavailable (contact the site administrator for assistance).'));
       return CRM_Utils_System::permissionDenied();
     }
@@ -79,9 +81,11 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
 
     $this->assign('isShowLocation', CRM_Utils_Array::value('is_show_location', $values['event']));
 
+    $eventCurrency = CRM_Utils_Array::value('currency', $values['event'], $config->defaultCurrency);
+    $this->assign('eventCurrency', $eventCurrency);
+
     // show event fees.
     if ($this->_id && !empty($values['event']['is_monetary'])) {
-      CRM_Contribute_BAO_Contribution_Utils::overrideDefaultCurrency($values['event']);
 
       //CRM-10434
       $discountId = CRM_Core_BAO_Discount::findSet($this->_id, 'civicrm_event');
@@ -110,7 +114,7 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
           foreach ($priceSetFields as $fid => $fieldValues) {
             if (!is_array($fieldValues['options']) ||
               empty($fieldValues['options']) ||
-              (CRM_Utils_Array::value('visibility_id', $fieldValues) != array_search('public', $visibility) && $adminFieldVisible == FALSE)
+              (($fieldValues['visibility_id'] ?? NULL) != array_search('public', $visibility) && $adminFieldVisible == FALSE)
             ) {
               continue;
             }
@@ -126,13 +130,9 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
             else {
               $labelClass = 'price_set_field-label';
             }
-            // show tax rate with amount
-            $invoiceSettings = Civi::settings()->get('contribution_invoice_settings');
-            $taxTerm = Civi::settings()->get('tax_term');
-            $displayOpt = $invoiceSettings['tax_display_settings'] ?? NULL;
 
             foreach ($fieldValues['options'] as $optionId => $optionVal) {
-              if (CRM_Utils_Array::value('visibility_id', $optionVal) != array_search('public', $visibility) &&
+              if (($optionVal['visibility_id'] ?? NULL) != array_search('public', $visibility) &&
                 $adminFieldVisible == FALSE
               ) {
                 continue;
@@ -140,11 +140,12 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
 
               $values['feeBlock']['isDisplayAmount'][$fieldCnt] = $fieldValues['is_display_amounts'] ?? NULL;
               if (Civi::settings()->get('invoicing') && isset($optionVal['tax_amount'])) {
-                $values['feeBlock']['value'][$fieldCnt] = CRM_Price_BAO_PriceField::getTaxLabel($optionVal, 'amount', $displayOpt, $taxTerm);
+                $values['feeBlock']['value'][$fieldCnt] = CRM_Price_BAO_PriceField::getTaxLabel($optionVal, 'amount', $eventCurrency);
                 $values['feeBlock']['tax_amount'][$fieldCnt] = $optionVal['tax_amount'];
               }
               else {
                 $values['feeBlock']['value'][$fieldCnt] = $optionVal['amount'];
+                $values['feeBlock']['tax_amount'][$fieldCnt] = 0;
               }
               $values['feeBlock']['label'][$fieldCnt] = $optionVal['label'];
               $values['feeBlock']['lClass'][$fieldCnt] = $labelClass;
@@ -178,8 +179,8 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
     $this->assign('action', CRM_Core_Action::VIEW);
     //To show the event location on maps directly on event info page
     $locations = CRM_Event_BAO_Event::getMapInfo($this->_id);
+    $this->assign('locations', $locations);
     if (!empty($locations) && !empty($values['event']['is_map'])) {
-      $this->assign('locations', $locations);
       $this->assign('mapProvider', $config->mapProvider);
       $this->assign('mapKey', $config->mapAPIKey);
       $sumLat = $sumLng = 0;
@@ -280,10 +281,8 @@ class CRM_Event_Page_EventInfo extends CRM_Core_Page {
           $this->assign('registerURL', $url);
         }
       }
-      elseif (CRM_Core_Permission::check('register for events')) {
-        $this->assign('registerClosed', TRUE);
-      }
     }
+    $this->assign('registerClosed', !empty($values['event']['is_online_registration']) && !$isEventOpenForRegistration);
 
     $this->assign('allowRegistration', $allowRegistration);
 

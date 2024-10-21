@@ -26,6 +26,8 @@ use Civi\Api4\Utils\CoreUtil;
  */
 abstract class AbstractCreateAction extends AbstractAction {
 
+  use Traits\GetSetValueTrait;
+
   /**
    * Field values to set for the new $ENTITY.
    *
@@ -34,33 +36,14 @@ abstract class AbstractCreateAction extends AbstractAction {
   protected $values = [];
 
   /**
-   * @param string $fieldName
-   * @return mixed|null
-   */
-  public function getValue(string $fieldName) {
-    return $this->values[$fieldName] ?? NULL;
-  }
-
-  /**
-   * Add a field value.
-   * @param string $fieldName
-   * @param mixed $value
-   * @return $this
-   */
-  public function addValue(string $fieldName, $value) {
-    $this->values[$fieldName] = $value;
-    return $this;
-  }
-
-  /**
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   protected function validateValues() {
-    // FIXME: There should be a protocol to report a full list of errors... Perhaps a subclass of API_Exception?
+    // FIXME: There should be a protocol to report a full list of errors... Perhaps a subclass of CRM_Core_Exception?
     $unmatched = $this->checkRequiredFields($this->getValues());
     if ($unmatched) {
-      throw new \API_Exception("Mandatory values missing from Api4 {$this->getEntityName()}::{$this->getActionName()}: " . implode(", ", $unmatched), "mandatory_missing", ["fields" => $unmatched]);
+      throw new \CRM_Core_Exception("Mandatory values missing from Api4 {$this->getEntityName()}::{$this->getActionName()}: " . implode(", ", $unmatched), "mandatory_missing", ["fields" => $unmatched]);
     }
 
     if ($this->checkPermissions && !CoreUtil::checkAccessRecord($this, $this->getValues(), \CRM_Core_Session::getLoggedInContactID() ?: 0)) {

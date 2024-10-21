@@ -8,10 +8,8 @@
     // Trait properties get mixed into display controller using angular.extend()
     return {
 
-      sort: [],
-
       isSortable: function(col) {
-        return col.type === 'field' && col.sortable !== false;
+        return !this.settings.draggable && col.type === 'field' && col.sortable !== false;
       },
 
       getSort: function(col) {
@@ -39,7 +37,7 @@
           this.sort.push([col.key, dir]);
         }
         if (this.results || !this.settings.button) {
-          this.getResults();
+          this.getResultsPronto();
         }
       }
 

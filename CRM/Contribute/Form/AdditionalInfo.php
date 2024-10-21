@@ -127,11 +127,10 @@ class CRM_Contribute_Form_AdditionalInfo {
     }
 
     $form->add('select', 'contribution_page_id',
-      ts('Online Contribution Page'),
-      [
-        '' => ts('- select -'),
-      ] +
-      CRM_Contribute_PseudoConstant::contributionPage()
+      ts('Contribution Page'),
+      ['' => ts('- select -')] + CRM_Contribute_PseudoConstant::contributionPage(),
+      FALSE,
+      ['class' => 'crm-select2']
     );
 
     $form->add('textarea', 'note', ts('Notes'), ["rows" => 4, "cols" => 60]);
@@ -256,7 +255,7 @@ class CRM_Contribute_Form_AdditionalInfo {
     $noteID = [];
     if ($contributionNoteID) {
       $noteID = ["id" => $contributionNoteID];
-      $noteParams['note'] = $noteParams['note'] ? $noteParams['note'] : "null";
+      $noteParams['note'] = $noteParams['note'] ?: "null";
     }
     CRM_Core_BAO_Note::add($noteParams, $noteID);
   }
@@ -405,6 +404,11 @@ class CRM_Contribute_Form_AdditionalInfo {
         if ($groupID == 'info') {
           continue;
         }
+
+        $is_public = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomGroup', $groupID, 'is_public');
+        if (!$is_public) {
+          continue;
+        }
         foreach ($group['fields'] as $k => $field) {
           $field['title'] = $field['label'];
           $customFields["custom_{$k}"] = $field;
@@ -435,14 +439,14 @@ class CRM_Contribute_Form_AdditionalInfo {
 
     [$sendReceipt] = CRM_Core_BAO_MessageTemplate::sendTemplate(
       [
-        'groupName' => 'msg_tpl_workflow_contribution',
-        'valueName' => 'contribution_offline_receipt',
+        'workflow' => 'contribution_offline_receipt',
         'contactId' => $params['contact_id'],
         'contributionId' => $params['contribution_id'],
+        'tokenContext' => ['contributionId' => (int) $params['contribution_id'], 'contactId' => $params['contact_id']],
         'from' => $params['from_email_address'],
         'toName' => $contributorDisplayName,
         'toEmail' => $contributorEmail,
-        'isTest' => $form->_mode == 'test',
+        'isTest' => $form->_mode === 'test',
         'PDFFilename' => ts('receipt') . '.pdf',
         'isEmailPdf' => Civi::settings()->get('invoice_is_email_pdf'),
       ]

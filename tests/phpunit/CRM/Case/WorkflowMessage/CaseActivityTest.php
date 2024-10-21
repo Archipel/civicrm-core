@@ -12,6 +12,7 @@
 
 /**
  * Class CRM_Case_WorkflowMessage_CaseActivityTest
+ * @group msgtpl
  */
 class CRM_Case_WorkflowMessage_CaseActivityTest extends CiviUnitTestCase {
   use \Civi\Test\WorkflowMessageTestTrait;
@@ -20,7 +21,7 @@ class CRM_Case_WorkflowMessage_CaseActivityTest extends CiviUnitTestCase {
     return CRM_Case_WorkflowMessage_CaseActivity::class;
   }
 
-  public function testAdhocClassEquiv() {
+  public function testAdhocClassEquiv(): void {
     $examples = \Civi\Api4\ExampleData::get(0)
       ->setSelect(['name', 'data'])
       ->addWhere('name', 'IN', ['workflow/case_activity/CaseAdhocExample', 'workflow/case_activity/CaseModelExample'])
@@ -37,7 +38,7 @@ class CRM_Case_WorkflowMessage_CaseActivityTest extends CiviUnitTestCase {
    *
    * To see this, we take all the example data and use it with diff constructors.
    */
-  public function testConstructorEquivalence() {
+  public function testConstructorEquivalence(): void {
     $examples = $this->findExamples()->execute()->indexBy('name')->column('data');
     $this->assertTrue(count($examples) >= 1, 'Must have at least one example data-set');
     foreach ($examples as $example) {
@@ -48,11 +49,11 @@ class CRM_Case_WorkflowMessage_CaseActivityTest extends CiviUnitTestCase {
   /**
    * Basic canary test fetching a specific example.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function testExampleGet() {
-    $file = \Civi::paths()->getPath('[civicrm.root]/tests/phpunit/CRM/Case/WorkflowMessage/CaseActivity/CaseModelExample.ex.php');
+  public function testExampleGet(): void {
+    $file = \Civi::paths()->getPath('[civicrm.root]/tests/phpunit/CRM/Case/WorkflowMessage/CaseActivity/CaseModelExample.php');
     $name = 'workflow/case_activity/CaseModelExample';
 
     $this->assertTrue(file_exists($file), "Expect find canary file ($file)");
@@ -71,7 +72,7 @@ class CRM_Case_WorkflowMessage_CaseActivityTest extends CiviUnitTestCase {
       ->execute()
       ->single();
     $this->assertEquals($name, $get['name']);
-    $this->assertEquals(100, $get['data']['modelProps']['contact']['contact_id']);
+    $this->assertEquals(0, $get['data']['modelProps']['contact']['id']);
     $this->assertEquals('myrole', $get['data']['modelProps']['contact']['role']);
   }
 

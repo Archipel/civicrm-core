@@ -51,9 +51,16 @@
 
     angular.extend(CrmMailingAB.prototype, {
       getAutosaveSignature: function() {
+        //modified date is unset so that it gets ignored in comparison
+        //its value is overwritten with the save response from the server and may differ from the local value,
+        //which would result in an unnecessary auto-save
+        var mailings = angular.copy(this.mailings);
+        _.each(mailings, function(mailing) {
+          mailing.modified_date = undefined;
+        });
         return [
           this.ab,
-          this.mailings,
+          mailings,
           this.attachments.a.getAutosaveSignature(),
           this.attachments.b.getAutosaveSignature(),
           this.attachments.c.getAutosaveSignature()
@@ -186,6 +193,9 @@
                   return {entity_table: 'civicrm_mailing', entity_id: crmMailingAB.ab['mailing_id_' + mkey]};
                 });
                 return crmMailingAB.attachments[mkey].load();
+              }).catch(function (ex){
+                console.error(ex);
+                throw new Error('Failed to load Mailings');
               });
           }
           else {

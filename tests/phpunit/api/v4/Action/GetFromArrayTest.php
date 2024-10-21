@@ -19,15 +19,15 @@
 
 namespace api\v4\Action;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Api4\MockArrayEntity;
 
 /**
  * @group headless
  */
-class GetFromArrayTest extends UnitTestCase {
+class GetFromArrayTest extends Api4TestBase {
 
-  public function testArrayGetWithLimit() {
+  public function testArrayGetWithLimit(): void {
     $result = MockArrayEntity::get()
       ->setOffset(2)
       ->setLimit(2)
@@ -40,7 +40,7 @@ class GetFromArrayTest extends UnitTestCase {
     $this->assertCount(5, $result);
   }
 
-  public function testArrayGetWithSort() {
+  public function testArrayGetWithSort(): void {
     $result = MockArrayEntity::get()
       ->addOrderBy('field1', 'DESC')
       ->execute();
@@ -59,7 +59,7 @@ class GetFromArrayTest extends UnitTestCase {
     $this->assertEquals([3, 1, 2, 5, 4], array_column((array) $result, 'field1'));
   }
 
-  public function testArrayGetWithSelect() {
+  public function testArrayGetWithSelect(): void {
     $result = MockArrayEntity::get()
       ->addSelect('field1')
       ->addSelect('f*3')
@@ -76,6 +76,7 @@ class GetFromArrayTest extends UnitTestCase {
       ],
       [
         'field1' => 3,
+        'field3' => NULL,
       ],
       [
         'field1' => 4,
@@ -84,7 +85,7 @@ class GetFromArrayTest extends UnitTestCase {
     ], (array) $result);
   }
 
-  public function testArrayGetWithWhere() {
+  public function testArrayGetWithWhere(): void {
     $result = MockArrayEntity::get()
       ->addWhere('field2', '=', 'yack')
       ->execute();
@@ -167,7 +168,7 @@ class GetFromArrayTest extends UnitTestCase {
     $this->assertEquals([1, 2, 5], array_column((array) $result, 'field1'));
   }
 
-  public function testArrayGetWithNestedWhereClauses() {
+  public function testArrayGetWithNestedWhereClauses(): void {
     $result = MockArrayEntity::get()
       ->addClause('OR', ['field2', 'LIKE', '%ra'], ['field2', 'LIKE', 'x ray'])
       ->execute();

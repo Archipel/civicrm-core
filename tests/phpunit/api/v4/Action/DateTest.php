@@ -23,14 +23,15 @@ use Civi\Api4\Activity;
 use Civi\Api4\Contact;
 use Civi\Api4\Contribution;
 use Civi\Api4\Relationship;
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class DateTest extends UnitTestCase {
+class DateTest extends Api4TestBase implements TransactionalInterface {
 
-  public function testRelationshipDate() {
+  public function testRelationshipDate(): void {
     $c1 = Contact::create()
       ->addValue('first_name', 'c')
       ->addValue('last_name', 'one')
@@ -62,7 +63,7 @@ class DateTest extends UnitTestCase {
     $this->assertArrayNotHasKey($r, $result);
   }
 
-  public function testRelativeDateRanges() {
+  public function testRelativeDateRanges(): void {
     $c1 = Contact::create()
       ->addValue('first_name', 'c')
       ->addValue('last_name', 'one')
@@ -71,7 +72,7 @@ class DateTest extends UnitTestCase {
 
     // Avoid problems with `strtotime(<date arithmetic expression>)` giving
     // impossible dates like April 31 which roll over and then don't match.
-    $thisMonth = date('m');
+    $thisMonth = (int) date('m');
     $lastMonth = ($thisMonth === 1 ? 12 : $thisMonth - 1);
     $nextMonth = ($thisMonth === 12 ? 1 : $thisMonth + 1);
     $lastMonthsYear = ($thisMonth === 1 ? date('Y') - 1 : date('Y'));
@@ -107,8 +108,9 @@ class DateTest extends UnitTestCase {
     $this->assertContains($act[5], $result);
     $this->assertContains($act[6], $result);
 
+    // Ensure it also works if the DATE() function is used
     $result = Activity::get(FALSE)->addSelect('id')
-      ->addWhere('activity_date_time', '>=', 'this.year')
+      ->addWhere('DATE(activity_date_time)', '>=', 'this.year')
       ->execute()->column('id');
     $this->assertNotContains($act[0], $result);
     $this->assertNotContains($act[1], $result);
@@ -144,7 +146,7 @@ class DateTest extends UnitTestCase {
     $this->assertNotContains($act[6], $result);
   }
 
-  public function testJoinOnRelativeDate() {
+  public function testJoinOnRelativeDate(): void {
     $c1 = Contact::create(FALSE)
       ->addValue('first_name', 'Contributor')
       ->addValue('last_name', 'One')
@@ -191,6 +193,48 @@ class DateTest extends UnitTestCase {
       ->addSelect('id', 'contribution.total_amount')
       ->setJoin([
         ['Contribution AS contribution', FALSE, NULL, ['contribution.receive_date', '!=', '"previous.year"']],
+      ])
+      ->addWhere('id', '=', $c1)
+      ->execute();
+    $this->assertCount(2, $contact);
+
+    // Find contributions To end of previous calendar year
+    $contact = \Civi\Api4\Contact::get()
+      ->addSelect('id', 'contribution.total_amount')
+      ->setJoin([
+        ['Contribution AS contribution', FALSE, NULL, ['contribution.receive_date', '=', '"earlier.year"']],
+      ])
+      ->addWhere('id', '=', $c1)
+      ->execute();
+    $this->assertCount(2, $contact);
+
+    // Find contributions not To end of previous calendar year
+    $contact = \Civi\Api4\Contact::get()
+      ->addSelect('id', 'contribution.total_amount')
+      ->setJoin([
+        ['Contribution AS contribution', FALSE, NULL, ['contribution.receive_date', '!=', '"earlier.year"']],
+      ])
+      ->addWhere('id', '=', $c1)
+      ->execute();
+    $this->assertCount(1, $contact);
+    $this->assertEquals(6, $contact[0]['contribution.total_amount']);
+
+    // Find contributions From start of current calendar year
+    $contact = \Civi\Api4\Contact::get()
+      ->addSelect('id', 'contribution.total_amount')
+      ->setJoin([
+        ['Contribution AS contribution', FALSE, NULL, ['contribution.receive_date', '=', '"greater.year"']],
+      ])
+      ->addWhere('id', '=', $c1)
+      ->execute();
+    $this->assertCount(1, $contact);
+    $this->assertEquals(6, $contact[0]['contribution.total_amount']);
+
+    // Find contributions not From start of current calendar year
+    $contact = \Civi\Api4\Contact::get()
+      ->addSelect('id', 'contribution.total_amount')
+      ->setJoin([
+        ['Contribution AS contribution', FALSE, NULL, ['contribution.receive_date', '!=', '"greater.year"']],
       ])
       ->addWhere('id', '=', $c1)
       ->execute();

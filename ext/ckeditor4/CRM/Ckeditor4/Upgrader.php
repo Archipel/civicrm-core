@@ -4,7 +4,7 @@ use CRM_Ckeditor4_ExtensionUtil as E;
 /**
  * Collection of upgrade steps.
  */
-class CRM_Ckeditor4_Upgrader extends CRM_Ckeditor4_Upgrader_Base {
+class CRM_Ckeditor4_Upgrader extends CRM_Extension_Upgrader_Base {
 
   /**
    * Install extension.
@@ -26,7 +26,7 @@ class CRM_Ckeditor4_Upgrader extends CRM_Ckeditor4_Upgrader_Base {
     foreach ($domains as $domain) {
       $currentSetting = \Civi::settings($domain['id'])->get('editor_id');
       if ($currentSetting === 'CKEditor') {
-        \Civi::setttings($domain['id'])->set('editor_id', 'Textarea');
+        \Civi::settings($domain['id'])->set('editor_id', 'Textarea');
       }
     }
     civicrm_api3('OptionValue', 'get', ['name' => 'CKEditor', 'api.option_value.delete' => ['id' => "\$value.id"]]);

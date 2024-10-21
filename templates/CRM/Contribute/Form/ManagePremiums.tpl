@@ -17,7 +17,6 @@
   {elseif $action eq 1024}
      {include file="CRM/Contribute/Form/Contribution/PremiumBlock.tpl" context="previewPremium"}
   {else}
-     <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
   {crmRegion name="contribute-form-managepremiums-standard-fields"}
   <table class="form-layout-compressed">
      <tr class="crm-contribution-form-block-name">
@@ -47,7 +46,7 @@
         <p>{ts}You can upload an image from your computer OR enter a URL for an image already on the Web. If you chose to upload an image file, a 'thumbnail' version will be automatically created for you. If you don't have an image available at this time, you may also choose to display a 'No Image Available' icon by selecting the 'default image'.{/ts}</p>
                   </div>
   <table class="form-layout-compressed">
-    {if !empty($thumbnailUrl)}<tr class="odd-row"><td class="describe-image" colspan="2"><strong>Current Image Thumbnail</strong><br /><img src="{$thumbnailUrl}" /></td></tr>{/if}
+    {if !empty($thumbnailUrl)}<tr class="odd-row"><td class="describe-image" colspan="2"><strong>{ts}Current Image Thumbnail{/ts}</strong><br /><img src="{$thumbnailUrl}" /></td></tr>{/if}
     <tr class="crm-contribution-form-block-imageOption"><td>{$form.imageOption.image.html}</td><td>{$form.uploadFile.html}</td></tr>
   <tr class="crm-contribution-form-block-imageOption-thumbnail"><td colspan="2">{$form.imageOption.thumbnail.html}</td></tr>
     <tr id="imageURL"{if $action neq 2} class="hiddenElement"{/if}>
@@ -74,12 +73,12 @@
      <span class="description">{ts}The market value of this premium (e.g. retail price). For tax-deductible contributions, this amount will be used to set the non-deductible amount in the contribution record and receipt.{/ts}</span>
        </td>
     </tr>
-    <tr class="crm-contribution-form-block-cost">
-       <td class="label">{$form.cost.label}</td>
-       <td class="html-adjust">{$form.cost.html}<br />
-        <span class="description">{ts}You may optionally record the actual cost of this premium to your organization. This may be useful when evaluating net return for this incentive.{/ts}</span>
-       </td>
-    </tr>
+      <tr class="crm-contribution-form-block-cost">
+         <td class="label">{$form.cost.label}</td>
+         <td class="html-adjust">{$form.cost.html}<br />
+          <span class="description">{ts}You may optionally record the actual cost of this premium to your organization. This may be useful when evaluating net return for this incentive.{/ts}</span>
+         </td>
+      </tr>
      <tr class="crm-contribution-form-block-financial_type">
        <td class="label">{$form.financial_type_id.label}</td>
        <td class="html-adjust">

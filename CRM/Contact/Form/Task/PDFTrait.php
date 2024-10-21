@@ -67,7 +67,7 @@ trait CRM_Contact_Form_Task_PDFTrait {
       FALSE
     );
 
-    // Added for core#2121,
+    // Added for dev/core#2121,
     // To support sending a custom pdf filename before downloading.
     $form->addElement('hidden', 'pdf_file_name');
 
@@ -179,7 +179,7 @@ trait CRM_Contact_Form_Task_PDFTrait {
       $defaults['from_email_address'] = current(CRM_Core_BAO_Domain::getNameAndEmail(FALSE, TRUE));
     }
     $form->setDefaults($defaults);
-    $form->setTitle('Print/Merge Document');
+    $form->setTitle(ts('Print/Merge Document'));
   }
 
   /**
@@ -220,8 +220,6 @@ trait CRM_Contact_Form_Task_PDFTrait {
    * Process the form after the input has been submitted and validated.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
-   * @throws \API_Exception
    */
   public function postProcess(): void {
     $formValues = $this->controller->exportValues($this->getName());
@@ -263,7 +261,7 @@ trait CRM_Contact_Form_Task_PDFTrait {
     $fileName = $this->getFileName();
 
     if ($type === 'pdf') {
-      CRM_Utils_PDF_Utils::html2pdf($html, $fileName, FALSE, $formValues);
+      CRM_Utils_PDF_Utils::html2pdf($html, $fileName . '.pdf', FALSE, $formValues);
     }
     elseif (!empty($formValues['document_file_path'])) {
       $fileName = pathinfo($formValues['document_file_path'], PATHINFO_FILENAME) . '.' . $type;
@@ -283,7 +281,7 @@ trait CRM_Contact_Form_Task_PDFTrait {
         civicrm_api3('Attachment', 'create', [
           'entity_table' => 'civicrm_activity',
           'entity_id' => $activityId,
-          'name' => $fileName,
+          'name' => $fileName . '.' . $type,
           'mime_type' => $mimeType,
           'options' => [
             'move-file' => $tee->getFileName(),
@@ -332,7 +330,6 @@ trait CRM_Contact_Form_Task_PDFTrait {
    *   and use-case.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   protected function createActivities($html_message, $contactIds, $subject, $campaign_id, $perContactHtml = []): array {
     $activityParams = [
@@ -401,7 +398,6 @@ trait CRM_Contact_Form_Task_PDFTrait {
    * @return string $html_message
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function processTemplate(&$formValues) {
@@ -477,17 +473,7 @@ trait CRM_Contact_Form_Task_PDFTrait {
     //time being hack to strip '&nbsp;'
     //from particular letter line, CRM-6798
     $this->formatMessage($html_message);
-
-    $messageToken = CRM_Utils_Token::getTokens($html_message);
-
-    $returnProperties = [];
-    if (isset($messageToken['contact'])) {
-      foreach ($messageToken['contact'] as $key => $value) {
-        $returnProperties[$value] = 1;
-      }
-    }
-
-    return [$formValues, $html_message, $messageToken, $returnProperties];
+    return [$formValues, $html_message];
   }
 
   /**

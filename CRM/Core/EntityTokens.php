@@ -75,23 +75,19 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @return array
    */
   protected function getTokenMetadata(): array {
-    if (empty($this->tokensMetadata)) {
-      $cacheKey = $this->getCacheKey();
-      if (Civi::cache('metadata')->has($cacheKey)) {
-        $this->tokensMetadata = Civi::cache('metadata')->get($cacheKey);
+    $cacheKey = $this->getCacheKey();
+    if (!Civi::cache('metadata')->has($cacheKey)) {
+      $tokensMetadata = $this->getBespokeTokens();
+      $tokensMetadata = array_merge($tokensMetadata, $this->getRelatedTokens());
+      foreach ($this->getFieldMetadata() as $field) {
+        $this->addFieldToTokenMetadata($tokensMetadata, $field, $this->getExposedFields());
       }
-      else {
-        $this->tokensMetadata = $this->getBespokeTokens();
-        foreach ($this->getFieldMetadata() as $field) {
-          $this->addFieldToTokenMetadata($field, $this->getExposedFields());
-        }
-        foreach ($this->getHiddenTokens() as $name) {
-          $this->tokensMetadata[$name]['audience'] = 'hidden';
-        }
-        Civi::cache('metadata')->set($cacheKey, $this->tokensMetadata);
+      foreach ($this->getHiddenTokens() as $name) {
+        $tokensMetadata[$name]['audience'] = 'hidden';
       }
+      Civi::cache('metadata')->set($cacheKey, $tokensMetadata);
     }
-    return $this->tokensMetadata;
+    return Civi::cache('metadata')->get($cacheKey);
   }
 
   /**
@@ -124,12 +120,11 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
       return $row->customToken($entity, \CRM_Core_BAO_CustomField::getKeyID($field), $this->getFieldValue($row, 'id'));
     }
     if ($this->isMoneyField($field)) {
-      $currency = $this->getCurrency($row);
-      if (!$currency) {
-        // too hard basket for now - just do what we always did.
-        return $row->format('text/plain')->tokens($entity, $field,
-          \CRM_Utils_Money::format($fieldValue, $currency));
+      $currency = $this->getCurrency($row) ?: \Civi::settings()->get('defaultCurrency');
+      if (empty($fieldValue) && !is_numeric($fieldValue)) {
+        $fieldValue = 0;
       }
+
       return $row->format('text/plain')->tokens($entity, $field,
         Money::of($fieldValue, $currency));
 
@@ -143,7 +138,22 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
         Civi::log()->info('invalid date token');
       }
     }
+    if ($this->isHTMLTextField($field)) {
+      return $row->format('text/html')->tokens($entity, $field, (string) $fieldValue);
+    }
     $row->format('text/plain')->tokens($entity, $field, (string) $fieldValue);
+  }
+
+  /**
+   * Is the text stored in html format.
+   *
+   * @param string $fieldName
+   *
+   * @return bool
+   */
+  public function isHTMLTextField(string $fieldName): bool {
+    $metadata = $this->getMetadataForField($fieldName);
+    return ($this->getMetadataForField($fieldName)['input_type'] ?? NULL) === 'RichTextEditor';
   }
 
   /**
@@ -263,7 +273,7 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
         // Tests fail without checkPermissions = FALSE
         $this->fieldMetadata = (array) civicrm_api4($this->getApiEntityName(), 'getfields', ['checkPermissions' => FALSE], 'name');
       }
-      catch (API_Exception $e) {
+      catch (CRM_Core_Exception $e) {
         $this->fieldMetadata = [];
       }
     }
@@ -274,6 +284,13 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * Get any tokens with custom calculation.
    */
   protected function getBespokeTokens(): array {
+    return [];
+  }
+
+  /**
+   * Get related entity tokens.
+   */
+  protected function getRelatedTokens(): array {
     return [];
   }
 
@@ -292,10 +309,19 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
   protected function getPseudoValue(string $realField, string $pseudoKey, $fieldValue): string {
     $bao = CRM_Core_DAO_AllCoreTables::getFullName($this->getMetadataForField($realField)['entity']);
     if ($pseudoKey === 'name') {
+      // There is a theoretical possibility fieldValue could be an array but
+      // specifically for preferred communication type - but real world usage
+      // hitting this is unlikely & the unexpectation is unclear so commenting,
+      // rather than adding handling.
       $fieldValue = (string) CRM_Core_PseudoConstant::getName($bao, $realField, $fieldValue);
     }
     if ($pseudoKey === 'label') {
-      $fieldValue = (string) CRM_Core_PseudoConstant::getLabel($bao, $realField, $fieldValue);
+      $newValue = [];
+      // Preferred communication method is an array that would resolve to (e.g) 'Phone, Email'
+      foreach ((array) $fieldValue as $individualValue) {
+        $newValue[] = CRM_Core_PseudoConstant::getLabel($bao, $realField, $individualValue);
+      }
+      $fieldValue = implode(', ', $newValue);
     }
     if ($pseudoKey === 'abbr' && $realField === 'state_province_id') {
       // hack alert - currently only supported for state.
@@ -337,10 +363,9 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @return bool
    */
   public function checkActive(TokenProcessor $processor) {
-    return (!empty($processor->context['actionMapping'])
+    return ((!empty($processor->context['actionMapping'])
         // This makes the 'schema context compulsory - which feels accidental
-        // since recent discu
-      && $processor->context['actionMapping']->getEntity()) || in_array($this->getEntityIDField(), $processor->context['schema']);
+      && $processor->context['actionMapping']->getEntityName()) || in_array($this->getEntityIDField(), $processor->context['schema'])) && in_array($this->getApiEntityName(), array_keys(\Civi::service('action_object_provider')->getEntities()));
   }
 
   /**
@@ -349,7 +374,7 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @param \Civi\ActionSchedule\Event\MailingQueryEvent $e
    */
   public function alterActionScheduleQuery(MailingQueryEvent $e): void {
-    if ($e->mapping->getEntity() !== $this->getExtendableTableName()) {
+    if ($e->mapping->getEntityTable($e->actionSchedule) !== $this->getExtendableTableName()) {
       return;
     }
     $e->query->select('e.id AS tokenContext_' . $this->getEntityIDField());
@@ -370,7 +395,7 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @todo remove this function & use the metadata that is loaded.
    *
    * @return string[]
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function getBasicTokens(): array {
     $return = [];
@@ -411,7 +436,7 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
     // 'not a real field' offered up by case - seems like an oddity
     // we should skip at the top level for now.
     $fields = ['tags'];
-    if (!CRM_Campaign_BAO_Campaign::isCampaignEnable()) {
+    if (!CRM_Campaign_BAO_Campaign::isComponentEnabled()) {
       $fields[] = 'campaign_id';
     }
     return $fields;
@@ -467,7 +492,7 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @param \Civi\Token\Event\TokenValueEvent $e
    *
    * @return array
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getPrefetchFields(TokenValueEvent $e): array {
     $allTokens = array_keys($this->getTokenMetadata());
@@ -501,6 +526,8 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    * @param int $id
    *
    * @return string
+   *
+   * @throws \CRM_Core_Exception
    */
   protected function getCustomFieldName(int $id): string {
     foreach ($this->getTokenMetadata() as $key => $field) {
@@ -508,6 +535,9 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
         return $key;
       }
     }
+    throw new CRM_Core_Exception(
+      "A custom field with the ID {$id} does not exist"
+    );
   }
 
   /**
@@ -520,9 +550,14 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
    */
   protected function getCustomFieldValue($entityID, string $field) {
     $id = str_replace('custom_', '', $field);
-    $value = $this->prefetch[$entityID][$this->getCustomFieldName($id)] ?? '';
-    if ($value !== NULL) {
-      return CRM_Core_BAO_CustomField::displayValue($value, $id);
+    try {
+      $value = $this->prefetch[$entityID][$this->getCustomFieldName($id)] ?? '';
+      if ($value !== NULL) {
+        return CRM_Core_BAO_CustomField::displayValue($value, $id);
+      }
+    }
+    catch (CRM_Core_Exception $exception) {
+      return NULL;
     }
   }
 
@@ -597,15 +632,17 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
   /**
    * Add the token to the metadata based on the field spec.
    *
+   * @param array $tokensMetadata
    * @param array $field
    * @param array $exposedFields
    * @param string $prefix
    */
-  protected function addFieldToTokenMetadata(array $field, array $exposedFields, string $prefix = ''): void {
-    if ($field['type'] !== 'Custom' && !in_array($field['name'], $exposedFields, TRUE)) {
+  protected function addFieldToTokenMetadata(array &$tokensMetadata, array $field, array $exposedFields, string $prefix = ''): void {
+    $isExposed = in_array(str_replace($prefix . '.', '', $field['name']), $exposedFields, TRUE);
+    if ($field['type'] !== 'Custom' && !$isExposed) {
       return;
     }
-    $field['audience'] = 'user';
+    $field['audience'] = $field['audience'] ?? 'user';
     if ($field['name'] === 'contact_id') {
       // Since {contact.id} is almost always present don't confuse users
       // by also adding (e.g {participant.contact_id)
@@ -618,36 +655,37 @@ class CRM_Core_EntityTokens extends AbstractTokenSubscriber {
       // Convert to apiv3 style for now. Later we can add v4 with
       // portable naming & support for labels/ dates etc so let's leave
       // the space open for that.
-      // Not the existing quickform widget has handling for the custom field
+      // Not the existing QuickForm widget has handling for the custom field
       // format based on the title using this syntax.
       $parts = explode(': ', $field['label']);
       $field['title'] = "{$parts[1]} :: {$parts[0]}";
       $tokenName = 'custom_' . $field['custom_field_id'];
-      $this->tokensMetadata[$tokenName] = $field;
+      $tokensMetadata[$tokenName] = $field;
       return;
     }
-    $tokenName = $prefix ? ($prefix . '.' . $field['name']) : $field['name'];
-    if (in_array($field['name'], $exposedFields, TRUE)) {
+    $tokenName = $field['name'];
+    // Presumably this line can not be reached unless isExposed = TRUE.
+    if ($isExposed) {
       if (
         ($field['options'] || !empty($field['suffixes']))
         // At the time of writing currency didn't have a label option - this may have changed.
         && !in_array($field['name'], $this->getCurrencyFieldName(), TRUE)
       ) {
-        $this->tokensMetadata[$tokenName . ':label'] = $this->tokensMetadata[$tokenName . ':name'] = $field;
+        $tokensMetadata[$tokenName . ':label'] = $tokensMetadata[$tokenName . ':name'] = $field;
         $fieldLabel = $field['input_attrs']['label'] ?? $field['label'];
-        $this->tokensMetadata[$tokenName . ':label']['name'] = $field['name'] . ':label';
-        $this->tokensMetadata[$tokenName . ':name']['name'] = $field['name'] . ':name';
-        $this->tokensMetadata[$tokenName . ':name']['audience'] = 'sysadmin';
-        $this->tokensMetadata[$tokenName . ':label']['title'] = $fieldLabel;
-        $this->tokensMetadata[$tokenName . ':name']['title'] = ts('Machine name') . ': ' . $fieldLabel;
+        $tokensMetadata[$tokenName . ':label']['name'] = $field['name'] . ':label';
+        $tokensMetadata[$tokenName . ':name']['name'] = $field['name'] . ':name';
+        $tokensMetadata[$tokenName . ':name']['audience'] = 'sysadmin';
+        $tokensMetadata[$tokenName . ':label']['title'] = $fieldLabel;
+        $tokensMetadata[$tokenName . ':name']['title'] = ts('Machine name') . ': ' . $fieldLabel;
         $field['audience'] = 'sysadmin';
       }
       if ($field['data_type'] === 'Boolean') {
-        $this->tokensMetadata[$tokenName . ':label'] = $field;
-        $this->tokensMetadata[$tokenName . ':label']['name'] = $field['name'] . ':label';
+        $tokensMetadata[$tokenName . ':label'] = $field;
+        $tokensMetadata[$tokenName . ':label']['name'] = $field['name'] . ':label';
         $field['audience'] = 'sysadmin';
       }
-      $this->tokensMetadata[$tokenName] = $field;
+      $tokensMetadata[$tokenName] = $field;
     }
   }
 

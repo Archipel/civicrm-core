@@ -24,7 +24,7 @@
  * @return array
  *   Array of financial transactions which are payments, if error an array with an error id and error message
  *
- * @throws \CiviCRM_API3_Exception
+ * @throws \CRM_Core_Exception
  */
 function civicrm_api3_payment_get($params) {
   $params['is_payment'] = TRUE;
@@ -42,9 +42,8 @@ function civicrm_api3_payment_get($params) {
     if (empty($eft)) {
       return civicrm_api3_create_success([], $params, 'Payment', 'get');
     }
-    foreach ($eft as $entityFinancialTrxn) {
-      $params['financial_trxn_id']['IN'][] = $entityFinancialTrxn['financial_trxn_id'];
-    }
+    $ftIds = array_column($eft, 'financial_trxn_id');
+    $params['financial_trxn_id'] = ['IN' => $ftIds];
   }
 
   $financialTrxn = civicrm_api3('FinancialTrxn', 'get', array_merge($params, ['sequential' => FALSE]))['values'];
@@ -72,7 +71,7 @@ function civicrm_api3_payment_get($params) {
  * @return array
  *   Api result array
  *
- * @throws \CiviCRM_API3_Exception
+ * @throws \CRM_Core_Exception
  */
 function civicrm_api3_payment_delete($params) {
   return civicrm_api3('FinancialTrxn', 'delete', $params);
@@ -87,8 +86,8 @@ function civicrm_api3_payment_delete($params) {
  * @return array
  *   Api result array
  *
- * @throws \CiviCRM_API3_Exception
- * @throws API_Exception
+ * @throws \CRM_Core_Exception
+ * @throws CRM_Core_Exception
  */
 function civicrm_api3_payment_cancel($params) {
   $eftParams = [
@@ -125,7 +124,6 @@ function civicrm_api3_payment_cancel($params) {
  *   Api result array
  *
  * @throws \CRM_Core_Exception
- * @throws \CiviCRM_API3_Exception
  */
 function civicrm_api3_payment_create($params) {
   if (empty($params['skipCleanMoney'])) {

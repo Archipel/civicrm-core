@@ -9,12 +9,15 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\API\Exception\UnauthorizedException;
+use Civi\Api4\EntityFinancialAccount;
+
 /**
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
-class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
+class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType implements \Civi\Core\HookInterface {
 
   /**
    * Static cache holder of available financial types for this session
@@ -29,43 +32,24 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
   public static $_statusACLFt = [];
 
   /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
-   * Fetch object based on array of properties.
-   *
+   * @deprecated
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
    * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
-   *
-   * @return CRM_Financial_DAO_FinancialType
+   * @return self|null
    */
-  public static function retrieve(&$params, &$defaults) {
-    $financialType = new CRM_Financial_DAO_FinancialType();
-    $financialType->copyValues($params);
-    if ($financialType->find(TRUE)) {
-      CRM_Core_DAO::storeValues($financialType, $defaults);
-      return $financialType;
-    }
-    return NULL;
+  public static function retrieve($params, &$defaults) {
+    CRM_Core_Error::deprecatedFunctionWarning('API');
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
-   * Update the is_active flag in the db.
-   *
+   * @deprecated - this bypasses hooks.
    * @param int $id
-   *   Id of the database record.
    * @param bool $is_active
-   *   Value we want to set the is_active field.
-   *
    * @return bool
    */
   public static function setIsActive($id, $is_active) {
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
     return CRM_Core_DAO::setFieldValue('CRM_Financial_DAO_FinancialType', $id, 'is_active', $is_active);
   }
 
@@ -75,23 +59,17 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
    * @param array $params
    *
    * @return \CRM_Financial_DAO_FinancialType
+   * @deprecated
    */
   public static function create(array $params) {
-    $hook = empty($params['id']) ? 'create' : 'edit';
-    CRM_Utils_Hook::pre($hook, 'FinancialType', $params['id'] ?? NULL, $params);
-    $financialType = self::add($params);
-    CRM_Utils_Hook::post($hook, 'FinancialType', $financialType->id, $financialType);
-    return $financialType;
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
+    return self::writeRecord($params);
   }
 
   /**
    * Add the financial types.
    *
-   * Note that add functions are being deprecated in favour of create.
-   * The steps here are to remove direct calls to this function from
-   * core & then move the innids of the function to the create function.
-   * This function would remain for 6 months or so as a wrapper of create with
-   * a deprecation notice.
+   * Note that $ids isn't passed anywhere except tests, which pass an empty array.
    *
    * @param array $params
    *   Values from the database object.
@@ -99,96 +77,117 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
    *   Array that we wish to deprecate and remove.
    *
    * @return object
+   * @deprecated
    */
   public static function add(array $params, $ids = []) {
-    // @todo deprecate this function, move the code to create & call create from add.
-    $financialType = new CRM_Financial_DAO_FinancialType();
-    $financialType->copyValues($params);
-    $financialType->save();
-    // CRM-12470
-    if (empty($ids['financialType']) && empty($params['id'])) {
-      $titles = CRM_Financial_BAO_FinancialTypeAccount::createDefaultFinancialAccounts($financialType);
-      $financialType->titles = $titles;
-    }
-    return $financialType;
+    CRM_Core_Error::deprecatedFunctionWarning('deleteRecord');
+    return self::writeRecord($params);
   }
 
   /**
    * Delete financial Types.
    *
    * @param int $financialTypeId
-   *
+   * @deprecated
    * @return array|bool
    */
   public static function del($financialTypeId) {
-    $financialType = new CRM_Financial_DAO_FinancialType();
-    $financialType->id = $financialTypeId;
-    $financialType->find(TRUE);
-    // tables to ignore checks for financial_type_id
-    $ignoreTables = ['CRM_Financial_DAO_EntityFinancialAccount'];
+    CRM_Core_Error::deprecatedFunctionWarning('deleteRecord');
+    try {
+      static::deleteRecord(['id' => $financialTypeId]);
+      return TRUE;
+    }
+    catch (CRM_Core_Exception $e) {
+      return [
+        'is_error' => 1,
+        'error_message' => $e->getMessage(),
+      ];
+    }
+  }
 
-    // TODO: if (!$financialType->find(true)) {
+  /**
+   * Callback for hook_civicrm_pre().
+   * @param \Civi\Core\Event\PreEvent $event
+   * @throws CRM_Core_Exception
+   */
+  public static function self_hook_civicrm_pre(\Civi\Core\Event\PreEvent $event) {
+    if ($event->action === 'delete') {
+      $financialType = new CRM_Financial_DAO_FinancialType();
+      $financialType->id = $event->id;
 
-    // ensure that we have no objects that have an FK to this financial type id TODO: that cannot be null
-    $occurrences = $financialType->findReferences();
-    if ($occurrences) {
+      // tables to ignore checks for financial_type_id
+      $ignoreTables = ['CRM_Financial_DAO_EntityFinancialAccount'];
+
+      // ensure that we have no objects that have an FK to this financial type id TODO: that cannot be null
       $tables = [];
-      foreach ($occurrences as $occurrence) {
+      foreach ($financialType->findReferences() as $occurrence) {
         $className = get_class($occurrence);
         if (!in_array($className, $tables) && !in_array($className, $ignoreTables)) {
           $tables[] = $className;
         }
       }
       if (!empty($tables)) {
-        $message = ts('The following tables have an entry for this financial type: %1', [1 => implode(', ', $tables)]);
-
-        $errors = [];
-        $errors['is_error'] = 1;
-        $errors['error_message'] = $message;
-        return $errors;
+        throw new CRM_Core_Exception(ts('The following tables have an entry for this financial type: %1', [1 => implode(', ', $tables)]));
       }
     }
-
-    // delete from financial Type table
-    $financialType->delete();
-
-    $entityFinancialType = new CRM_Financial_DAO_EntityFinancialAccount();
-    $entityFinancialType->entity_id = $financialTypeId;
-    $entityFinancialType->entity_table = 'civicrm_financial_type';
-    $entityFinancialType->delete();
-    return TRUE;
   }
 
   /**
-   * fetch financial type having relationship as Income Account is.
-   *
+   * Callback for hook_civicrm_post().
+   * @param \Civi\Core\Event\PostEvent $event
+   */
+  public static function self_hook_civicrm_post(\Civi\Core\Event\PostEvent $event) {
+    if ($event->action === 'create') {
+      $titles = CRM_Financial_BAO_EntityFinancialAccount::createDefaultFinancialAccounts($event->object);
+      $event->object->titles = $titles;
+    }
+    if ($event->action === 'delete') {
+      \Civi\Api4\EntityFinancialAccount::delete(FALSE)
+        ->addWhere('entity_id', '=', $event->id)
+        ->addWhere('entity_table', '=', 'civicrm_financial_type')
+        ->execute();
+    }
+  }
+
+  /**
+   * Fetch financial types having relationship as Income Account is.
    *
    * @return array
    *   all financial type with income account is relationship
+   *
+   * @throws \CRM_Core_Exception
    */
-  public static function getIncomeFinancialType() {
-    // Financial Type
-    $financialType = CRM_Contribute_PseudoConstant::financialType();
-    $revenueFinancialType = [];
-    $relationTypeId = key(CRM_Core_PseudoConstant::accountOptionValues('account_relationship', NULL, " AND v.name LIKE 'Income Account is' "));
-    CRM_Core_PseudoConstant::populate(
-      $revenueFinancialType,
-      'CRM_Financial_DAO_EntityFinancialAccount',
-      $all = TRUE,
-      $retrieve = 'entity_id',
-      $filter = NULL,
-      "account_relationship = $relationTypeId AND entity_table = 'civicrm_financial_type' "
-    );
-
-    foreach ($financialType as $key => $financialTypeName) {
-      if (!in_array($key, $revenueFinancialType)
-        || (CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus()
-          && !CRM_Core_Permission::check('add contributions of type ' . $financialTypeName))
-      ) {
-        unset($financialType[$key]);
+  public static function getIncomeFinancialType($checkPermissions = TRUE): array {
+    // Realistically tests are the only place where logged in contact can
+    // change during the session at this stage.
+    $key = 'income_type' . (int) $checkPermissions;
+    if ($checkPermissions) {
+      $key .= '_' . CRM_Core_Session::getLoggedInContactID();
+    }
+    if (isset(Civi::$statics[__CLASS__][$key])) {
+      return Civi::$statics[__CLASS__][$key];
+    }
+    try {
+      $types = EntityFinancialAccount::get($checkPermissions)
+        ->addWhere('account_relationship:name', '=', 'Income Account is')
+        ->addWhere('entity_table', '=', 'civicrm_financial_type')
+        ->addSelect('entity_id', 'financial_type.name')
+        ->addJoin('FinancialType AS financial_type', 'LEFT', [
+          'entity_id',
+          '=',
+          'financial_type.id',
+        ])
+        ->addWhere('financial_type.is_active', '=', '1')
+        ->execute()->indexBy('entity_id');
+      Civi::$statics[__CLASS__][$key] = [];
+      foreach ($types as $type) {
+        Civi::$statics[__CLASS__][$key][$type['entity_id']] = $type['financial_type.name'];
       }
     }
-    return $financialType;
+    catch (UnauthorizedException $e) {
+      Civi::$statics[__CLASS__][$key] = [];
+    }
+    return Civi::$statics[__CLASS__][$key];
   }
 
   /**
@@ -281,7 +280,7 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
    */
   public static function getAvailableMembershipTypes(&$membershipTypes = NULL, $action = CRM_Core_Action::VIEW) {
     if (empty($membershipTypes)) {
-      $membershipTypes = CRM_Member_PseudoConstant::membershipType();
+      $membershipTypes = CRM_Member_BAO_Membership::buildOptions('membership_type_id');
     }
     if (!self::isACLFinancialTypeStatus()) {
       return $membershipTypes;
@@ -325,46 +324,24 @@ class CRM_Financial_BAO_FinancialType extends CRM_Financial_DAO_FinancialType {
   /**
    * Function to build a permissioned sql where clause based on available financial types.
    *
-   * @param array $whereClauses
-   *   (reference ) an array of clauses
    * @param string $component
    *   the type of component
-   * @param string $alias
-   *   the alias to use
    *
+   * @deprecated
+   *
+   * @return string $clauses
    */
-  public static function buildPermissionedClause(&$whereClauses, $component = NULL, $alias = NULL) {
-    // @todo the relevant addSelectWhere clause should be called.
-    if (!self::isACLFinancialTypeStatus()) {
-      return FALSE;
+  public static function buildPermissionedClause(string $component): string {
+    CRM_Core_Error::deprecatedFunctionWarning('no alternative');
+    // There are no non-test usages of this function (including in a universe
+    // search).
+    if ($component === 'contribution') {
+      $clauses = CRM_Contribute_BAO_Contribution::getSelectWhereClause();
     }
-    if (is_array($whereClauses)) {
-      $types = self::getAllEnabledAvailableFinancialTypes();
-      if (empty($types)) {
-        $whereClauses[] = ' ' . $alias . '.financial_type_id IN (0)';
-      }
-      else {
-        $whereClauses[] = ' ' . $alias . '.financial_type_id IN (' . implode(',', array_keys($types)) . ')';
-      }
+    if ($component === 'membership') {
+      $clauses = CRM_Member_BAO_Membership::getSelectWhereClause();
     }
-    else {
-      if ($component == 'contribution') {
-        $types = self::getAllEnabledAvailableFinancialTypes();
-        $column = "financial_type_id";
-      }
-      if ($component == 'membership') {
-        self::getAvailableMembershipTypes($types, CRM_Core_Action::VIEW);
-        $column = "membership_type_id";
-      }
-      if (!empty($whereClauses)) {
-        $whereClauses .= ' AND ';
-      }
-      if (empty($types)) {
-        $whereClauses .= " civicrm_{$component}.{$column} IN (0)";
-        return;
-      }
-      $whereClauses .= " civicrm_{$component}.{$column} IN (" . implode(',', array_keys($types)) . ")";
-    }
+    return 'AND ' . implode(' AND ', $clauses);
   }
 
   /**

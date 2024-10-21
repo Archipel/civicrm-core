@@ -117,7 +117,7 @@ class CRM_Extension_Mapper {
    * Given the class, provides extension path.
    *
    *
-   * @param $clazz
+   * @param string $clazz
    *
    * @return string
    *   full path the extension .php file
@@ -355,8 +355,8 @@ class CRM_Extension_Mapper {
     // TODO optimization/caching
     $urls = [];
     $urls['civicrm'] = $this->keyToUrl('civicrm');
+    /** @var CRM_Core_Module $module */
     foreach ($this->getModules() as $module) {
-      /** @var $module CRM_Core_Module */
       if ($module->is_active) {
         try {
           $urls[$module->name] = $this->keyToUrl($module->name);
@@ -441,7 +441,7 @@ class CRM_Extension_Mapper {
   }
 
   /**
-   * @return array
+   * @return CRM_Extension_Info[]
    *   Ex: $result['org.civicrm.foobar'] = new CRM_Extension_Info(...).
    * @throws \CRM_Extension_Exception
    * @throws \Exception
@@ -452,10 +452,11 @@ class CRM_Extension_Mapper {
         $this->keyToInfo($key);
       }
       catch (CRM_Extension_Exception_ParseException $e) {
-        CRM_Core_Session::setStatus(ts('Parse error in extension: %1', [
-          1 => $e->getMessage(),
+        CRM_Core_Session::setStatus(ts('Parse error in extension %1: %2', [
+          1 => $key,
+          2 => $e->getMessage(),
         ]), '', 'error');
-        CRM_Core_Error::debug_log_message("Parse error in extension: " . $e->getMessage());
+        CRM_Core_Error::debug_log_message("Parse error in extension " . $key . ": " . $e->getMessage());
         continue;
       }
     }
@@ -480,8 +481,7 @@ class CRM_Extension_Mapper {
   /**
    * Get a list of all installed modules, including enabled and disabled ones
    *
-   * @return array
-   *   CRM_Core_Module
+   * @return CRM_Core_Module[]
    */
   public function getModules() {
     $result = [];
@@ -516,7 +516,7 @@ class CRM_Extension_Mapper {
   }
 
   /**
-   * Given te class, provides the template name.
+   * Given the class, provides the template name.
    * @todo consider multiple templates, support for one template for now
    *
    *
@@ -539,6 +539,7 @@ class CRM_Extension_Mapper {
     }
     // FIXME: How can code so code wrong be so right?
     CRM_Extension_System::singleton()->getClassLoader()->refresh();
+    CRM_Extension_System::singleton()->getMixinLoader()->run(TRUE);
   }
 
   /**
@@ -546,7 +547,7 @@ class CRM_Extension_Mapper {
    * @todo We should improve this to return more appropriate text. eg. when an extension is not installed
    *   it should not say "version xx is installed".
    *
-   * @param array $remoteExtensionInfo
+   * @param CRM_Extension_Info $remoteExtensionInfo
    * @param array $localExtensionInfo
    *
    * @return string
@@ -576,10 +577,11 @@ class CRM_Extension_Mapper {
         $info = $this->keyToInfo($key);
       }
       catch (CRM_Extension_Exception_ParseException $e) {
-        CRM_Core_Session::setStatus(ts('Parse error in extension: %1', [
-          1 => $e->getMessage(),
+        CRM_Core_Session::setStatus(ts('Parse error in extension %1: %2', [
+          1 => $key,
+          2 => $e->getMessage(),
         ]), '', 'error');
-        CRM_Core_Error::debug_log_message("Parse error in extension: " . $e->getMessage());
+        CRM_Core_Error::debug_log_message("Parse error in extension " . $key . ": " . $e->getMessage());
         return NULL;
       }
 

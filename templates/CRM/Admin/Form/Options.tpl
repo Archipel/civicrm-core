@@ -9,13 +9,12 @@
 *}
 {* this template is used for adding/editing options *}
 <div class="crm-block crm-form-block crm-admin-options-form-block">
-<div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="top"}</div>
   {if $action eq 8}
-      <div class="messages status no-popup">
-        {icon icon="fa-info-circle"}{/icon}
-             {ts 1=$gLabel}WARNING: Deleting this option will result in the loss of all %1 related records which use the option.{/ts} {ts}This may mean the loss of a substantial amount of data, and the action cannot be undone.{/ts} {ts}Do you want to continue?{/ts}
-      </div>
-    {else}
+    <div class="messages status no-popup">
+      {icon icon="fa-info-circle"}{/icon}
+      {ts 1=$gLabel}WARNING: Deleting this option will result in the loss of all %1 related records which use the option.{/ts} {ts}This may mean the loss of a substantial amount of data, and the action cannot be undone.{/ts} {ts}Do you want to continue?{/ts}
+    </div>
+  {else}
     <table class="form-layout-compressed">
         {if $gName eq 'custom_search'}
            <tr class="crm-admin-options-form-block-custom_search_path">
@@ -99,9 +98,11 @@
                 <td>{$form.description.html}<br />
             {if $gName eq 'activity_type'}
                <span class="description">{ts}Description is included at the top of the activity edit and view pages for this type of activity.{/ts}</span>
+            {elseif $gName eq 'email_greeting' || $gName eq 'postal_greeting' || $gName eq  'addressee'}
+                <span class="description">{ts}Description will be appended to processed greeting.{/ts}</span>
+            {/if}
                 </td>
               </tr>
-            {/if}
         {/if}
         {if $gName eq 'participant_status'}
               <tr class="crm-admin-options-form-block-visibility_id">
@@ -151,12 +152,11 @@
         {/if}
         {if !empty($showContactFilter)}{* contactOptions is exposed for email/postal greeting and addressee types to set filter for contact types *}
            <tr class="crm-admin-options-form-block-contactOptions">
-             <td class="label">{$form.contactOptions.label}</td>
-             <td>{$form.contactOptions.html}</td>
+             <td class="label">{$form.contact_type_id.label}</td>
+             <td>{$form.contact_type_id.html}</td>
            </tr>
         {/if}
     </table>
-    {/if}
-<div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="bottom"}</div>
- </fieldset>
+  {/if}
+  <div class="crm-submit-buttons">{include file="CRM/common/formButtons.tpl" location="bottom"}</div>
 </div>

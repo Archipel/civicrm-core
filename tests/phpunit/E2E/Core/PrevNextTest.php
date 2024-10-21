@@ -8,7 +8,8 @@ namespace E2E\Core;
  * Check that the active prev-next service behaves as expected.
  *
  * @package E2E\Core
- * @group e2e ornery
+ * @group e2e
+ * @group ornery
  */
 class PrevNextTest extends \CiviEndToEndTestCase {
 
@@ -41,9 +42,10 @@ class PrevNextTest extends \CiviEndToEndTestCase {
   protected function tearDown(): void {
     \Civi::service('prevnext')->deleteItem(NULL, $this->cacheKey);
     \Civi::service('prevnext')->deleteItem(NULL, $this->cacheKeyB);
+    parent::tearDown();
   }
 
-  public function testFillSql() {
+  public function testFillSql(): void {
     $start = 0;
     $prefillLimit = 25;
     $sort = NULL;
@@ -70,7 +72,7 @@ class PrevNextTest extends \CiviEndToEndTestCase {
     $this->assertSelections([]);
   }
 
-  public function testFillArray() {
+  public function testFillArray(): void {
     $rowSetA = [
       ['entity_id1' => 100, 'data' => 'Alice'],
       ['entity_id1' => 400, 'data' => 'Bob'],
@@ -98,7 +100,7 @@ class PrevNextTest extends \CiviEndToEndTestCase {
     $this->assertSelections([], 'get', $this->cacheKey);
   }
 
-  public function testFetch() {
+  public function testFetch(): void {
     $this->testFillArray();
 
     $cids = $this->prevNext->fetch($this->cacheKey, 0, 2);
@@ -236,7 +238,7 @@ class PrevNextTest extends \CiviEndToEndTestCase {
     $this->assertTrue(!isset($pos['prev']));
   }
 
-  public function testDeleteByCacheKey() {
+  public function testDeleteByCacheKey(): void {
     // Add background data
     $this->prevNext->fillWithArray($this->cacheKeyB, [
       ['entity_id1' => 100, 'data' => 'Alice'],
@@ -264,7 +266,7 @@ class PrevNextTest extends \CiviEndToEndTestCase {
     $this->assertSelections([100, 150], 'getall', $this->cacheKeyB);
   }
 
-  public function testDeleteByEntityId() {
+  public function testDeleteByEntityId(): void {
     // Fill two caches
     $this->prevNext->fillWithArray($this->cacheKey, [
       ['entity_id1' => 100, 'data' => 'Alice'],
@@ -290,7 +292,7 @@ class PrevNextTest extends \CiviEndToEndTestCase {
     $this->assertSelections([400], 'getall', $this->cacheKeyB);
   }
 
-  public function testDeleteAll() {
+  public function testDeleteAll(): void {
     // Fill two caches
     $this->prevNext->fillWithArray($this->cacheKey, [
       ['entity_id1' => 100, 'data' => 'Alice'],

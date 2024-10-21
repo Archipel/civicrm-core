@@ -14,7 +14,7 @@
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
-class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implements Civi\Test\HookInterface {
+class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implements Civi\Core\HookInterface {
 
   /**
    * Takes an associative array and creates an instance object.
@@ -77,7 +77,8 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
     }
 
     if (!$instanceID) {
-      if ($reportID = CRM_Utils_Array::value('report_id', $params)) {
+      $reportID = $params['report_id'] ?? NULL;
+      if ($reportID) {
         $instance->report_id = $reportID;
       }
       elseif ($instanceID) {
@@ -135,7 +136,8 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
       $navigationParams['parent_id'] = $params['parent_id'] ?? NULL;
       $navigationParams['is_active'] = 1;
 
-      if ($permission = CRM_Utils_Array::value('permission', $params)) {
+      $permission = $params['permission'] ?? NULL;
+      if ($permission) {
         $navigationParams['permission'][] = $permission;
       }
 
@@ -157,7 +159,8 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
         'label' => $params['title'],
         'is_active' => 1,
       ];
-      if ($permission = CRM_Utils_Array::value('permission', $params)) {
+      $permission = $params['permission'] ?? NULL;
+      if ($permission) {
         $dashletParams['permission'][] = $permission;
       }
     }
@@ -223,6 +226,7 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
    * @return mixed
    */
   public static function del($id = NULL) {
+    CRM_Core_Error::deprecatedFunctionWarning('deleteRecord');
     self::deleteRecord(['id' => $id]);
     return 1;
   }
@@ -243,22 +247,13 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
   }
 
   /**
-   * Retrieve instance.
-   *
+   * @deprecated
    * @param array $params
    * @param array $defaults
-   *
-   * @return CRM_Report_DAO_ReportInstance|null
+   * @return self|null
    */
   public static function retrieve($params, &$defaults) {
-    $instance = new CRM_Report_DAO_ReportInstance();
-    $instance->copyValues($params);
-
-    if ($instance->find(TRUE)) {
-      CRM_Core_DAO::storeValues($instance, $defaults);
-      return $instance;
-    }
-    return NULL;
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -327,7 +322,7 @@ class CRM_Report_BAO_ReportInstance extends CRM_Report_DAO_ReportInstance implem
       CRM_Core_Error::statusBounce($statusMessage, $bounceTo);
     }
 
-    CRM_Report_BAO_ReportInstance::del($instanceId);
+    CRM_Report_BAO_ReportInstance::deleteRecord(['id' => $instanceId]);
 
     CRM_Core_Session::setStatus(ts('Selected report has been deleted.'), ts('Deleted'), 'success');
     if ($successRedirect) {

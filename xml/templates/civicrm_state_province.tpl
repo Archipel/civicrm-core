@@ -114,8 +114,6 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (1226, 1101, "UP", "Uttar Pradesh"),
 (1227, 1101, "WB", "West Bengal"),
 (1228, 1101, "AN", "Andaman and Nicobar Islands"),
-(1229, 1101, "DN", "Dadra and Nagar Haveli"),
-(1230, 1101, "DD", "Daman and Diu"),
 (1231, 1101, "DL", "Delhi"),
 (1232, 1101, "LD", "Lakshadweep"),
 (1233, 1101, "PY", "Pondicherry"),
@@ -1986,8 +1984,8 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (3519, 1125, "TE", "Telšių Apskritis"),
 (3520, 1125, "UT", "Utenos Apskritis"),
 (3521, 1125, "VL", "Vilniaus Apskritis"),
-(3522, 1126, "D", "Diekirch"),
-(3523, 1126, "G", "GreveNmacher"),
+(3522, 1126, "DI", "Diekirch"),
+(3523, 1126, "GR", "Grevenmacher"),
 (3550, 1119, "DGV", "Daugavpils"),
 (3551, 1119, "JEL", "Jelgava"),
 (3552, 1119, "JUR", "Jūrmala"),
@@ -2503,8 +2501,8 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (4062, 1170, "CAT", "Catanduanes"),
 (4063, 1170, "CAV", "Cavite"),
 (4064, 1170, "CEB", "Cebu"),
-(4065, 1170, "COM", "Compostela Valley"),
-(4066, 1170, "DAV", "Davao"),
+(4065, 1170, "COM", "Davao de Oro"),
+(4066, 1170, "DAV", "Davao del Norte"),
 (4067, 1170, "DAS", "Davao del Sur"),
 (4068, 1170, "DAO", "Davao Oriental"),
 (4069, 1170, "EAS", "Eastern Samar"),
@@ -2514,7 +2512,7 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (4073, 1170, "ILS", "Ilocos Sur"),
 (4074, 1170, "ILI", "Iloilo"),
 (4075, 1170, "ISA", "Isabela"),
-(4076, 1170, "KAL", "Kalinga-Apayso"),
+(4076, 1170, "KAL", "Kalinga"),
 (4077, 1170, "LAG", "Laguna"),
 (4078, 1170, "LAN", "Lanao del Norte"),
 (4079, 1170, "LAS", "Lanao del Sur"),
@@ -2530,7 +2528,7 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (4089, 1170, "MOU", "Mountain Province"),
 (4090, 1170, "NEC", "Negroe Occidental"),
 (4091, 1170, "NER", "Negros Oriental"),
-(4092, 1170, "NCO", "North Cotabato"),
+(4092, 1170, "NCO", "Cotabato"),
 (4093, 1170, "NSA", "Northern Samar"),
 (4094, 1170, "NUE", "Nueva Ecija"),
 (4095, 1170, "NUV", "Nueva Vizcaya"),
@@ -3759,7 +3757,7 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (NULL, 1045, "ZW", "Zhongwei"),
 
 -- CRM-10863 Added Missing Province for Luxembourg
-(NULL, 1126, "L", "Luxembourg"),
+(NULL, 1126, "LU", "Luxembourg"),
 
 -- CRM-11367 Latvian regions
 (NULL, 1119, "002", "Aizkraukles novads"),
@@ -4141,4 +4139,44 @@ INSERT INTO civicrm_state_province (id, country_id, abbreviation, name) VALUES
 (NULL, 1226, "WRX", "Wrexham"),
 
 -- Add missing state for South Korea
-(NULL, 1115, "50", "Sejong");
+(NULL, 1115, "50", "Sejong"),
+
+-- Add missing province for Philippines
+(NULL, 1170, "DIN", "Dinagat Islands"),
+
+-- Add missing state for Colombia
+(NULL, 1048, "HUI", "Huila"),
+
+-- Add missing parishes for Bermuda
+ (NULL, 1023, 'DEV', 'Devonshire'),
+ (NULL, 1023, 'HAM', 'Hamilton Parish'),
+ (NULL, 1023, 'HA', 'City of Hamilton'),
+ (NULL, 1023, 'PAG', 'Paget'),
+ (NULL, 1023, 'PEM', 'Pembroke'),
+ (NULL, 1023, 'SG', 'Town of St. George'),
+ (NULL, 1023, 'SGE', 'Saint George\'s'),
+ (NULL, 1023, 'SAN', 'Sandys'),
+ (NULL, 1023, 'SMI', 'Smiths'),
+ (NULL, 1023, 'SOU', 'Southampton'),
+ (NULL, 1023, 'WAR', 'Warwick'),
+
+-- Add in missing Indian State provinces
+
+(NULL, 1101, "DH", "Dādra and Nagar Haveli and Damān and Diu"),
+(NULL, 1101, "LA", "Ladākh"),
+
+ -- end of statement:
+
+-- Add missing provinces for Luxembourg
+(NULL, 1126, 'CA', 'Capellen'),
+(NULL, 1126, 'CL', 'Clervaux'),
+(NULL, 1126, 'EC', 'Echternach'),
+(NULL, 1126, 'ES', 'Esch-sur-Alzette'),
+(NULL, 1126, 'ME', 'Mersch'),
+(NULL, 1126, 'RD', 'Redange-sur-Attert'),
+(NULL, 1126, 'RM', 'Remich'),
+(NULL, 1126, 'VD', 'Vianden'),
+(NULL, 1126, 'WI', 'Wiltz')
+
+-- end of statement:
+ ;

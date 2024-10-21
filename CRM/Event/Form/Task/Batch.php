@@ -89,7 +89,6 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
 
     $this->_fields = CRM_Core_BAO_UFGroup::getFields($ufGroupId, FALSE, CRM_Core_Action::VIEW);
     if (array_key_exists('participant_status', $this->_fields)) {
-      $this->assign('statusProfile', 1);
       $this->assignToTemplate();
     }
 
@@ -261,7 +260,6 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
    * @param int $statusId
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public static function updatePendingOnlineContribution($participantId, $statusId) {
 
@@ -303,7 +301,6 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
    * @param array $params
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Exception
    *
    * @deprecated
@@ -381,7 +378,6 @@ class CRM_Event_Form_Task_Batch extends CRM_Event_Form_Task {
    * @param array $params
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function submit($params) {
     $statusClasses = CRM_Event_PseudoConstant::participantStatusClass();

@@ -57,7 +57,8 @@ class CRM_Core_BAO_CustomValue extends CRM_Core_DAO {
         return CRM_Utils_Rule::boolean($value);
 
       case 'ContactReference':
-        return CRM_Utils_Rule::validContact($value);
+      case 'EntityReference':
+        return CRM_Utils_Rule::positiveInteger($value);
 
       case 'StateProvince':
 
@@ -260,7 +261,7 @@ class CRM_Core_BAO_CustomValue extends CRM_Core_DAO {
     }
 
     // Do we have access to the target record?
-    if (in_array($extends, ['Contact', 'Individual', 'Organization', 'Household'])) {
+    if ($extends === 'Contact' || in_array($extends, CRM_Contact_BAO_ContactType::basicTypes(TRUE), TRUE)) {
       return \Civi\Api4\Utils\CoreUtil::checkAccessDelegated('Contact', 'update', ['id' => $eid], $userID);
     }
     elseif (\Civi\Api4\Utils\CoreUtil::getApiClass($extends)) {

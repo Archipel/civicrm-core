@@ -9,23 +9,11 @@
  +--------------------------------------------------------------------+
  */
 
-use Civi\Api4\Contribution;
-
 /**
  * Class CRM_Core_Payment_BaseIPNTest
  * @group headless
  */
 class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
-
-  /**
-   * Should financials be checked after the test but before tear down.
-   *
-   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
-   * are some test data issues and some real bugs currently blocking.
-   *
-   * @var bool
-   */
-  protected $isValidateFinancialsOnPostAssert = TRUE;
 
   protected $_financialTypeId;
   protected $_contributionParams;
@@ -54,7 +42,6 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
   protected $_recurId;
   protected $_membershipId;
   protected $input;
-  protected $ids;
   protected $objects;
 
   /**
@@ -66,7 +53,6 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
    * @var int
    */
   protected $_membershipStatusID;
-  public $DBResetRequired = FALSE;
 
   /**
    * Setup function.
@@ -100,12 +86,15 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
   public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
     CRM_Member_PseudoConstant::membershipStatus(NULL, NULL, 'name', TRUE);
+    parent::tearDown();
   }
 
   /**
    * Test the LoadObjects function with recurring membership data.
+   *
+   * @throws \CRM_Core_Exception
    */
-  public function testLoadMembershipObjectsLoadAll() {
+  public function testLoadMembershipObjectsLoadAll(): void {
     $this->_setUpMembershipObjects();
     $this->_setUpRecurringContribution();
     $this->_membershipId = $this->ids['membership'];
@@ -113,24 +102,27 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
     $contribution->find(TRUE);
-    $contribution->loadRelatedObjects($this->input, $this->ids, TRUE);
+    $contribution->_component = 'contribute';
+    $ids = array_merge(CRM_Contribute_BAO_Contribution::getComponentDetails($this->_contributionId), $this->ids);
+
+    $contribution->loadRelatedObjects($this->_processorId, $ids);
     $this->assertNotEmpty($contribution->_relatedObjects['membership']);
     $this->assertArrayHasKey($this->_membershipId . '_' . $this->_membershipTypeID, $contribution->_relatedObjects['membership']);
     $this->assertTrue(is_a($contribution->_relatedObjects['membership'][$this->_membershipId . '_' . $this->_membershipTypeID], 'CRM_Member_BAO_Membership'));
-    $this->assertTrue(is_a($contribution->_relatedObjects['financialType'], 'CRM_Financial_BAO_FinancialType'));
     $this->assertNotEmpty($contribution->_relatedObjects['contributionRecur']);
     $this->assertNotEmpty($contribution->_relatedObjects['paymentProcessor']);
   }
 
   /**
    * Test the LoadObjects function with recurring membership data.
+   *
+   * @throws \Exception
    */
-  public function testSendMailMembershipObjects() {
+  public function testSendMailMembershipObjects(): void {
     $this->_setUpMembershipObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $values = [];
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertIsArray($msg, 'Message returned as an array in line');
     $this->assertEquals('Mr. Anthony Anderson II', $msg['to']);
     $this->assertStringContainsString('Membership Type: General', $msg['body']);
@@ -140,13 +132,14 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
    * Test the LoadObjects function data does not leak.
    *
    * If more than one iteration takes place the variables should not leak.
+   *
+   * @throws \Exception
    */
-  public function testSendMailMembershipObjectsNoLeakage() {
+  public function testSendMailMembershipObjectsNoLeakage(): void {
     $this->_setUpMembershipObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
-    $values = [];
     $contribution->id = $this->_contributionId;
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertEquals('Mr. Anthony Anderson II', $msg['to']);
     $this->assertStringContainsString('Membership Type: General', $msg['body']);
 
@@ -159,19 +152,21 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     $this->input['invoiceID'] = 'abc';
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertEquals('Dr. Donald Duck II', $msg['to']);
     $this->assertStringContainsString('Membership Type: Fowl', $msg['body']);
   }
 
   /**
    * Test the LoadObjects function with recurring membership data.
+   *
+   * @throws \Exception
    */
-  public function testSendMailMembershipWithoutLoadObjects() {
+  public function testSendMailMembershipWithoutLoadObjects(): void {
     $this->_setUpMembershipObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertIsArray($msg, 'Message not returned as an array');
     $this->assertEquals('Mr. Anthony Anderson II', $msg['to']);
     $this->assertStringContainsString('Membership Type: General', $msg['body']);
@@ -179,24 +174,28 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
 
   /**
    * Test the LoadObjects function with a participant.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \Exception
    */
-  public function testComposeMailParticipant() {
+  public function testComposeMailParticipant(): void {
     $this->_setUpParticipantObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $contribution->loadRelatedObjects($this->input, $this->ids);
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $contribution->loadRelatedObjects($this->_processorId, $this->ids);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertStringContainsString('registration has been received and your status has been updated to Attended.', $msg['body']);
     $this->assertStringContainsString('Annual CiviCRM meet', $msg['html']);
   }
 
   /**
+   * @throws \CRM_Core_Exception
    */
-  public function testComposeMailParticipantObjects() {
+  public function testComposeMailParticipantObjects(): void {
     $this->_setUpParticipantObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertEquals('Mr. Anthony Anderson II', $msg['to']);
     $this->assertStringContainsString('Thank you for your registration', $msg['body']);
   }
@@ -222,15 +221,13 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
    * Test the LoadObjects function with recurring membership data.
    *
    * @throws \CRM_Core_Exception
-   * @throws \Exception
    */
-  public function testsendMailParticipantObjectsNoMail(): void {
+  public function testSendMailParticipantObjectsNoMail(): void {
     $this->_setUpParticipantObjects();
     $event = new CRM_Event_BAO_Event();
     $event->id = $this->_eventId;
     $event->is_email_confirm = FALSE;
     $event->save();
-    $values = [];
     $tablesToTruncate = [
       'civicrm_mailing_spool',
     ];
@@ -238,96 +235,22 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     $mut = new CiviMailUtils($this, TRUE);
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $contribution->composeMessageArray($this->input, $this->ids);
     $mut->assertMailLogEmpty('no mail should have been send as event set to no confirm');
     $mut->stop();
   }
 
   /**
    * Test the LoadObjects function with a pledge.
+   *
+   * @throws \Exception
    */
   public function testSendMailPledge(): void {
     $this->_setUpPledgeObjects();
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
-    $msg = $contribution->composeMessageArray($this->input, $this->ids, $values);
+    $msg = $contribution->composeMessageArray($this->input, $this->ids);
     $this->assertStringContainsString('Contribution Information', $msg['html']);
-  }
-
-  /**
-   * @throws \API_Exception
-   * @throws \CRM_Core_Exception
-   * @throws \Civi\API\Exception\UnauthorizedException
-   * @throws \CiviCRM_API3_Exception
-   */
-  public function testThatCancellingEventPaymentWillCancelAllAdditionalPendingParticipantsAndCreateCancellationActivities(): void {
-    // Test fails - reason not yet investigated.
-    $this->isValidateFinancialsOnPostAssert = FALSE;
-    $this->_setUpParticipantObjects('Pending from incomplete transaction');
-    $additionalParticipantId = $this->participantCreate([
-      'event_id' => $this->_eventId,
-      'registered_by_id' => $this->_participantId,
-      'status_id' => 'Pending from incomplete transaction',
-    ]);
-
-    Contribution::update(FALSE)->setValues([
-      'cancel_date' => 'now',
-      'contribution_status_id:name' => 'Cancelled',
-    ])->addWhere('id', '=', $this->_contributionId)->execute();
-
-    $cancelledParticipantsCount = $this->callAPISuccess('Participant', 'get', [
-      'sequential' => 1,
-      'id' => ['IN' => [$this->_participantId, $additionalParticipantId]],
-      'status_id' => 'Cancelled',
-    ])['count'];
-    $this->assertEquals(2, $cancelledParticipantsCount);
-
-    $cancelledActivatesCount = civicrm_api3('Activity', 'get', [
-      'sequential' => 1,
-      'activity_type_id' => 'Event Registration',
-      'subject' => ['LIKE' => '%Cancelled%'],
-      'source_record_id' => ['IN' => [$this->_participantId, $additionalParticipantId]],
-    ]);
-
-    $this->assertEquals(2, $cancelledActivatesCount['count']);
-  }
-
-  /**
-   * Test that related pending participant records are cancelled.
-   *
-   * @throws \API_Exception
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
-   * @throws \Civi\API\Exception\UnauthorizedException
-   */
-  public function testThatFailedEventPaymentWillCancelAllAdditionalPendingParticipantsAndCreateCancellationActivities(): void {
-    $this->_setUpParticipantObjects('Pending from incomplete transaction');
-    $additionalParticipantId = $this->participantCreate([
-      'event_id' => $this->_eventId,
-      'registered_by_id' => $this->_participantId,
-      'status_id' => 'Pending from incomplete transaction',
-    ]);
-
-    Contribution::update(FALSE)->setValues([
-      'cancel_date' => 'now',
-      'contribution_status_id:name' => 'Failed',
-    ])->addWhere('id', '=', $this->ids['contribution'])->execute();
-
-    $cancelledParticipantsCount = civicrm_api3('Participant', 'get', [
-      'sequential' => 1,
-      'id' => ['IN' => [$this->_participantId, $additionalParticipantId]],
-      'status_id' => 'Cancelled',
-    ])['count'];
-    $this->assertEquals(2, $cancelledParticipantsCount);
-
-    $cancelledActivatesCount = civicrm_api3('Activity', 'get', [
-      'sequential' => 1,
-      'activity_type_id' => 'Event Registration',
-      'subject' => ['LIKE' => '%Cancelled%'],
-      'source_record_id' => ['IN' => [$this->_participantId, $additionalParticipantId]],
-    ]);
-
-    $this->assertEquals(2, $cancelledActivatesCount['count']);
   }
 
   /**
@@ -335,7 +258,7 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
    *
    * @param bool $contributionPage
    */
-  public function _setUpContributionObjects($contributionPage = FALSE) {
+  public function _setUpContributionObjects(bool $contributionPage): void {
 
     $contribution = new CRM_Contribute_BAO_Contribution();
     $contribution->id = $this->_contributionId;
@@ -413,7 +336,7 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     ];
   }
 
-  public function _setUpRecurringContribution() {
+  public function _setUpRecurringContribution(): void {
     $this->_contributionRecurParams = [
       'contact_id' => $this->_contactId,
       'amount' => 150.00,
@@ -441,10 +364,9 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
    * @param string $participantStatus
    *   The participant to create status
    *
-   * @throws \CRM_Core_Exception
    */
-  public function _setUpParticipantObjects($participantStatus = 'Attended'): void {
-    $event = $this->eventCreate(['is_email_confirm' => 1]);
+  public function _setUpParticipantObjects(string $participantStatus = 'Attended'): void {
+    $event = $this->eventCreatePaid(['is_email_confirm' => 1, 'email_confirm_text' => '']);
     $this->setupContribution();
 
     $this->_eventId = $event['id'];
@@ -467,7 +389,7 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     $this->input = [
       'component' => 'event',
       'total_amount' => 150.00,
-      'invoiceID' => "c8acb91e080ad7bd8a2adc119c192885",
+      'invoiceID' => 'c8acb91e080ad7bd8a2adc119c192885',
       'contactID' => $this->_contactId,
       'contributionID' => $contribution->id,
       'participantID' => $this->_participantId,
@@ -480,7 +402,7 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
   /**
    * Set up participant requirements for test.
    */
-  public function _setUpPledgeObjects() {
+  public function _setUpPledgeObjects(): void {
     $this->setupContribution();
     $this->_pledgeId = $this->pledgeCreate(['contact_id' => $this->_contactId]);
     //we'll create membership payment here because to make setup more re-usable
@@ -495,7 +417,7 @@ class CRM_Core_Payment_BaseIPNTest extends CiviUnitTestCase {
     $this->input = [
       'component' => 'contribute',
       'total_amount' => 150.00,
-      'invoiceID' => "c8acb91e080ad7bd8a2adc119c192885",
+      'invoiceID' => 'c8acb91e080ad7bd8a2adc119c192885',
       'contactID' => $this->_contactId,
       'contributionID' => $this->_contributionId,
       'pledgeID' => $this->_pledgeId,

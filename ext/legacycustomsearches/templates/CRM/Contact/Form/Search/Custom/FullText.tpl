@@ -14,11 +14,11 @@
       <table class="form-layout-compressed">
         <tr>
           <td>
-            <label>{$form.text.label}</label>
+            {$form.text.label}
             {$form.text.html}
           </td>
           <td>
-            <label>{ts}in...{/ts}</label>
+            {$form.table.label}
             {$form.table.html}
           </td>
           <td>{$form.buttons.html} {help id="id-fullText"}</td>
@@ -35,7 +35,7 @@
 {/if}
 
 {* @TODO: This is confusing - the variable `table` is already set and used above, and now we set it again to something that is technically different but has the same value, except on a blank form where it doesn't exist, but effectively then is the same value that it already has which is ''. So do we need this line even? *}
-{if (isset($form.table.value.0))}{assign var=table value=$form.table.value.0}{/if}
+{if $form.table.value && (array_key_exists(0, $form.table.value))}{assign var=table value=$form.table.value.0}{/if}
 {assign var=text  value=$form.text.value}
 {if !empty($summary.Contact) }
   <div class="section">
@@ -209,8 +209,8 @@
           <th class='link'>{ts}Contributor's Name{/ts}</th>
           <th class="currency">{ts}Amount{/ts}</th>
           <th>{ts}Financial Type{/ts}</th>
-          <th>{ts}Source{/ts}</th>
-          <th class="received_date">{ts}Received{/ts}</th>
+          <th>{ts}Contribution Source{/ts}</th>
+          <th class="received_date">{ts}Contribution Date{/ts}</th>
           <th>{ts}Status{/ts}</th>
           {if $allowFileSearch}<th>{ts}File{/ts}</th>{/if}
           <th></th>
@@ -265,7 +265,7 @@
           <th>{ts}Fee Level{/ts}</th>
           <th class="currency">{ts}Fee Amount{/ts}</th>
           <th class="register_date">{ts}Register Date{/ts}</th>
-          <th>{ts}Source{/ts}</th>
+          <th>{ts}Participant Source{/ts}</th>
           <th>{ts}Status{/ts}</th>
           <th>{ts}Role{/ts}</th>
           {if $allowFileSearch}<th>{ts}File{/ts}</th>{/if}
@@ -320,8 +320,8 @@
           <th>{ts}Membership Type{/ts}</th>
           <th class="currency">{ts}Membership Fee{/ts}</th>
           <th class="start_date">{ts}Membership Start Date{/ts}</th>
-          <th class="end_date">{ts}Membership End Date{/ts}</th>
-          <th>{ts}Source{/ts}</th>
+          <th class="end_date">{ts}Membership Expiration Date{/ts}</th>
+          <th>{ts}Membership Source{/ts}</th>
           <th>{ts}Status{/ts}</th>
           {if $allowFileSearch}<th>{ts}File{/ts}</th>{/if}
           <th></th>

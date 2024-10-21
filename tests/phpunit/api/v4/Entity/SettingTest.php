@@ -20,14 +20,15 @@
 namespace api\v4\Entity;
 
 use Civi\Api4\Setting;
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class SettingTest extends UnitTestCase {
+class SettingTest extends Api4TestBase implements TransactionalInterface {
 
-  public function testSettingASetting() {
+  public function testSettingASetting(): void {
     $setting = Setting::set()->addValue('menubar_position', 'above-crm-container')->setCheckPermissions(FALSE)->execute()->first();
     $this->assertEquals('above-crm-container', $setting['value']);
     $setting = Setting::get()->addSelect('menubar_position')->setCheckPermissions(FALSE)->execute()->first();
@@ -39,18 +40,18 @@ class SettingTest extends UnitTestCase {
     $this->assertEquals('over-cms-menu', $setting['value']);
   }
 
-  public function testInvalidSetting() {
+  public function testInvalidSetting(): void {
     $message = '';
     try {
       Setting::set()->addValue('not_a_real_setting!', 'hello')->setCheckPermissions(FALSE)->execute();
     }
-    catch (\API_Exception $e) {
+    catch (\CRM_Core_Exception $e) {
       $message = $e->getMessage();
     }
     $this->assertStringContainsString('setting', $message);
   }
 
-  public function testSerailizedSetting() {
+  public function testSerailizedSetting(): void {
     $set = \Civi\Api4\Setting::set(FALSE)
       ->addValue('contact_edit_options:name', [
         'CommunicationPreferences',
@@ -74,7 +75,7 @@ class SettingTest extends UnitTestCase {
   /**
    * Ensure settings work with the "index" mode.
    */
-  public function testSettingsWithIndexParam() {
+  public function testSettingsWithIndexParam(): void {
     $settings = civicrm_api4('Setting', 'get', [], ['name' => 'value']);
     $stringValues = FALSE;
     $arrayValues = FALSE;
@@ -95,7 +96,7 @@ class SettingTest extends UnitTestCase {
   /**
    * Make sure options load from getFields.
    */
-  public function testSettingGetFieldsOptions() {
+  public function testSettingGetFieldsOptions(): void {
     $setting = civicrm_api4('Setting', 'getFields', [
       'select' => ['options'],
       'loadOptions' => FALSE,
@@ -119,7 +120,7 @@ class SettingTest extends UnitTestCase {
   /**
    * Ensure settings default values unserialize.
    */
-  public function testSettingUnserializeDefaults() {
+  public function testSettingUnserializeDefaults(): void {
     $setting = civicrm_api4('Setting', 'getFields', ['where' => [['name', '=', 'contact_view_options']]], 0);
     $this->assertTrue(is_array($setting['default']));
   }

@@ -23,12 +23,28 @@ class CRM_Extension_Info {
   const FILENAME = 'info.xml';
 
   /**
-   * @var string
+   * @var string|null
    */
   public $key = NULL;
+
+  /**
+   * @var string|null
+   */
   public $type = NULL;
+
+  /**
+   * @var string|null
+   */
   public $name = NULL;
+
+  /**
+   * @var string|null
+   */
   public $label = NULL;
+
+  /**
+   * @var string|null
+   */
   public $file = NULL;
 
   /**
@@ -43,6 +59,13 @@ class CRM_Extension_Info {
    *   Each item is they key-name of an extension required by this extension.
    */
   public $requires = [];
+
+  /**
+   * @var array
+   *   List of expected mixins.
+   *   Ex: ['civix@2.0.0']
+   */
+  public $mixins = [];
 
   /**
    * @var array
@@ -73,15 +96,90 @@ class CRM_Extension_Info {
   public $upgrader = NULL;
 
   /**
+   * @var array|null
+   */
+  public $civix;
+
+  /**
+   * @var string|null
+   */
+  public $comments;
+
+  /**
+   * @var array
+   *   Ex: ['ver' => '5.50']
+   */
+  public $compatibility;
+
+  /**
+   * @var string|null
+   */
+  public $description;
+
+  /**
+   * @var string|null
+   *   Ex: 'stable', 'alpha', 'beta'
+   */
+  public $develStage;
+
+  /**
+   * Full URL of the zipball for this extension/version.
+   *
+   * This property is (usually) only provided on the feed of new/available extensions.
+   *
+   * @var string|null
+   */
+  public $downloadUrl;
+
+  /**
+   * @var string|null
+   *   Ex: 'GPL-3.0'
+   */
+  public $license;
+
+  /**
+   * @var string|null
+   *   Ex: '2025-01-02'
+   */
+  public $releaseDate;
+
+  /**
+   * @var array|null
+   *   Ex: ['Documentation' => 'https://example.org/my-extension/docs']
+   */
+  public $urls;
+
+  /**
+   * @var string|null
+   *   Ex: '1.2.3'
+   */
+  public $version;
+
+  /**
+   * @var array
+   */
+  public $typeInfo;
+
+  /**
+   * @var string
+   */
+  public $url;
+
+  /**
+   * @var string
+   */
+  public $category;
+
+  /**
    * Load extension info an XML file.
    *
-   * @param $file
+   * @param string $file
    *
    * @throws CRM_Extension_Exception_ParseException
    * @return CRM_Extension_Info
    */
   public static function loadFromFile($file) {
-    list ($xml, $error) = CRM_Utils_XML::parseFile($file);
+    [$xml, $error] = CRM_Utils_XML::parseFile($file);
     if ($xml === FALSE) {
       throw new CRM_Extension_Exception_ParseException("Failed to parse info XML: $error");
     }
@@ -101,7 +199,7 @@ class CRM_Extension_Info {
    * @return CRM_Extension_Info
    */
   public static function loadFromString($string) {
-    list ($xml, $error) = CRM_Utils_XML::parseString($string);
+    [$xml, $error] = CRM_Utils_XML::parseString($string);
     if ($xml === FALSE) {
       throw new CRM_Extension_Exception_ParseException("Failed to parse info XML: $string");
     }
@@ -133,11 +231,11 @@ class CRM_Extension_Info {
   }
 
   /**
-   * @param null $key
-   * @param null $type
-   * @param null $name
-   * @param null $label
-   * @param null $file
+   * @param string|null $key
+   * @param string|null $type
+   * @param string|null $name
+   * @param string|null $label
+   * @param string|null $file
    */
   public function __construct($key = NULL, $type = NULL, $name = NULL, $label = NULL, $file = NULL) {
     $this->key = $key;
@@ -195,6 +293,12 @@ class CRM_Extension_Info {
         $this->tags = [];
         foreach ($val->tag as $tag) {
           $this->tags[] = (string) $tag;
+        }
+      }
+      elseif ($attr === 'mixins') {
+        $this->mixins = [];
+        foreach ($val->mixin as $mixin) {
+          $this->mixins[] = (string) $mixin;
         }
       }
       elseif ($attr === 'requires') {

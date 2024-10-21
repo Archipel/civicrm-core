@@ -20,8 +20,6 @@
         // When search-by-range is enabled the second element gets a suffix for some properties like "placeholder2"
         rangeElements = ['', '2'],
         dateRangeElements = ['1', '2'],
-        relativeDatesWithPickRange = CRM.afGuiEditor.dateRanges,
-        relativeDatesWithoutPickRange = relativeDatesWithPickRange.slice(1),
         yesNo = [
           {id: '1', label: ts('Yes')},
           {id: '0', label: ts('No')}
@@ -30,8 +28,8 @@
 
       this.$onInit = function() {
         ctrl.hasDefaultValue = !!getSet('afform_default');
-        ctrl.fieldDefn = angular.extend({}, ctrl.getDefn(), ctrl.node.defn);
-        ctrl.inputTypes = _.transform(_.cloneDeep(afGui.meta.inputType), function(inputTypes, type) {
+        setFieldDefn();
+        ctrl.inputTypes = _.transform(_.cloneDeep(afGui.meta.inputTypes), function(inputTypes, type) {
           if (inputTypeCanBe(type.name)) {
             // Change labels for EntityRef fields
             if (ctrl.getDefn().input_type === 'EntityRef') {
@@ -49,6 +47,12 @@
             inputTypes.push(type);
           }
         });
+        this.searchOperators = CRM.afAdmin.search_operators;
+        // If field has limited operators, set appropriately
+        if (ctrl.fieldDefn.operators && ctrl.fieldDefn.operators.length) {
+          this.searchOperators = _.pick(this.searchOperators, ctrl.fieldDefn.operators);
+        }
+        setDateOptions();
       };
 
       this.getFkEntity = function() {
@@ -89,6 +93,11 @@
       // Returns the original field definition from metadata
       this.getDefn = function() {
         var defn = afGui.getField(ctrl.container.getFieldEntityType(ctrl.node.name), ctrl.node.name);
+        // Calc fields are specific to a search display, not part of the schema
+        if (!defn && ctrl.container.getSearchDisplay()) {
+          var searchDisplay = ctrl.container.getSearchDisplay();
+          defn = _.findWhere(searchDisplay.calc_fields, {name: ctrl.node.name});
+        }
         defn = defn || {
           label: ts('Untitled'),
           required: false
@@ -99,11 +108,18 @@
         return defn;
       };
 
+      // Get the api entity this field belongs to
+      this.getEntity = function() {
+        return afGui.getEntity(ctrl.container.getFieldEntityType(ctrl.node.name));
+      };
+
       $scope.getOriginalLabel = function() {
+        // Use afform entity if available (e.g. "Individual1")
         if (ctrl.container.getEntityName()) {
           return ctrl.editor.getEntity(ctrl.container.getEntityName()).label + ': ' + ctrl.getDefn().label;
         }
-        return afGui.getEntity(ctrl.container.getFieldEntityType(ctrl.node.name)).label + ': ' + ctrl.getDefn().label;
+        // Use generic entity (e.g. "Contact")
+        return ctrl.getEntity().label + ': ' + ctrl.getDefn().label;
       };
 
       $scope.hasOptions = function() {
@@ -112,11 +128,8 @@
       };
 
       this.getOptions = function() {
-        if (ctrl.node.defn && ctrl.node.defn.options) {
-          return ctrl.node.defn.options;
-        }
-        if (_.includes(['Date', 'Timestamp'], $scope.getProp('data_type'))) {
-          return $scope.getProp('search_range') ? relativeDatesWithPickRange : relativeDatesWithoutPickRange;
+        if (ctrl.fieldDefn.options) {
+          return ctrl.fieldDefn.options;
         }
         if (ctrl.getDefn().input_type === 'EntityRef') {
           // Build a list of all entities in this form that can be referenced by this field.
@@ -167,6 +180,9 @@
           case 'Number':
             return !(defn.options || defn.data_type === 'Boolean');
 
+          case 'DisplayOnly':
+            return true;
+
           default:
             return false;
         }
@@ -210,10 +226,14 @@
         if (newVal && getSet('input_attrs.multiple')) {
           getSet('input_attrs.multiple', false);
         }
+        if (ctrl.hasDefaultValue) {
+          $scope.toggleDefaultValue();
+        }
+        setDateOptions();
       };
 
-      $scope.toggleRequired = function() {
-        getSet('required', !getSet('required'));
+      $scope.toggleAttr = function(attr) {
+        getSet(attr, !getSet(attr));
       };
 
       $scope.toggleHelp = function(position) {
@@ -225,6 +245,17 @@
           ($scope.getProp('input_type') === 'CheckBox' || $scope.getProp('input_attrs.multiple')));
       }
 
+      function setFieldDefn() {
+        ctrl.fieldDefn = angular.extend({}, ctrl.getDefn(), ctrl.node.defn);
+      }
+
+      function setDateOptions() {
+        if (_.includes(['Date', 'Timestamp'], $scope.getProp('data_type'))) {
+          ctrl.node.defn = ctrl.node.defn || {};
+          ctrl.node.defn.options = $scope.getProp('search_range') ? CRM.afGuiEditor.dateRanges : CRM.afGuiEditor.dateRanges.slice(1);
+          setFieldDefn();
+        }
+      }
 
       $scope.toggleDefaultValue = function() {
         if (ctrl.hasDefaultValue) {
@@ -264,7 +295,24 @@
         }
       };
 
-      // Getter/setter for definition props
+      // Getter/setter for search_operator and expose_operator combo-field
+      // The expose_operator flag changes the behavior of the search_operator field
+      // to either set the value on the backend, or set the default value for the user-select list on the form
+      $scope.getSetOperator = function(val) {
+        if (arguments.length) {
+          // _EXPOSE_ is not a real option for search_operator, instead it sets the expose_operator boolean
+          getSet('expose_operator', val === '_EXPOSE_');
+          if (val === '_EXPOSE_') {
+            getSet('search_operator', _.keys(ctrl.searchOperators)[0]);
+          } else {
+            getSet('search_operator', val);
+          }
+          return val;
+        }
+        return getSet('expose_operator') ? '_EXPOSE_' : getSet('search_operator');
+      };
+
+      // Generic getter/setter for definition props
       $scope.getSet = function(propName) {
         return _.wrap(propName, getSet);
       };
@@ -294,7 +342,7 @@
               clearOut(ctrl.node, ['defn', 'input_attrs']);
             }
           }
-          ctrl.fieldDefn = angular.extend({}, ctrl.getDefn(), ctrl.node.defn);
+          setFieldDefn();
 
           // When changing the multiple property, force-reset the default value widget
           if (ctrl.hasDefaultValue && _.includes(['input_type', 'input_attrs.multiple'], propName)) {

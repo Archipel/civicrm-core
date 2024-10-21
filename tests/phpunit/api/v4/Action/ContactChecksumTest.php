@@ -19,14 +19,16 @@
 
 namespace api\v4\Action;
 
+use api\v4\Api4TestBase;
 use Civi\Api4\Contact;
+use Civi\Test\TransactionalInterface;
 
 /**
  * @group headless
  */
-class ContactChecksumTest extends \api\v4\UnitTestCase {
+class ContactChecksumTest extends Api4TestBase implements TransactionalInterface {
 
-  public function testGetChecksum() {
+  public function testGetChecksum(): void {
     $contact = Contact::create(FALSE)
       ->addValue('first_name', 'Check')
       ->addValue('last_name', 'Sum')
@@ -43,7 +45,7 @@ class ContactChecksumTest extends \api\v4\UnitTestCase {
     $this->assertTrue($result['valid']);
   }
 
-  public function testValidateChecksum() {
+  public function testValidateChecksum(): void {
     $cid = Contact::create(FALSE)
       ->addValue('first_name', 'Checker')
       ->addValue('last_name', 'Sum')

@@ -10,49 +10,14 @@
  */
 
 /**
- * Upgrade logic for FiveForty */
+ * Upgrade logic for FiveForty
+ */
 class CRM_Upgrade_Incremental_php_FiveForty extends CRM_Upgrade_Incremental_Base {
-
-  /**
-   * Compute any messages which should be displayed beforeupgrade.
-   *
-   * Note: This function is called iteratively for each incremental upgrade step.
-   * There must be a concrete step (eg 'X.Y.Z.mysql.tpl' or 'upgrade_X_Y_Z()').
-   *
-   * @param string $preUpgradeMessage
-   * @param string $rev
-   *   a version number, e.g. '4.4.alpha1', '4.4.beta3', '4.4.0'.
-   * @param null $currentVer
-   */
-  public function setPreUpgradeMessage(&$preUpgradeMessage, $rev, $currentVer = NULL) {
-    // Example: Generate a pre-upgrade message.
-    // if ($rev == '5.12.34') {
-    //   $preUpgradeMessage .= '<p>' . ts('A new permission, "%1", has been added. This permission is now used to control access to the Manage Tags screen.', array(1 => ts('manage tags'))) . '</p>';
-    // }
-  }
-
-  /**
-   * Compute any messages which should be displayed after upgrade.
-   *
-   * Note: This function is called iteratively for each incremental upgrade step.
-   * There must be a concrete step (eg 'X.Y.Z.mysql.tpl' or 'upgrade_X_Y_Z()').
-   *
-   * @param string $postUpgradeMessage
-   *   alterable.
-   * @param string $rev
-   *   an intermediate version; note that setPostUpgradeMessage is called repeatedly with different $revs.
-   */
-  public function setPostUpgradeMessage(&$postUpgradeMessage, $rev) {
-    // Example: Generate a post-upgrade message.
-    // if ($rev == '5.12.34') {
-    //   $postUpgradeMessage .= '<br /><br />' . ts("By default, CiviCRM now disables the ability to import directly from SQL. To use this feature, you must explicitly grant permission 'import SQL datasource'.");
-    // }
-  }
 
   public function upgrade_5_40_alpha1($rev) {
     $this->addTask(ts('Upgrade DB to %1: SQL', [1 => $rev]), 'runSql', $rev);
     $this->addTask('Add option list for group_used_for', 'addGroupOptionList');
-    $this->addTask('core-issue#2486  - Add product_id foreign key to civicrm_contribution_product', 'addContributionProductFK');
+    $this->addTask('dev/core#2486  - Add product_id foreign key to civicrm_contribution_product', 'addContributionProductFK');
     $this->addTask('Add membership_num_terms column to civicrm_line_item', 'addColumn',
       'civicrm_line_item', 'membership_num_terms', "int unsigned DEFAULT NULL COMMENT 'Number of terms for this membership (only supported in Order->Payment flow). If the field is NULL it means unknown and it will be assumed to be 1 during payment.create if entity_table is civicrm_membership'"
     );

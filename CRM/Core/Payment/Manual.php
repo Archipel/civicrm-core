@@ -111,8 +111,18 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
    * @throws \Civi\Payment\Exception\PaymentProcessorException
    */
   public function doPayment(&$params, $component = 'contribute') {
-    $params['payment_status_id'] = $this->getResult();
-    return $params;
+    $result['payment_status_id'] = $this->getResult();
+    if ($result['payment_status_id'] == CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Pending')) {
+      $result = $this->setStatusPaymentPending($result);
+    }
+    elseif ($result['payment_status_id'] == CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'contribution_status_id', 'Completed')) {
+      $result = $this->setStatusPaymentCompleted($result);
+    }
+    else {
+      throw new \Civi\Payment\Exception\PaymentProcessorException('Result from doPayment MUST be one of Completed|Pending');
+    }
+
+    return $result;
   }
 
   /**
@@ -283,5 +293,15 @@ class CRM_Core_Payment_Manual extends CRM_Core_Payment {
   protected function supportsCancelRecurring() {
     return TRUE;
   }
+
+  /**
+   * Override default payment instrument validation, as recommended.
+   *
+   * We have nothing to validate here.
+   *
+   * @param array $values
+   * @param array $errors
+   */
+  public function validatePaymentInstrument($values, &$errors): void {}
 
 }

@@ -21,7 +21,7 @@ class CRM_Core_Payment_PaypalStdTest extends CiviUnitTestCase {
   protected $processor;
 
   /**
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setUp(): void {
     parent::setUp();
@@ -50,7 +50,7 @@ class CRM_Core_Payment_PaypalStdTest extends CiviUnitTestCase {
    *
    * @throws \Civi\Payment\Exception\PaymentProcessorException
    */
-  public function testSinglePayment() {
+  public function testSinglePayment(): void {
     $params = [];
     $params['amount'] = 5.24;
     $params['currency'] = 'USD';

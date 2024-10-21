@@ -88,7 +88,7 @@ class ReflectionUtils {
         elseif ($key == 'return') {
           $info['return'] = explode('|', $words[0]);
         }
-        elseif ($key == 'options' || $key == 'ui_join_filters') {
+        elseif ($key == 'options') {
           $val = str_replace(', ', ',', implode(' ', $words));
           $info[$key] = explode(',', $val);
         }
@@ -180,6 +180,20 @@ class ReflectionUtils {
   }
 
   /**
+   * Check if a class method is deprecated
+   *
+   * @param string $className
+   * @param string $methodName
+   * @return bool
+   * @throws \ReflectionException
+   */
+  public static function isMethodDeprecated(string $className, string $methodName): bool {
+    $reflection = new \ReflectionClass($className);
+    $docBlock = $reflection->getMethod($methodName)->getDocComment();
+    return strpos($docBlock, "@deprecated") !== FALSE;
+  }
+
+  /**
    * Find any methods in this class which match the given prefix.
    *
    * @param string $class
@@ -200,6 +214,58 @@ class ReflectionUtils {
     catch (\ReflectionException $e) {
       throw new \RuntimeException(sprintf("Cannot inspect class %s.", $class));
     }
+  }
+
+  /**
+   * Cast the $value to the preferred $type (if we're fairly confident).
+   *
+   * This is like PHP's `settype()` but totally not. It only casts in narrow circumstances.
+   * This reflects an opinion that some castings are better than others.
+   *
+   * These will be converted:
+   *
+   *    cast('123', 'int') => 123
+   *    cast('123.4', 'float') => 123.4
+   *    cast('0', 'bool') => FALSE
+   *    cast(1, 'bool') => TRUE
+   *
+   * However, a string like 'hello' will never cast to bool, int, or float -- because that's
+   * a senseless request. We'll leave that to someone else to figure.
+   *
+   * @param mixed $value
+   * @param array $paramInfo
+   * @return mixed
+   *   If the $value is agreeable to casting according to a type-rule from $paramInfo, then
+   *   we return the converted value. Otherwise, return the original value.
+   */
+  public static function castTypeSoftly($value, array $paramInfo) {
+    if (count($paramInfo['type'] ?? []) !== 1) {
+      // I don't know when or why fields can have multiple types. We're just gone leave-be.
+      return $value;
+    }
+
+    switch ($paramInfo['type'][0]) {
+      case 'bool':
+        if (in_array($value, [0, 1, '0', '1'], TRUE)) {
+          return (bool) $value;
+        }
+        break;
+
+      case 'int':
+        if (is_numeric($value)) {
+          return (int) $value;
+        }
+        break;
+
+      case 'float':
+        if (is_numeric($value)) {
+          return (float) $value;
+        }
+        break;
+
+    }
+
+    return $value;
   }
 
 }

@@ -156,9 +156,9 @@ class CRM_Core_SelectValues {
    */
   public static function eventDate() {
     return [
-      'start_date' => ts('start date'),
-      'end_date' => ts('end date'),
-      'join_date' => ts('member since'),
+      'start_date' => ts('Membership Start Date'),
+      'end_date' => ts('Membership Expiration Date'),
+      'join_date' => ts('Member Since'),
     ];
   }
 
@@ -169,47 +169,71 @@ class CRM_Core_SelectValues {
    */
   public static function customHtmlType() {
     return [
-      'Text' => ts('Single-line input field (text or numeric)'),
-      'TextArea' => ts('Multi-line text box (textarea)'),
-      'Select' => ts('Drop-down (select list)'),
-      'Radio' => ts('Radio buttons'),
-      'CheckBox' => ts('Checkbox(es)'),
-      'Select Date' => ts('Select Date'),
-      'File' => ts('File'),
-      'RichTextEditor' => ts('Rich Text Editor'),
-      'Autocomplete-Select' => ts('Autocomplete-Select'),
-      'Link' => ts('Link'),
+      [
+        'id' => 'Text',
+        'name' => 'Single-line input field (text or numeric)',
+        'label' => ts('Single-line input field (text or numeric)'),
+      ],
+      [
+        'id' => 'TextArea',
+        'name' => 'Multi-line text box (textarea)',
+        'label' => ts('Multi-line text box (textarea)'),
+      ],
+      [
+        'id' => 'Select',
+        'name' => 'Drop-down (select list)',
+        'label' => ts('Drop-down (select list)'),
+      ],
+      [
+        'id' => 'Radio',
+        'name' => 'Radio buttons',
+        'label' => ts('Radio buttons'),
+      ],
+      [
+        'id' => 'CheckBox',
+        'name' => 'Checkbox(es)',
+        'label' => ts('Checkbox(es)'),
+      ],
+      [
+        'id' => 'Select Date',
+        'name' => 'Select Date',
+        'label' => ts('Select Date'),
+      ],
+      [
+        'id' => 'File',
+        'name' => 'File',
+        'label' => ts('File'),
+      ],
+      [
+        'id' => 'RichTextEditor',
+        'name' => 'Rich Text Editor',
+        'label' => ts('Rich Text Editor'),
+      ],
+      [
+        'id' => 'Autocomplete-Select',
+        'name' => 'Autocomplete-Select',
+        'label' => ts('Autocomplete-Select'),
+      ],
+      [
+        'id' => 'Link',
+        'name' => 'Link',
+        'label' => ts('Link'),
+      ],
     ];
   }
 
   /**
-   * Various pre defined extensions for dynamic properties and groups.
+   * List of entities to present on the Custom Group form.
+   *
+   * Includes pseudo-entities for Participant, in order to present sub-types on the form.
    *
    * @return array
-   *
    */
   public static function customGroupExtends() {
-    $customGroupExtends = [
-      'Activity' => ts('Activities'),
-      'Relationship' => ts('Relationships'),
-      'Contribution' => ts('Contributions'),
-      'ContributionRecur' => ts('Recurring Contributions'),
-      'Group' => ts('Groups'),
-      'Membership' => ts('Memberships'),
-      'Event' => ts('Events'),
-      'Participant' => ts('Participants'),
-      'ParticipantRole' => ts('Participants (Role)'),
-      'ParticipantEventName' => ts('Participants (Event Name)'),
-      'ParticipantEventType' => ts('Participants (Event Type)'),
-      'Pledge' => ts('Pledges'),
-      'Grant' => ts('Grants'),
-      'Address' => ts('Addresses'),
-      'Campaign' => ts('Campaigns'),
-    ];
-    $contactTypes = ['Contact' => ts('Contacts')] + self::contactType();
-    $extendObjs = CRM_Core_OptionGroup::values('cg_extend_objects');
-    $customGroupExtends = array_merge($contactTypes, $customGroupExtends, $extendObjs);
-    return $customGroupExtends;
+    $customGroupExtends = array_column(CRM_Core_BAO_CustomGroup::getCustomGroupExtendsOptions(), 'label', 'id');
+    // ParticipantRole, ParticipantEventName, etc.
+    $pseudoSelectors = CRM_Core_OptionGroup::values('custom_data_type', FALSE, FALSE, FALSE, NULL, 'label', TRUE, FALSE, 'name');
+    return array_merge($customGroupExtends, $pseudoSelectors);
   }
 
   /**
@@ -237,10 +261,7 @@ class CRM_Core_SelectValues {
     ];
 
     if (CRM_Core_Config::singleton()->userSystem->supports_form_extensions) {
-      $ufGroupType += [
-        'User Registration' => ts('Drupal User Registration'),
-        'User Account' => ts('View/Edit Drupal User Account'),
-      ];
+      $ufGroupType += CRM_Core_Config::singleton()->userSystem->getUfGroupTypes();
     }
     return $ufGroupType;
   }
@@ -413,7 +434,7 @@ class CRM_Core_SelectValues {
   public static function mapProvider() {
     static $map = NULL;
     if (!$map) {
-      $map = ['' => '- select -'] + CRM_Utils_System::getPluginList('templates/CRM/Contact/Form/Task/Map', ".tpl");
+      $map = ['' => ts('- select -')] + CRM_Utils_System::getPluginList('templates/CRM/Contact/Form/Task/Map', ".tpl");
     }
     return $map;
   }
@@ -427,7 +448,7 @@ class CRM_Core_SelectValues {
   public static function geoProvider() {
     static $geo = NULL;
     if (!$geo) {
-      $geo = ['' => '- select -'] + CRM_Utils_System::getPluginList('CRM/Utils/Geocode');
+      $geo = ['' => ts('- select -')] + CRM_Utils_System::getPluginList('CRM/Utils/Geocode');
     }
     return $geo;
   }
@@ -462,9 +483,22 @@ class CRM_Core_SelectValues {
   public static function addressProvider() {
     static $addr = NULL;
     if (!$addr) {
-      $addr = array_merge(['' => '- select -'], CRM_Utils_System::getPluginList('CRM/Utils/Address', '.php', ['BatchUpdate']));
+      $addr = array_merge(['' => ts('- select -')], CRM_Utils_System::getPluginList('CRM/Utils/Address', '.php', ['BatchUpdate']));
     }
     return $addr;
+  }
+
+  public static function smsProvider(): array {
+    $providers = CRM_SMS_BAO_Provider::getProviders(NULL, NULL, TRUE, 'is_default desc, title');
+    $result = [];
+    foreach ($providers as $provider) {
+      $result[] = [
+        'id' => $provider['id'],
+        'name' => $provider['name'],
+        'label' => $provider['title'],
+      ];
+    }
+    return $result;
   }
 
   /**
@@ -519,9 +553,12 @@ class CRM_Core_SelectValues {
   /**
    * Different type of Membership Tokens.
    *
+   * @deprecated
+   *
    * @return array
    */
   public static function membershipTokens(): array {
+    CRM_Core_Error::deprecatedFunctionWarning('token processor');
     return [
       '{membership.id}' => ts('Membership ID'),
       '{membership.status_id:label}' => ts('Status'),
@@ -541,6 +578,7 @@ class CRM_Core_SelectValues {
    * @return array
    */
   public static function eventTokens(): array {
+    CRM_Core_Error::deprecatedFunctionWarning('token processor');
     $tokenProcessor = new TokenProcessor(Civi::dispatcher(), ['schema' => ['eventId']]);
     $allTokens = $tokenProcessor->listTokens();
     foreach (array_keys($allTokens) as $token) {
@@ -559,6 +597,7 @@ class CRM_Core_SelectValues {
    * @return array
    */
   public static function contributionTokens(): array {
+    CRM_Core_Error::deprecatedFunctionWarning('use the token processor');
     $tokenProcessor = new TokenProcessor(Civi::dispatcher(), ['schema' => ['contributionId']]);
     $allTokens = $tokenProcessor->listTokens();
     foreach (array_keys($allTokens) as $token) {
@@ -749,6 +788,22 @@ class CRM_Core_SelectValues {
   }
 
   /**
+   * Get measurement units recognized by the TCPDF package used to create PDF labels.
+   *
+   * @return array
+   *   array of measurement units
+   */
+  public static function getLayoutUnits(): array {
+    return [
+      'in' => ts('Inches'),
+      'cm' => ts('Centimeters'),
+      'mm' => ts('Millimeters'),
+      'pt' => ts('Points'),
+      'px' => ts('Pixels'),
+    ];
+  }
+
+  /**
    * Extension types.
    *
    * @return array
@@ -871,9 +926,21 @@ class CRM_Core_SelectValues {
    */
   public static function billingMode() {
     return [
-      CRM_Core_Payment::BILLING_MODE_FORM => 'form',
-      CRM_Core_Payment::BILLING_MODE_BUTTON => 'button',
-      CRM_Core_Payment::BILLING_MODE_NOTIFY => 'notify',
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_FORM,
+        'name' => 'form',
+        'label' => 'form',
+      ],
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_BUTTON,
+        'name' => 'button',
+        'label' => 'button',
+      ],
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_NOTIFY,
+        'name' => 'notify',
+        'label' => 'notify',
+      ],
     ];
   }
 
@@ -882,9 +949,21 @@ class CRM_Core_SelectValues {
    */
   public static function contributeMode() {
     return [
-      CRM_Core_Payment::BILLING_MODE_FORM => 'direct',
-      CRM_Core_Payment::BILLING_MODE_BUTTON => 'directIPN',
-      CRM_Core_Payment::BILLING_MODE_NOTIFY => 'notify',
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_FORM,
+        'name' => 'direct',
+        'label' => 'direct',
+      ],
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_BUTTON,
+        'name' => 'directIPN',
+        'label' => 'directIPN',
+      ],
+      [
+        'id' => CRM_Core_Payment::BILLING_MODE_NOTIFY,
+        'name' => 'notify',
+        'label' => 'notify',
+      ],
     ];
   }
 
@@ -900,6 +979,7 @@ class CRM_Core_SelectValues {
     // is for recurring payments and probably not good to re-use for recurring entities.
     // If something other than a hard-coded list is desired, add a new option_group.
     return [
+      'minute' => ts('minute', ['plural' => 'minutes', 'count' => $count]),
       'hour' => ts('hour', ['plural' => 'hours', 'count' => $count]),
       'day' => ts('day', ['plural' => 'days', 'count' => $count]),
       'week' => ts('week', ['plural' => 'weeks', 'count' => $count]),
@@ -995,9 +1075,21 @@ class CRM_Core_SelectValues {
    */
   public static function getPermissionedRelationshipOptions() {
     return [
-      CRM_Contact_BAO_Relationship::NONE => ts('None'),
-      CRM_Contact_BAO_Relationship::VIEW => ts('View only'),
-      CRM_Contact_BAO_Relationship::EDIT => ts('View and update'),
+      [
+        'id' => CRM_Contact_BAO_Relationship::NONE,
+        'name' => 'None',
+        'label' => ts('None'),
+      ],
+      [
+        'id' => CRM_Contact_BAO_Relationship::VIEW,
+        'name' => 'View only',
+        'label' => ts('View only'),
+      ],
+      [
+        'id' => CRM_Contact_BAO_Relationship::EDIT,
+        'name' => 'View and update',
+        'label' => ts('View and update'),
+      ],
     ];
   }
 
@@ -1020,34 +1112,40 @@ class CRM_Core_SelectValues {
    * Dropdown options for quicksearch in the menu
    *
    * @return array
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public static function quicksearchOptions() {
     $includeEmail = civicrm_api3('setting', 'getvalue', ['name' => 'includeEmailInName', 'group' => 'Search Preferences']);
     $options = [
       'sort_name' => $includeEmail ? ts('Name/Email') : ts('Name'),
-      'contact_id' => ts('Contact ID'),
+      'id' => ts('Contact ID'),
       'external_identifier' => ts('External ID'),
       'first_name' => ts('First Name'),
       'last_name' => ts('Last Name'),
-      'email' => ts('Email'),
-      'phone_numeric' => ts('Phone'),
-      'street_address' => ts('Street Address'),
-      'city' => ts('City'),
-      'postal_code' => ts('Postal Code'),
+      'email_primary.email' => ts('Email'),
+      'phone_primary.phone_numeric' => ts('Phone'),
+      'address_primary.street_address' => ts('Street Address'),
+      'address_primary.city' => ts('City'),
+      'address_primary.postal_code' => ts('Postal Code'),
       'job_title' => ts('Job Title'),
     ];
-    $custom = civicrm_api3('CustomField', 'get', [
-      'return' => ['name', 'label', 'custom_group_id.title'],
-      'custom_group_id.extends' => ['IN' => ['Contact', 'Individual', 'Organization', 'Household']],
-      'data_type' => ['NOT IN' => ['ContactReference', 'Date', 'File']],
-      'custom_group_id.is_active' => 1,
-      'is_active' => 1,
-      'is_searchable' => 1,
-      'options' => ['sort' => ['custom_group_id.weight', 'weight'], 'limit' => 0],
+    $custom = civicrm_api4('CustomField', 'get', [
+      'checkPermissions' => FALSE,
+      'select' => ['name', 'label', 'custom_group_id.name', 'custom_group_id.title', 'option_group_id'],
+      'where' => [
+        ['custom_group_id.extends', 'IN', array_merge(['Contact'], CRM_Contact_BAO_ContactType::basicTypes())],
+        ['data_type', 'NOT IN', ['ContactReference', 'Date', 'File']],
+        ['custom_group_id.is_active', '=', TRUE],
+        ['is_active', '=', TRUE],
+        ['is_searchable', '=', TRUE],
+      ],
+      'orderBy' => [
+        'custom_group_id.weight' => 'ASC',
+        'weight' => 'ASC',
+      ],
     ]);
-    foreach ($custom['values'] as $field) {
-      $options['custom_' . $field['name']] = $field['custom_group_id.title'] . ': ' . $field['label'];
+    foreach ($custom as $field) {
+      $options[$field['custom_group_id.name'] . '.' . $field['name'] . ($field['option_group_id'] ? ':label' : '')] = $field['custom_group_id.title'] . ': ' . $field['label'];
     }
     return $options;
   }
@@ -1074,6 +1172,7 @@ class CRM_Core_SelectValues {
    */
   public static function fieldSerialization() {
     return [
+      CRM_Core_DAO::SERIALIZE_NONE => 'none',
       CRM_Core_DAO::SERIALIZE_SEPARATOR_BOOKEND => 'separator_bookend',
       CRM_Core_DAO::SERIALIZE_SEPARATOR_TRIMMED => 'separator_trimmed',
       CRM_Core_DAO::SERIALIZE_JSON => 'json',
@@ -1101,6 +1200,59 @@ class CRM_Core_SelectValues {
       'a_b' => ts('A to B'),
       'b_a' => ts('B to A'),
     ];
+  }
+
+  /**
+   * @return array
+   */
+  public static function andOr() {
+    return [
+      'AND' => ts('And'),
+      'OR' => ts('Or'),
+    ];
+  }
+
+  public static function beforeAfter() {
+    return [
+      'before' => ts('Before'),
+      'after' => ts('After'),
+    ];
+  }
+
+  /**
+   * Columns from the option_value table which may or may not be used by each option_group.
+   *
+   * Note: Value is not listed here as it is not optional.
+   *
+   * @return string[]
+   */
+  public static function optionValueFields() {
+    return [
+      'name' => 'name',
+      'label' => 'label',
+      'description' => 'description',
+      'icon' => 'icon',
+      'color' => 'color',
+    ];
+  }
+
+  /**
+   * Callback for Role.permissions pseudoconstant values.
+   *
+   * Permissions for Civi Standalone, not used by CMS-based systems.
+   *
+   * @return array
+   */
+  public static function permissions() {
+    $perms = $options = [];
+    \CRM_Utils_Hook::permissionList($perms);
+
+    foreach ($perms as $machineName => $details) {
+      if (!empty($details['is_active'])) {
+        $options[$machineName] = $details['title'];
+      }
+    }
+    return $options;
   }
 
 }

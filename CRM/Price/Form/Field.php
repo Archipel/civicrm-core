@@ -257,7 +257,7 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
     }
 
     // form fields of Custom Option rows
-    $_showHide = new CRM_Core_ShowHideBlocks('', '');
+    $_showHide = new CRM_Core_ShowHideBlocks();
 
     for ($i = 1; $i <= self::NUM_OPTION; $i++) {
 
@@ -427,26 +427,18 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
       }
     }
 
-    //avoid the same price field label in Within PriceSet
-    $priceFieldLabel = new CRM_Price_DAO_PriceField();
-    $priceFieldLabel->label = $fields['label'];
-    $priceFieldLabel->price_set_id = $form->_sid;
-
-    $dupeLabel = FALSE;
-    if ($priceFieldLabel->find(TRUE) && $form->getEntityId() != $priceFieldLabel->id) {
-      $dupeLabel = TRUE;
-    }
-
-    if ($dupeLabel) {
-      $errors['label'] = ts('Name already exists in Database.');
-    }
-
-    if ((is_numeric(CRM_Utils_Array::value('count', $fields)) &&
+    if ((is_numeric($fields['count'] ?? '') &&
         empty($fields['count'])
       ) &&
-      (CRM_Utils_Array::value('html_type', $fields) == 'Text')
+      (($fields['html_type'] ?? NULL) == 'Text')
     ) {
       $errors['count'] = ts('Participant Count must be greater than zero.');
+    }
+
+    // Validate start/end date inputs
+    $validateDates = \CRM_Utils_Date::validateStartEndDatepickerInputs('active_on', $fields['active_on'], 'expire_on', $fields['expire_on']);
+    if ($validateDates !== TRUE) {
+      $errors[$validateDates['key']] = $validateDates['message'];
     }
 
     if ($form->_action & CRM_Core_Action::ADD) {
@@ -454,7 +446,7 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
         $countemptyrows = 0;
         $publicOptionCount = $_flagOption = $_rowError = 0;
 
-        $_showHide = new CRM_Core_ShowHideBlocks('', '');
+        $_showHide = new CRM_Core_ShowHideBlocks();
         $visibilityOptions = CRM_Price_BAO_PriceFieldValue::buildOptions('visibility_id', 'validate');
 
         for ($index = 1; $index <= self::NUM_OPTION; $index++) {
@@ -481,7 +473,7 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
 
           // allow for 0 value.
           if (!empty($fields['option_amount'][$index]) ||
-            strlen($fields['option_amount'][$index]) > 0
+            strlen($fields['option_amount'][$index] ?? '') > 0
           ) {
             $noAmount = 0;
           }
@@ -646,7 +638,6 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
    * Process the form.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function postProcess() {
     // store the submitted values in an array
@@ -662,7 +653,7 @@ class CRM_Price_Form_Field extends CRM_Core_Form {
     $session = CRM_Core_Session::singleton();
     if ($buttonName == $this->getButtonName('next', 'new')) {
       CRM_Core_Session::setStatus(ts(' You can add another price set field.'), '', 'info');
-      $session->replaceUserContext(CRM_Utils_System::url('civicrm/admin/price/field', 'reset=1&action=add&sid=' . $this->_sid));
+      $session->replaceUserContext(CRM_Utils_System::url('civicrm/admin/price/field/edit', 'reset=1&action=add&sid=' . $this->_sid));
     }
     else {
       $session->replaceUserContext(CRM_Utils_System::url('civicrm/admin/price/field', 'reset=1&action=browse&sid=' . $this->_sid));

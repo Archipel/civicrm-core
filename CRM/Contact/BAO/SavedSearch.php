@@ -18,52 +18,23 @@
 /**
  * Business object for Saved searches.
  */
-class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
+class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch implements \Civi\Core\HookInterface {
 
   /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
-   * Query the db for all saved searches.
-   *
-   * @return array
-   *   contains the search name as value and and id as key
-   */
-  public function getAll() {
-    $savedSearch = new CRM_Contact_DAO_SavedSearch();
-    $savedSearch->selectAdd();
-    $savedSearch->selectAdd('id, name');
-    $savedSearch->find();
-    while ($savedSearch->fetch()) {
-      $aSavedSearch[$savedSearch->id] = $savedSearch->name;
-    }
-    return $aSavedSearch;
-  }
-
-  /**
-   * Retrieve DB object based on input parameters.
-   *
-   * It also stores all the retrieved values in the default array.
+   * Retrieve DB object and copy to defaults array.
    *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
+   *   Array of criteria values.
    * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
+   *   Array to be populated with found values.
    *
-   * @return CRM_Contact_DAO_SavedSearch
+   * @return self|null
+   *   The DAO object, if found.
+   *
+   * @deprecated
    */
   public static function retrieve($params, &$defaults = []) {
-    $savedSearch = new CRM_Contact_DAO_SavedSearch();
-    $savedSearch->copyValues($params);
-    if ($savedSearch->find(TRUE)) {
-      CRM_Core_DAO::storeValues($savedSearch, $defaults);
-      return $savedSearch;
-    }
-    return NULL;
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -76,7 +47,6 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
    *   the values of the posted saved search used as default values in various Search Form
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public static function getFormValues($id) {
     $specialDateFields = [
@@ -187,13 +157,6 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
       }
     }
 
-    if ($customSearchClass = CRM_Utils_Array::value('customSearchClass', $result)) {
-      // check if there is a special function - formatSavedSearchFields defined in the custom search form
-      if (method_exists($customSearchClass, 'formatSavedSearchFields')) {
-        $customSearchClass::formatSavedSearchFields($result);
-      }
-    }
-
     return $result;
   }
 
@@ -205,7 +168,6 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
    * @return array
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public static function getSearchParams($id) {
     $savedSearch = \Civi\Api4\SavedSearch::get(FALSE)
@@ -255,121 +217,51 @@ class CRM_Contact_BAO_SavedSearch extends CRM_Contact_DAO_SavedSearch {
   }
 
   /**
-   * Contact IDS Sql (whatever that means!).
+   * Deprecated function, gets a value from Group entity
    *
+   * @deprecated
    * @param int $id
-   *
-   * @return string
-   */
-  public static function contactIDsSQL($id) {
-    $params = self::getSearchParams($id);
-    if ($params && !empty($params['customSearchID'])) {
-      return CRM_Contact_BAO_SearchCustom::contactIDSQL(NULL, $id);
-    }
-    else {
-      $tables = $whereTables = ['civicrm_contact' => 1];
-      $where = CRM_Contact_BAO_SavedSearch::whereClause($id, $tables, $whereTables);
-      if (!$where) {
-        $where = '( 1 )';
-      }
-      $from = CRM_Contact_BAO_Query::fromClause($whereTables);
-      return "
-SELECT contact_a.id
-$from
-WHERE  $where";
-    }
-  }
-
-  /**
-   * Get from where email (whatever that means!).
-   *
-   * @param int $id
-   *
-   * @return array
-   */
-  public static function fromWhereEmail($id) {
-    $params = self::getSearchParams($id);
-
-    if ($params) {
-      if (!empty($params['customSearchID'])) {
-        return CRM_Contact_BAO_SearchCustom::fromWhereEmail(NULL, $id);
-      }
-      else {
-        $tables = $whereTables = ['civicrm_contact' => 1, 'civicrm_email' => 1];
-        $where = CRM_Contact_BAO_SavedSearch::whereClause($id, $tables, $whereTables);
-        $from = CRM_Contact_BAO_Query::fromClause($whereTables);
-        return [$from, $where];
-      }
-    }
-    else {
-      // fix for CRM-7240
-      $from = "
-FROM      civicrm_contact contact_a
-LEFT JOIN civicrm_email ON (contact_a.id = civicrm_email.contact_id AND civicrm_email.is_primary = 1)
-";
-      $where = " ( 1 ) ";
-      $tables['civicrm_contact'] = $whereTables['civicrm_contact'] = 1;
-      $tables['civicrm_email'] = $whereTables['civicrm_email'] = 1;
-      return [$from, $where];
-    }
-  }
-
-  /**
-   * Given an id, get the name of the saved search.
-   *
-   * @param int $id
-   *   The id of the saved search.
-   *
    * @param string $value
    *
-   * @return string
-   *   the name of the saved search
+   * @return string|null
    */
   public static function getName($id, $value = 'name') {
-    $group = new CRM_Contact_DAO_Group();
-    $group->saved_search_id = $id;
-    if ($group->find(TRUE)) {
-      return $group->$value;
-    }
-    return NULL;
+    return parent::getFieldValue('CRM_Contact_DAO_Group', $id, $value, 'saved_search_id');
   }
 
   /**
-   * Create or update SavedSearch record.
-   *
+   * @deprecated
    * @param array $params
-   *
-   * @return \CRM_Contact_DAO_SavedSearch
+   * @return CRM_Contact_DAO_SavedSearch
    */
   public static function create(&$params) {
-    // Auto-create unique name from label if supplied
-    if (empty($params['id']) && empty($params['name']) && !empty($params['label'])) {
-      $name = CRM_Utils_String::munge($params['label']);
-      $existing = Civi\Api4\SavedSearch::get(FALSE)
-        ->addWhere('name', 'LIKE', $name . '%')
-        ->addSelect('name')
-        ->execute()->column('name');
-      $suffix = '';
-      while (in_array($name . $suffix, $existing)) {
-        $suffix = '_' . (1 + str_replace('_', '', $suffix));
-      }
-      $params['name'] = $name . $suffix;
-    }
-    $loggedInContactID = CRM_Core_Session::getLoggedInContactID();
-    if ($loggedInContactID) {
-      if (empty($params['id'])) {
-        $params['created_id'] = $loggedInContactID;
-      }
-      $params['modified_id'] = $loggedInContactID;
-    }
-    // Set by mysql
-    unset($params['modified_date']);
-
-    // Flush angular caches to refresh search displays
-    if (isset($params['api_params'])) {
-      Civi::container()->get('angular')->clear();
-    }
     return self::writeRecord($params);
+  }
+
+  /**
+   * Callback for hook_civicrm_pre().
+   *
+   * @param \Civi\Core\Event\PreEvent $event
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public static function self_hook_civicrm_pre(\Civi\Core\Event\PreEvent $event): void {
+    if ($event->action === 'create' || $event->action === 'edit') {
+      $loggedInContactID = CRM_Core_Session::getLoggedInContactID();
+      if ($loggedInContactID) {
+        if ($event->action === 'create') {
+          $event->params['created_id'] = $event->params['created_id'] ?? $loggedInContactID;
+        }
+        $event->params['modified_id'] = $event->params['modified_id'] ?? $loggedInContactID;
+      }
+      // Set by mysql
+      unset($event->params['modified_date']);
+
+      // Flush angular caches to refresh search displays
+      if (isset($event->params['api_params'])) {
+        Civi::container()->get('angular')->clear();
+      }
+    }
   }
 
   /**
@@ -422,7 +314,7 @@ LEFT JOIN civicrm_email ON (contact_a.id = civicrm_email.contact_id AND civicrm_
    * @param string $op
    * @param array|string|int $value
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public static function decodeRelativeFields(&$formValues, $fieldName, $op, $value) {
     // check if its a custom date field, if yes then 'searchDate' format the value

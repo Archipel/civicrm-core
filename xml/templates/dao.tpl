@@ -72,7 +72,14 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
      * {$field.comment|regex_replace:"/\n[ ]*/":"\n* "}
      *
 {/if}
-     * @var {$field.phpType}
+     * @var {$field.phpType}{if $field.phpNullable}|null
+{/if}
+
+     *   (SQL type: {$field.sqlType})
+     *   Note that values will be retrieved from the database as a string.
+{if $field.deprecated}
+     * @deprecated
+{/if}
      */
     public ${$field.name};
 
@@ -177,17 +184,19 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
 {if isset($field.cols)}
                       'cols'      => {$field.cols},
 {/if} {* field.cols *}
-
-{if $field.import}
-                      'import'    => {$field.import|strtoupper},
+                      'usage'     => array(
+                                       {foreach from=$field.usage key=usage item=isUsed}'{$usage}' => {$isUsed},
+                                       {/foreach}),
+{if $field.import === 'TRUE'}
+                      'import'    => TRUE,
 
 {/if} {* field.import *}
   'where'     => '{$table.name}.{$field.name}',
   {if $field.headerPattern}'headerPattern' => '{$field.headerPattern}',{/if}
   {if $field.dataPattern}'dataPattern' => '{$field.dataPattern}',{/if}
-{if $field.export}
-                      'export'    => {$field.export|strtoupper},
-{/if} {* field.export *}
+{if $field.export === 'TRUE' || ($field.export === 'FALSE' && $field.import === 'TRUE')}
+                      'export'    => {$field.export},
+{/if} {* field.export - only show if meaningful, deprecated for usage *}
 {if $field.contactType}
                       'contactType' => {if $field.contactType == 'null'}NULL{else}'{$field.contactType}'{/if},
 {/if}
@@ -198,7 +207,8 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
                       'permission'      => {$field.permission|@print_array},
 {/if}
 {if $field.default || $field.default === '0'}
-                         'default'   => '{if ($field.default[0]=="'" or $field.default[0]=='"')}{$field.default|substring:1:-1}{else}{$field.default}{/if}',
+  {capture assign=unquotedDefault}{if ($field.default[0]=="'" or $field.default[0]=='"')}{$field.default|substring:1:-1}{else}{$field.default}{/if}{/capture}
+                         'default'   => {if ($unquotedDefault==='NULL')}NULL{else}'{$unquotedDefault}'{/if},
 {/if} {* field.default *}
   'table_name' => '{$table.name}',
   'entity' => '{$table.entity}',
@@ -218,10 +228,13 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
 {if $field.uniqueTitle}
   'unique_title' => {$tsFunctionName}('{$field.uniqueTitle}'),
 {/if}
+{if $field.deprecated}
+  'deprecated' => TRUE,
+{/if}
 {if $field.html}
   'html' => array(
   {foreach from=$field.html item=val key=key}
-    '{$key}' => {if $key eq 'label'}{$tsFunctionName}("{$val}"){else}'{$val}'{/if},
+    '{$key}' => {if $key eq 'label'}{$tsFunctionName}("{$val}"){elseif is_array($val)}{$val|@print_array}{else}'{$val}'{/if},
   {/foreach}
   ),
 {/if}

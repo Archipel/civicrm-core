@@ -11,9 +11,9 @@ class CRM_Case_Form_TaskTest extends CiviCaseTestCase {
    * Test the order of the corresponding ids in the output matches the order
    * of the ids in the input, i.e. case_contacts matches cases.
    *
-   * @param $input array
-   * @param $selected_search_results array
-   * @param $expected array
+   * @param array $input
+   * @param array $selected_search_results
+   * @param array $expected
    *
    * @dataProvider contactIDProvider
    */
@@ -135,13 +135,13 @@ class CRM_Case_Form_TaskTest extends CiviCaseTestCase {
   public function testOpenFileOnCaseForm($input) {
     // Create a case and an activity to use
     $client_id = $this->individualCreate([], 0, TRUE);
-    $case = $this->createCase($client_id, $this->_loggedInUser);
+    $case = $this->createCase($client_id, $this->getLoggedInUser());
     // create 2 cases since "move"/"copy" aren't available actions otherwise
-    $case = $this->createCase($this->individualCreate([], 1, TRUE), $this->_loggedInUser);
+    $case = $this->createCase($this->individualCreate([], 1, TRUE), $this->getLoggedInUser());
     $activity_params = [
       'activity_type_id' => 'Inbound Email',
       'source_contact_id' => $client_id,
-      'target_id' => $this->_loggedInUser,
+      'target_id' => $this->getLoggedInUser(),
       'subject' => $input['subject'] ?? NULL,
       'details' => 'test test test',
       'activity_date_time' => date('Ymdhis'),

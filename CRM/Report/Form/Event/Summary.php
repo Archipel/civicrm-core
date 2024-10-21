@@ -18,12 +18,6 @@ class CRM_Report_Form_Event_Summary extends CRM_Report_Form {
 
   protected $_summary = NULL;
 
-  protected $_charts = [
-    '' => 'Tabular',
-    'barChart' => 'Bar Chart',
-    'pieChart' => 'Pie Chart',
-  ];
-
   protected $_add2groupSupported = FALSE;
 
   protected $_customGroupExtends = [
@@ -105,6 +99,14 @@ class CRM_Report_Form_Event_Summary extends CRM_Report_Form {
       ],
     ];
     $this->_currencyColumn = 'civicrm_participant_fee_currency';
+
+    // Add charts support
+    $this->_charts = [
+      '' => ts('Tabular'),
+      'barChart' => ts('Bar Chart'),
+      'pieChart' => ts('Pie Chart'),
+    ];
+
     parent::__construct();
   }
 
@@ -141,7 +143,7 @@ class CRM_Report_Form_Event_Summary extends CRM_Report_Form {
       if (array_key_exists('filters', $table)) {
         foreach ($table['filters'] as $fieldName => $field) {
           $clause = NULL;
-          if (CRM_Utils_Array::value('type', $field) & CRM_Utils_Type::T_DATE) {
+          if (($field['type'] ?? 0) & CRM_Utils_Type::T_DATE) {
             $relative = $this->_params["{$fieldName}_relative"] ?? NULL;
             $from = $this->_params["{$fieldName}_from"] ?? NULL;
             $to = $this->_params["{$fieldName}_to"] ?? NULL;
@@ -338,7 +340,7 @@ class CRM_Report_Form_Event_Summary extends CRM_Report_Form {
   }
 
   /**
-   * @param $rows
+   * @param array $rows
    */
   public function buildChart(&$rows) {
     $this->_interval = 'events';

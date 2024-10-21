@@ -1,7 +1,7 @@
 (function(angular, $, _) {
   "use strict";
 
-  angular.module('afAdmin').controller('afAdminList', function($scope, afforms, crmApi4, crmStatus) {
+  angular.module('afAdmin').controller('afAdminList', function($scope, afforms, crmApi4, crmStatus, afGui) {
     var ts = $scope.ts = CRM.ts('org.civicrm.afform_admin'),
       ctrl = $scope.$ctrl = this;
     this.sortField = 'title';
@@ -32,6 +32,9 @@
       if (afform['contact_summary:label']) {
         afform.placement.push(afform['contact_summary:label']);
       }
+      if (afform.submission_date) {
+        afform.submission_date = CRM.utils.formatDate(afform.submission_date);
+      }
       afforms[afform.type] = afforms[afform.type] || [];
       afforms[afform.type].push(afform);
     }, {});
@@ -45,15 +48,21 @@
     $scope.$bindToRoute({
       expr: '$ctrl.tab',
       param: 'tab',
-      format: 'raw',
-      default: ctrl.tabs[0].name
+      format: 'raw'
     });
 
+    if (!ctrl.tab) {
+      ctrl.tab = ctrl.tabs[0].name;
+    }
+
     this.createLinks = function() {
-      ctrl.searchCreateLinks = '';
-      if ($scope.types[ctrl.tab].options) {
+      // Reset search input in dropdown
+      $scope.searchCreateLinks.label = '';
+      // A value means it's alredy loaded. Null means it's loading.
+      if ($scope.types[ctrl.tab].options || $scope.types[ctrl.tab].options === null) {
         return;
       }
+      $scope.types[ctrl.tab].options = null;
       var links = [];
 
       if (ctrl.tab === 'form') {
@@ -87,17 +96,8 @@
       }
 
       if (ctrl.tab === 'search') {
-        crmApi4('SearchDisplay', 'get', {
-          select: ['name', 'label', 'type:icon', 'saved_search.name', 'saved_search.label']
-        }).then(function(searchDisplays) {
-          _.each(searchDisplays, function(searchDisplay) {
-            links.push({
-              url: '#create/search/' + searchDisplay['saved_search.name'] + '.' + searchDisplay.name,
-              label: searchDisplay['saved_search.label'] + ': ' + searchDisplay.label,
-              icon: searchDisplay['type:icon']
-            });
-          });
-          $scope.types.search.options = _.sortBy(links, 'Label');
+        afGui.getAllSearchDisplays().then(function(links) {
+          $scope.types.search.options = links;
         });
       }
     };
@@ -109,7 +109,7 @@
         if (afform.has_base) {
           apiOps.push(['Afform', 'get', {
             where: [['name', '=', afform.name]],
-            select: ['name', 'title', 'type', 'is_public', 'server_route', 'has_local', 'has_base']
+            select: ['name', 'title', 'type', 'is_public', 'server_route', 'has_local', 'has_base', 'base_module', 'base_module:label']
           }, 0]);
         }
         var apiCall = crmStatus(

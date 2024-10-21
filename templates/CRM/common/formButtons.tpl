@@ -10,7 +10,7 @@
 
 {crmRegion name='form-buttons'}
 {* Loops through $linkButtons and assigns html "a" (link) buttons to the template. Used for additional entity functions such as "Move to Case" or "Renew Membership" *}
-{if !empty($linkButtons)}
+{if $linkButtons}
   {foreach from=$linkButtons item=linkButton}
     {if $linkButton.accessKey}
       {capture assign=accessKey}accesskey="{$linkButton.accessKey}"{/capture}
@@ -24,13 +24,13 @@
       {capture assign=linkname}name="{$linkButton.ref}"{/capture}
     {else}{capture assign=linkname}name="{$linkButton.name}"{/capture}
     {/if}
-    <a class="button" {$linkname} href="{crmURL p=$linkButton.url q=$linkButton.qs}" {$accessKey} {$linkButton.extra}><span>{$icon}{$linkButton.title}</span></a>
+    <a class="button{if array_key_exists('class', $linkButton)} {$linkButton.class}{/if}" {$linkname} href="{crmURL p=$linkButton.url q=$linkButton.qs}" {$accessKey} {$linkButton.extra}><span>{$icon|smarty:nodefaults}{$linkButton.title}</span></a>
   {/foreach}
 {/if}
 
 {foreach from=$form.buttons item=button key=key name=btns}
   {if $key|substring:0:4 EQ '_qf_'}
-    {if !empty($location)}
+    {if $location}
       {$form.buttons.$key.html|crmReplace:id:"$key-$location"}
     {else}
       {$form.buttons.$key.html}

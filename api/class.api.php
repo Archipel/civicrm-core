@@ -90,6 +90,89 @@
 class civicrm_api3 {
 
   /**
+   * Are we performing a local or remote API call?
+   *
+   * @var bool
+   */
+  public $local = TRUE;
+
+  /**
+   * Array of inputs to pass to `call`, if param not passed directly
+   *
+   * @var array
+   * @internal
+   */
+  public $input = [];
+
+  /**
+   * Holds the result of the last API request.
+   * If the request has not yet run, lastResult will be empty.
+   *
+   * @var \stdClass
+   * @internal
+   */
+  public $lastResult;
+
+  /**
+   * When making a remote API request,
+   * $uri will be the path to the remote server's API endpoint
+   *
+   * @var string|null
+   * @internal
+   */
+  public $uri = NULL;
+
+  /**
+   * When making a remote API request,
+   * $key will be sent as part of the request
+   *
+   * @var string|null
+   * @internal
+   */
+  public $key = NULL;
+
+  /**
+   * When making a remote API request,
+   * $api_key will be sent as part of the request
+   *
+   * @var string|null
+   * @internal
+   */
+  public $api_key = NULL;
+
+  /**
+   * When making a remote API request,
+   * $referer holds the Referer header value to be sent as part of the request
+   *
+   * @var string|null
+   * @internal
+   */
+  public $referer = NULL;
+
+  /**
+   * When making a remote API request,
+   * $useragent holds the User-Agent header value to be sent as part of the request
+   *
+   * @var string|null
+   * @internal
+   */
+  public $useragent = NULL;
+
+  /**
+   * Reference to the CRM_Core_Config singleton
+   *
+   * @var CRM_Core_Config
+   */
+  protected $cfg;
+
+  /**
+   * The current entity, which actions should be performed against
+   *
+   * @var string|null
+   */
+  protected $currentEntity = NULL;
+
+  /**
    * Class constructor.
    *
    * @param array $config API configuration.
@@ -97,7 +180,7 @@ class civicrm_api3 {
   public function __construct($config = NULL) {
     $this->local      = TRUE;
     $this->input      = [];
-    $this->lastResult = [];
+    $this->lastResult = new stdClass();
     if (!empty($config) && !empty($config['server'])) {
       // we are calling a remote server via REST
       $this->local = FALSE;
@@ -153,8 +236,8 @@ class civicrm_api3 {
   /**
    * Perform action.
    *
-   * @param $action
-   * @param $params
+   * @param string $action
+   * @param array $params
    *
    * @return bool
    */
@@ -171,8 +254,8 @@ class civicrm_api3 {
   /**
    * Call via rest.
    *
-   * @param $entity
-   * @param $action
+   * @param string $entity
+   * @param string $action
    * @param array $params
    *
    * @return \stdClass
@@ -228,7 +311,7 @@ class civicrm_api3 {
   /**
    * Call api function.
    *
-   * @param $entity
+   * @param string $entity
    * @param string $action
    * @param array $params
    *
@@ -298,8 +381,8 @@ class civicrm_api3 {
   /**
    * Get attribute.
    *
-   * @param $name
-   * @param null $value
+   * @param string $name
+   * @param mixed $value
    *
    * @return $this
    */

@@ -19,14 +19,15 @@
 
 namespace api\v4\Entity;
 
-use api\v4\UnitTestCase;
+use api\v4\Api4TestBase;
 use Civi\Crypto\CryptoTestTrait;
+use Civi\Test\TransactionalInterface;
 use Psr\Log\LoggerInterface;
 
 /**
  * @group headless
  */
-class RotateKeyTest extends UnitTestCase {
+class SystemRotateKeyTest extends Api4TestBase implements TransactionalInterface {
 
   use CryptoTestTrait;
 
@@ -39,7 +40,7 @@ class RotateKeyTest extends UnitTestCase {
     \CRM_Utils_Hook::singleton()->setHook('civicrm_cryptoRotateKey', [$this, 'onRotateKey']);
   }
 
-  public function testRekey() {
+  public function testRekey(): void {
     $result = \Civi\Api4\System::rotateKey(0)->setTag('UNIT-TEST')->execute();
     $this->assertEquals(2, count($result));
     $this->assertEquals('Updated field A using UNIT-TEST.', $result[0]['message']);

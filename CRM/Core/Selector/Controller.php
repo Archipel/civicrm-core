@@ -110,7 +110,9 @@ class CRM_Core_Selector_Controller {
    * Are we in print mode? if so we need to modify the display
    * functionality to do a minimal display :)
    *
-   * @var bool
+   * @var int|string
+   *   Should match a CRM_Core_Smarty::PRINT_* constant,
+   *   or equal 0 if not in print mode
    */
   protected $_print = FALSE;
 
@@ -156,6 +158,8 @@ class CRM_Core_Selector_Controller {
    */
   protected $_dynamicAction = FALSE;
 
+  protected $_case;
+
   /**
    * Class constructor.
    *
@@ -179,8 +183,8 @@ class CRM_Core_Selector_Controller {
   public function __construct($object, $pageID, $sortID, $action, $store = NULL, $output = self::TEMPLATE, $prefix = NULL, $case = NULL) {
 
     $this->_object = $object;
-    $this->_pageID = $pageID ? $pageID : 1;
-    $this->_sortID = $sortID ? $sortID : NULL;
+    $this->_pageID = $pageID ?: 1;
+    $this->_sortID = $sortID ?: NULL;
     $this->_action = $action;
     $this->_store = $store;
     $this->_output = $output;
@@ -516,7 +520,9 @@ class CRM_Core_Selector_Controller {
   /**
    * Setter for print.
    *
-   * @param bool $print
+   * @param int|string $print
+   *   Should match a CRM_Core_Smarty::PRINT_* constant,
+   *   or equal 0 if not in print mode
    *
    * @return void
    */
@@ -527,8 +533,9 @@ class CRM_Core_Selector_Controller {
   /**
    * Getter for print.
    *
-   * @return bool
-   *   return the print value
+   * @return int|string
+   *   Value matching a CRM_Core_Smarty::PRINT_* constant,
+   *   or 0 if not in print mode
    */
   public function getPrint() {
     return $this->_print;

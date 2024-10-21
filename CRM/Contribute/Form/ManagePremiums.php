@@ -63,7 +63,7 @@ class CRM_Contribute_Form_ManagePremiums extends CRM_Contribute_Form {
   /**
    * Build the form object.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function buildQuickForm() {
     parent::buildQuickForm();
@@ -116,10 +116,7 @@ class CRM_Contribute_Form_ManagePremiums extends CRM_Contribute_Form {
 
     $this->add('textarea', 'options', ts('Options'), ['cols' => 60, 'rows' => 3]);
 
-    $this->add('select', 'period_type', ts('Period Type'), [
-      'rolling' => 'Rolling',
-      'fixed' => 'Fixed',
-    ], FALSE, ['placeholder' => TRUE]);
+    $this->add('select', 'period_type', ts('Period Type'), CRM_Core_SelectValues::periodType(), FALSE, ['placeholder' => TRUE]);
 
     $this->add('text', 'fixed_period_start_day', ts('Fixed Period Start Day'), CRM_Core_DAO::getAttribute('CRM_Contribute_DAO_Product', 'fixed_period_start_day'));
 
@@ -198,14 +195,14 @@ class CRM_Contribute_Form_ManagePremiums extends CRM_Contribute_Form {
   public static function formRule($params, $files) {
 
     // If choosing to upload an image, then an image must be provided
-    if (CRM_Utils_Array::value('imageOption', $params) == 'image'
+    if (($params['imageOption'] ?? NULL) == 'image'
       && empty($files['uploadFile']['name'])
     ) {
       $errors['uploadFile'] = ts('A file must be selected');
     }
 
     // If choosing to use image URLs, then both URLs must be present
-    if (CRM_Utils_Array::value('imageOption', $params) == 'thumbnail') {
+    if (($params['imageOption'] ?? NULL) == 'thumbnail') {
       if (!$params['imageUrl']) {
         $errors['imageUrl'] = ts('Image URL is Required');
       }
@@ -262,7 +259,7 @@ class CRM_Contribute_Form_ManagePremiums extends CRM_Contribute_Form {
     // If deleting, then only delete and skip the rest of the post-processing
     if ($this->_action & CRM_Core_Action::DELETE) {
       try {
-        CRM_Contribute_BAO_Product::del($this->_id);
+        CRM_Contribute_BAO_Product::deleteRecord(['id' => $this->_id]);
       }
       catch (CRM_Core_Exception $e) {
         $message = ts("This Premium is linked to an <a href='%1'>Online Contribution page</a>. Please remove it before deleting this Premium.", [1 => CRM_Utils_System::url('civicrm/admin/contribute', 'reset=1')]);

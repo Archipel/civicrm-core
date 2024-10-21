@@ -13,7 +13,7 @@
 namespace Civi\Api4\Service\Spec;
 
 use Civi\Api4\Utils\CoreUtil;
-use CRM_Core_DAO_AllCoreTables as AllCoreTables;
+use Civi\Api4\Utils\FormattingUtil;
 
 class SpecFormatter {
 
@@ -26,6 +26,8 @@ class SpecFormatter {
   public static function arrayToField(array $data, $entity) {
     $dataTypeName = self::getDataType($data);
 
+    $hasDefault = isset($data['default']) && $data['default'] !== '';
+    // Custom field
     if (!empty($data['custom_group_id'])) {
       $field = new CustomFieldSpec($data['name'], $entity, $dataTypeName);
       if (strpos($entity, 'Custom_') !== 0) {
@@ -36,83 +38,84 @@ class SpecFormatter {
         $field->setType('Field');
         $field->setTableName($data['custom_group_id.table_name']);
       }
+      if ($dataTypeName === 'EntityReference') {
+        $field->setFkEntity($data['fk_entity']);
+      }
       $field->setColumnName($data['column_name']);
+      $field->setNullable(empty($data['is_required']));
       $field->setCustomFieldId($data['id'] ?? NULL);
       $field->setCustomGroupName($data['custom_group_id.name']);
       $field->setTitle($data['label']);
       $field->setLabel($data['custom_group_id.title'] . ': ' . $data['label']);
       $field->setHelpPre($data['help_pre'] ?? NULL);
       $field->setHelpPost($data['help_post'] ?? NULL);
-      if (self::customFieldHasOptions($data)) {
+      if (\CRM_Core_BAO_CustomField::hasOptions($data)) {
         $field->setOptionsCallback([__CLASS__, 'getOptions']);
+        $suffixes = ['label'];
         if (!empty($data['option_group_id'])) {
-          // Option groups support other stuff like description, icon & color,
-          // but at time of this writing, custom fields do not.
-          $field->setSuffixes(['id', 'name', 'label']);
+          $suffixes = CoreUtil::getOptionValueFields($data['option_group_id'], 'id');
         }
+        $field->setSuffixes($suffixes);
       }
       $field->setReadonly($data['is_view']);
     }
+    // Core field
     else {
       $name = $data['name'] ?? NULL;
       $field = new FieldSpec($name, $entity, $dataTypeName);
       $field->setType('Field');
       $field->setColumnName($name);
-      $field->setRequired(!empty($data['required']));
+      $field->setNullable(empty($data['required']));
+      $field->setRequired(!empty($data['required']) && !$hasDefault && $name !== 'id');
       $field->setTitle($data['title'] ?? NULL);
       $field->setLabel($data['html']['label'] ?? NULL);
+      $field->setLocalizable($data['localizable'] ?? FALSE);
       if (!empty($data['pseudoconstant'])) {
-        // Do not load options if 'prefetch' is explicitly FALSE
-        if (!isset($data['pseudoconstant']['prefetch']) || $data['pseudoconstant']['prefetch'] === FALSE) {
+        // Do not load options if 'prefetch' is disabled
+        if (($data['pseudoconstant']['prefetch'] ?? NULL) !== 'disabled') {
           $field->setOptionsCallback([__CLASS__, 'getOptions']);
         }
-        // These suffixes are always supported if a field has options
-        $suffixes = ['name', 'label'];
-        // Add other columns specified in schema (e.g. 'abbrColumn')
-        foreach (['description', 'abbr', 'icon', 'color'] as $suffix) {
-          if (isset($data['pseudoconstant'][$suffix . 'Column'])) {
-            $suffixes[] = $suffix;
+        // Explicitly declared suffixes
+        if (!empty($data['pseudoconstant']['suffixes'])) {
+          $suffixes = $data['pseudoconstant']['suffixes'];
+        }
+        else {
+          // These suffixes are always supported if a field has options
+          $suffixes = ['name', 'label'];
+          // Add other columns specified in schema (e.g. 'abbrColumn')
+          foreach (array_diff(FormattingUtil::$pseudoConstantSuffixes, $suffixes) as $suffix) {
+            if (!empty($data['pseudoconstant'][$suffix . 'Column'])) {
+              $suffixes[] = $suffix;
+            }
+          }
+          if (!empty($data['pseudoconstant']['optionGroupName'])) {
+            $suffixes = CoreUtil::getOptionValueFields($data['pseudoconstant']['optionGroupName'], 'name');
           }
         }
         $field->setSuffixes($suffixes);
       }
       $field->setReadonly(!empty($data['readonly']));
     }
+    if ($hasDefault) {
+      $field->setDefaultValue(FormattingUtil::convertDataType($data['default'], $dataTypeName));
+    }
     $field->setSerialize($data['serialize'] ?? NULL);
-    $field->setDefaultValue($data['default'] ?? NULL);
     $field->setDescription($data['description'] ?? NULL);
+    $field->setDeprecated($data['deprecated'] ?? FALSE);
     self::setInputTypeAndAttrs($field, $data, $dataTypeName);
 
     $field->setPermission($data['permission'] ?? NULL);
     $fkAPIName = $data['FKApiName'] ?? NULL;
     $fkClassName = $data['FKClassName'] ?? NULL;
     if ($fkAPIName || $fkClassName) {
-      $field->setFkEntity($fkAPIName ?: AllCoreTables::getBriefName($fkClassName));
+      $field->setFkEntity($fkAPIName ?: CoreUtil::getApiNameFromBAO($fkClassName));
+    }
+    // For pseudo-fk fields like `civicrm_group.parents`
+    elseif (($data['html']['type'] ?? NULL) === 'EntityRef' && !empty($data['pseudoconstant']['table'])) {
+      $field->setFkEntity(CoreUtil::getApiNameFromTableName($data['pseudoconstant']['table']));
     }
 
     return $field;
-  }
-
-  /**
-   * Does this custom field have options
-   *
-   * @param array $field
-   * @return bool
-   */
-  private static function customFieldHasOptions($field) {
-    // This will include boolean fields with Yes/No options.
-    if (in_array($field['html_type'], ['Radio', 'CheckBox'])) {
-      return TRUE;
-    }
-    // Do this before the "Select" string search because date fields have a "Select Date" html_type
-    // and contactRef fields have an "Autocomplete-Select" html_type - contacts are an FK not an option list.
-    if (in_array($field['data_type'], ['ContactReference', 'Date'])) {
-      return FALSE;
-    }
-    if (strpos($field['html_type'], 'Select') !== FALSE) {
-      return TRUE;
-    }
-    return !empty($field['option_group_id']);
   }
 
   /**
@@ -166,6 +169,15 @@ class SpecFormatter {
         self::addOptionProps($options, $spec, $bao, $fieldName, $values, $returnFormat);
       }
     }
+    // Special 'current_domain' option
+    if ($spec->getFkEntity() === 'Domain') {
+      array_unshift($options, [
+        'id' => 'current_domain',
+        'name' => 'current_domain',
+        'label' => ts('Current Domain'),
+        'icon' => 'fa-sign-in',
+      ]);
+    }
     return $options;
   }
 
@@ -191,7 +203,6 @@ class SpecFormatter {
     $returnFormat = array_diff($returnFormat, ['id', 'name', 'label']);
     // CRM_Core_Pseudoconstant doesn't know how to fetch extra stuff like icon, description, color, etc., so we have to invent that wheel here...
     if ($returnFormat) {
-      $optionIds = implode(',', array_column($options, 'id'));
       $optionIndex = array_flip(array_column($options, 'id'));
       if ($spec instanceof CustomFieldSpec) {
         $optionGroupId = \CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomField', $spec->getCustomFieldId(), 'option_group_id');
@@ -223,16 +234,27 @@ class SpecFormatter {
           $returnFormat = array_diff($returnFormat, ['abbr']);
         }
         // Fetch anything else (color, icon, description)
-        if ($returnFormat && !empty($pseudoconstant['table']) && \CRM_Utils_Rule::commaSeparatedIntegers($optionIds)) {
-          $sql = "SELECT * FROM {$pseudoconstant['table']} WHERE id IN (%1)";
-          $query = \CRM_Core_DAO::executeQuery($sql, [1 => [$optionIds, 'CommaSeparatedIntegers']]);
+        if ($returnFormat && !empty($pseudoconstant['table'])) {
+          $idCol = $pseudoconstant['keyColumn'] ?? 'id';
+          $optionIds = \CRM_Core_DAO::escapeStrings(array_column($options, 'id'));
+          $sql = "SELECT * FROM {$pseudoconstant['table']} WHERE `$idCol` IN ($optionIds)";
+          $query = \CRM_Core_DAO::executeQuery($sql);
           while ($query->fetch()) {
             foreach ($returnFormat as $ret) {
-              if (property_exists($query, $ret)) {
+              $retCol = $pseudoconstant[$ret . 'Column'] ?? $ret;
+              if (property_exists($query, $retCol)) {
                 // Note: our schema is inconsistent about whether `description` fields allow html,
                 // but it's usually assumed to be plain text, so we strip_tags() to standardize it.
-                $options[$optionIndex[$query->id]][$ret] = $ret === 'description' ? strip_tags($query->$ret) : $query->$ret;
+                $options[$optionIndex[$query->$idCol]][$ret] = isset($query->$retCol) ? strip_tags($query->$retCol) : NULL;
               }
+            }
+          }
+        }
+        elseif ($returnFormat && !empty($pseudoconstant['callback'])) {
+          $callbackOptions = call_user_func(\Civi\Core\Resolver::singleton()->get($pseudoconstant['callback']), $fieldName, ['values' => $values]);
+          foreach ($callbackOptions as $callbackOption) {
+            if (is_array($callbackOption) && !empty($callbackOption['id']) && isset($optionIndex[$callbackOption['id']])) {
+              $options[$optionIndex[$callbackOption['id']]] += $callbackOption;
             }
           }
         }
@@ -256,13 +278,19 @@ class SpecFormatter {
     $inputType = $data['html']['type'] ?? $data['html_type'] ?? NULL;
     $inputAttrs = $data['html'] ?? [];
     unset($inputAttrs['type']);
+    // Custom field EntityRef or ContactRef filters
+    if (is_string($data['filter'] ?? NULL) && strpos($data['filter'], '=')) {
+      $filters = explode('&', $data['filter']);
+      $inputAttrs['filter'] = $filters;
+    }
 
     $map = [
       'Select Date' => 'Date',
       'Link' => 'Url',
+      'Autocomplete-Select' => 'EntityRef',
     ];
     $inputType = $map[$inputType] ?? $inputType;
-    if ($dataTypeName === 'ContactReference') {
+    if ($dataTypeName === 'ContactReference' || $dataTypeName === 'EntityReference') {
       $inputType = 'EntityRef';
     }
     if (in_array($inputType, ['Select', 'EntityRef'], TRUE) && !empty($data['serialize'])) {
@@ -271,12 +299,18 @@ class SpecFormatter {
     if ($inputType == 'Date' && !empty($inputAttrs['formatType'])) {
       self::setLegacyDateFormat($inputAttrs);
     }
+    // Number input for numeric fields
+    if ($inputType === 'Text' && in_array($dataTypeName, ['Int', 'Float'], TRUE)) {
+      $inputType = 'Number';
+      // Todo: make 'step' configurable for the custom field
+      $inputAttrs['step'] = $dataTypeName === 'Int' ? 1 : .01;
+    }
     // Date/time settings from custom fields
     if ($inputType == 'Date' && !empty($data['custom_group_id'])) {
       $inputAttrs['time'] = empty($data['time_format']) ? FALSE : ($data['time_format'] == 1 ? 12 : 24);
       $inputAttrs['date'] = $data['date_format'];
-      $inputAttrs['start_date_years'] = (int) $data['start_date_years'];
-      $inputAttrs['end_date_years'] = (int) $data['end_date_years'];
+      $inputAttrs['start_date_years'] = isset($data['start_date_years']) ? (int) $data['start_date_years'] : NULL;
+      $inputAttrs['end_date_years'] = isset($data['end_date_years']) ? (int) $data['end_date_years'] : NULL;
     }
     if ($inputType == 'Text' && !empty($data['maxlength'])) {
       $inputAttrs['maxlength'] = (int) $data['maxlength'];
@@ -292,9 +326,31 @@ class SpecFormatter {
     foreach ($inputAttrs as $key => $val) {
       if ($key !== strtolower($key)) {
         unset($inputAttrs[$key]);
-        $key = strtolower(preg_replace('/(?=[A-Z])/', '_$0', $key));
+        $key = \CRM_Utils_String::convertStringToSnakeCase($key);
         $inputAttrs[$key] = $val;
       }
+      // Format EntityRef filter property (core and custom fields)
+      if ($key === 'filter' && is_array($val)) {
+        $filters = [];
+        foreach ($val as $filter) {
+          [$k, $v] = explode('=', $filter);
+          // Explode comma-separated values
+          $filters[$k] = strpos($v, ',') ? explode(',', $v) : $v;
+        }
+        // Legacy APIv3 custom field stuff
+        if ($dataTypeName === 'ContactReference') {
+          if (!empty($filters['group'])) {
+            $filters['groups'] = $filters['group'];
+          }
+          unset($filters['action'], $filters['group']);
+        }
+        $inputAttrs['filter'] = $filters;
+      }
+    }
+    // Custom autocompletes
+    if (!empty($data['option_group_id']) && $inputType === 'EntityRef') {
+      $fieldSpec->setFkEntity('OptionValue');
+      $inputAttrs['filter']['option_group_id'] = $data['option_group_id'];
     }
     $fieldSpec
       ->setInputType($inputType)

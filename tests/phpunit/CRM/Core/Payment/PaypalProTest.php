@@ -18,7 +18,7 @@ class CRM_Core_Payment_PaypalProTest extends CiviUnitTestCase {
   use CRM_Core_Payment_PaypalProTrait;
 
   /**
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setUp(): void {
     parent::setUp();
@@ -29,6 +29,7 @@ class CRM_Core_Payment_PaypalProTest extends CiviUnitTestCase {
 
   public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
+    $this->quickCleanup(['civicrm_campaign']);
     parent::tearDown();
   }
 
@@ -36,9 +37,9 @@ class CRM_Core_Payment_PaypalProTest extends CiviUnitTestCase {
    * Test doing a one-off payment.
    *
    * @throws \Civi\Payment\Exception\PaymentProcessorException
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
-  public function testSinglePayment() {
+  public function testSinglePayment(): void {
     $this->setupMockHandler();
     $params = $this->getBillingParams();
     $params['amount'] = 5.24;

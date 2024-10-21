@@ -10,7 +10,6 @@
 {capture assign=labelStyle }style="padding: 4px; border-bottom: 1px solid #999; background-color: #f7f7f7;"{/capture}
 {capture assign=valueStyle }style="padding: 4px; border-bottom: 1px solid #999;"{/capture}
 
-<center>
   <table id="crm-event_receipt" style="font-family: Arial, Verdana, sans-serif; text-align: left; width:100%; max-width:700px; padding:0; margin:0; border:0px;">
 
   <!-- BEGIN HEADER -->
@@ -21,13 +20,13 @@
 
   <tr>
    <td>
-     {assign var="greeting" value="{contact.email_greeting}"}{if $greeting}<p>{$greeting},</p>{/if}
+     {assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}<p>{$greeting},</p>{/if}
     {if !empty($receipt_text)}
      <p>{$receipt_text|htmlize}</p>
     {/if}
 
     {if $is_pay_later}
-     <p>{if isset($pay_later_receipt)}{$pay_later_receipt}{/if}</p> {* FIXME: this might be text rather than HTML *}
+     <p>{$pay_later_receipt}</p> {* FIXME: this might be text rather than HTML *}
     {/if}
 
    </td>
@@ -62,7 +61,7 @@
       {if $mem_end_date}
        <tr>
         <td {$labelStyle}>
-         {ts}Membership End Date{/ts}
+         {ts}Membership Expiration Date{/ts}
         </td>
         <td {$valueStyle}>
           {$mem_end_date|crmDate}
@@ -113,7 +112,7 @@
        {foreach from=$lineItem item=value key=priceset}
         <tr>
          <td colspan="2" {$valueStyle}>
-          <table> {* FIXME: style this table so that it looks like the text version (justification, etc.) *}
+          <table>
            <tr>
             <th>{ts}Item{/ts}</th>
             <th>{ts}Qty{/ts}</th>
@@ -154,7 +153,7 @@
        {foreach from=$lineItem item=value key=priceset}
         <tr>
          <td colspan="2" {$valueStyle}>
-          <table> {* FIXME: style this table so that it looks like the text version (justification, etc.) *}
+          <table>
            <tr>
             <th>{ts}Item{/ts}</th>
             <th>{ts}Fee{/ts}</th>
@@ -165,7 +164,7 @@
               <th>{ts}Total{/ts}</th>
             {/if}
       <th>{ts}Membership Start Date{/ts}</th>
-      <th>{ts}Membership End Date{/ts}</th>
+      <th>{ts}Membership Expiration Date{/ts}</th>
            </tr>
            {foreach from=$value item=line}
             <tr>
@@ -179,7 +178,7 @@
               <td>
                {$line.unit_price*$line.qty|crmMoney}
               </td>
-              {if isset($line.tax_rate) and ($line.tax_rate != "" || $line.tax_amount != "")}
+              {if ($line.tax_rate || $line.tax_amount != "")}
                <td>
                 {$line.tax_rate|string_format:"%.2f"}%
                </td>
@@ -218,17 +217,17 @@
         {foreach from=$dataArray item=value key=priceset}
          <tr>
          {if $priceset || $priceset == 0}
-           <td>&nbsp;{if isset($taxTerm)}{$taxTerm}{/if} {$priceset|string_format:"%.2f"}%</td>
+           <td>&nbsp;{$taxTerm} {$priceset|string_format:"%.2f"}%</td>
            <td>&nbsp;{$value|crmMoney:$currency}</td>
          {else}
-           <td>&nbsp;{ts}NO{/ts} {if isset($taxTerm)}{$taxTerm}{/if}</td>
+           <td>&nbsp;{ts}NO{/ts} {$taxTerm}</td>
            <td>&nbsp;{$value|crmMoney:$currency}</td>
          {/if}
          </tr>
         {/foreach}
        {/if}
        {/if}
-       {if isset($totalTaxAmount)}
+       {if $totalTaxAmount}
         <tr>
          <td {$labelStyle}>
           {ts}Total Tax Amount{/ts}
@@ -497,7 +496,7 @@
         </td>
        </tr>
       {/if}
-      {if !empty($is_deductible) AND !empty($price)}
+      {if $is_deductible AND !empty($price)}
         <tr>
          <td colspan="2" {$valueStyle}>
           <p>{ts 1=$price|crmMoney}The value of this premium is %1. This may affect the amount of the tax deduction you can claim. Consult your tax advisor for more information.{/ts}</p>
@@ -513,7 +512,6 @@
        </th>
       </tr>
       {foreach from=$customPre item=customValue key=customName}
-       {if (!empty($trackingFields) and ! in_array($customName, $trackingFields)) or empty($trackingFields)}
         <tr>
          <td {$labelStyle}>
           {$customName}
@@ -522,7 +520,6 @@
           {$customValue}
          </td>
         </tr>
-       {/if}
       {/foreach}
      {/if}
 
@@ -547,7 +544,6 @@
      {/if}
 
   </table>
-</center>
 
 </body>
 </html>

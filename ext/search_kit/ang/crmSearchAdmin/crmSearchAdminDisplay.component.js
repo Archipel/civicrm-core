@@ -12,11 +12,11 @@
     template: function() {
       // Dynamic template generates switch condition for each display type
       var html =
-        '<div ng-include="\'~/crmSearchAdmin/crmSearchAdminDisplay.html\'"></div>\n' +
         '<div ng-switch="$ctrl.display.type">\n';
       _.each(CRM.crmSearchAdmin.displayTypes, function(type) {
         html +=
           '<div ng-switch-when="' + type.id + '">\n' +
+          '  <div class="help-block"><i class="crm-i ' + type.icon + '"></i> ' + _.escape(type.description) + '</div>' +
           '  <search-admin-display-' + type.id + ' api-entity="$ctrl.savedSearch.api_entity" api-params="$ctrl.savedSearch.api_params" display="$ctrl.display"></search-admin-display-' + type.id + '>\n' +
           '  <hr>\n' +
           '  <button type="button" class="btn btn-{{ !$ctrl.stale ? \'success\' : $ctrl.preview ? \'warning\' : \'primary\' }}" ng-click="$ctrl.previewDisplay()" ng-disabled="!$ctrl.stale">\n' +
@@ -34,15 +34,14 @@
     },
     controller: function($scope, $timeout, searchMeta) {
       var ts = $scope.ts = CRM.ts('org.civicrm.search_kit'),
-        ctrl = this,
-        afforms;
+        ctrl = this;
 
-      this.afformPath = CRM.url('civicrm/admin/afform');
       this.isSuperAdmin = CRM.checkPerm('all CiviCRM permissions and ACLs');
       this.aclBypassHelp = ts('Only users with "all CiviCRM permissions and ACLs" can disable permission checks.');
 
       this.preview = this.stale = false;
 
+      // Extra (non-field) colum types
       this.colTypes = {
         links: {
           label: ts('Links'),
@@ -55,7 +54,7 @@
           label: ts('Buttons'),
           icon: 'fa-square-o',
           defaults: {
-            size: 'btn-sm',
+            size: 'btn-xs',
             links: []
           }
         },
@@ -63,9 +62,9 @@
           label: ts('Menu'),
           icon: 'fa-bars',
           defaults: {
-            text: ts('Actions'),
+            text: '',
             style: 'default',
-            size: 'btn-sm',
+            size: 'btn-xs',
             icon: 'fa-bars',
             links: []
           }
@@ -127,10 +126,18 @@
       };
 
       this.getColLabel = function(col) {
-        if (col.type === 'field') {
+        if (col.type === 'field' || col.type === 'image' || col.type === 'html') {
           return ctrl.getFieldLabel(col.key);
         }
         return ctrl.colTypes[col.type].label;
+      };
+
+      this.toggleEmptyVal = function(col) {
+        if (col.empty_value) {
+          delete col.empty_value;
+        } else {
+          col.empty_value = ts('None');
+        }
       };
 
       this.toggleRewrite = function(col) {
@@ -143,103 +150,129 @@
       };
 
       this.toggleImage = function(col) {
-        if (col.image) {
+        if (col.type === 'image') {
           delete col.image;
+          col.type = 'field';
         } else {
           col.image = {
             alt: this.getColLabel(col)
           };
           delete col.editable;
+          col.type = 'image';
         }
+      };
+
+      this.toggleHtml = function(col) {
+        if (col.type === 'html') {
+          col.type = 'field';
+        } else {
+          delete col.editable;
+          delete col.link;
+          delete col.icons;
+          col.type = 'html';
+        }
+      };
+
+      this.canBeImage = function(col) {
+        var expr = ctrl.getExprFromSelect(col.key),
+          info = searchMeta.parseExpr(expr);
+        return info.args[0] && info.args[0].field && info.args[0].field.input_type === 'File';
       };
 
       this.toggleEditable = function(col) {
         if (col.editable) {
           delete col.editable;
-          return;
+        } else {
+          col.editable = true;
         }
-
-        var info = searchMeta.parseExpr(col.key),
-          arg = _.findWhere(info.args, {type: 'field'}) || {},
-          value = col.key.split(':')[0];
-        if (!arg.field || info.fn) {
-          delete col.editable;
-          return;
-        }
-        // If field is an implicit join, use the original fk field
-        if (arg.field.name !== arg.field.fieldName) {
-          value = value.substr(0, value.lastIndexOf('.'));
-          info = searchMeta.parseExpr(value);
-          arg = info.args[0];
-        }
-        col.editable = {
-          // Hack to support editing relationships
-          entity: arg.field.entity.replace('RelationshipCache', 'Relationship'),
-          input_type: arg.field.input_type,
-          data_type: arg.field.data_type,
-          options: !!arg.field.options,
-          serialize: !!arg.field.serialize,
-          fk_entity: arg.field.fk_entity,
-          id: arg.prefix + searchMeta.getEntity(arg.field.entity).primary_key[0],
-          name: arg.field.name,
-          value: value
-        };
       };
 
-      this.isEditable = function(col) {
+      this.canBeEditable = function(col) {
         var expr = ctrl.getExprFromSelect(col.key),
           info = searchMeta.parseExpr(expr);
-        return !col.image && !col.rewrite && !col.link && !info.fn && info.args[0] && info.args[0].field && !info.args[0].field.readonly;
+        return !col.rewrite && !col.link && !info.fn && info.args[0] && info.args[0].field && !info.args[0].field.readonly;
       };
 
       // Checks if a column contains a sortable value
       // Must be a real sql expression (not a pseudo-field like `result_row_num`)
       this.canBeSortable = function(col) {
+        // Column-header sorting is incompatible with draggable sorting
+        if (ctrl.display.settings.draggable) {
+          return false;
+        }
         var expr = ctrl.getExprFromSelect(col.key),
           info = searchMeta.parseExpr(expr),
           arg = (info && info.args && _.findWhere(info.args, {type: 'field'})) || {};
         return arg.field && arg.field.type !== 'Pseudo';
       };
 
-      // Aggregate functions (COUNT, AVG, MAX) cannot display as links, except for GROUP_CONCAT
+      // Aggregate functions (COUNT, AVG, MAX) cannot autogenerate links, except for GROUP_CONCAT
       // which gets special treatment in APIv4 to convert it to an array.
-      this.canBeLink = function(col) {
-        var expr = ctrl.getExprFromSelect(col.key),
+      function canUseLinks(colKey) {
+        var expr = ctrl.getExprFromSelect(colKey),
           info = searchMeta.parseExpr(expr);
         return !info.fn || info.fn.category !== 'aggregate' || info.fn.name === 'GROUP_CONCAT';
-      };
+      }
+
+      var linkProps = ['path', 'entity', 'action', 'join', 'target'];
 
       this.toggleLink = function(column) {
         if (column.link) {
-          ctrl.onChangeLink(column, column.link.path, '');
+          ctrl.onChangeLink(column, {});
         } else {
+          delete column.editable;
           var defaultLink = ctrl.getLinks(column.key)[0];
-          column.link = {path: defaultLink ? defaultLink.path : 'civicrm/'};
-          ctrl.onChangeLink(column, null, column.link.path);
+          ctrl.onChangeLink(column, defaultLink || {path: 'civicrm/'});
         }
       };
 
-      this.onChangeLink = function(column, before, after) {
-        var beforeLink = before && _.findWhere(ctrl.getLinks(), {path: before}),
-          afterLink = after && _.findWhere(ctrl.getLinks(), {path: after});
-        if (!after) {
-          if (beforeLink && column.title === beforeLink.title) {
+      this.onChangeLink = function(column, afterLink) {
+        column.link = column.link || {};
+        var beforeLink = column.link.action && _.findWhere(ctrl.getLinks(column.key), {action: column.link.action});
+        if (!afterLink.action && !afterLink.path) {
+          if (beforeLink && beforeLink.text === column.title) {
             delete column.title;
           }
           delete column.link;
-        } else if (afterLink && ((!column.title && !before) || (beforeLink && beforeLink.title === column.title))) {
-          column.title = afterLink.title;
-        } else if (!afterLink && (beforeLink && beforeLink.title === column.title)) {
+          return;
+        }
+        if (afterLink.text && ((!column.title && !beforeLink) || (beforeLink && beforeLink.text === column.title))) {
+          column.title = afterLink.text;
+        } else if (!afterLink.text && (beforeLink && beforeLink.text === column.title)) {
           delete column.title;
         }
+        _.each(linkProps, function(prop) {
+          column.link[prop] = afterLink[prop] || '';
+        });
       };
 
       this.getLinks = function(columnKey) {
         if (!ctrl.links) {
-          ctrl.links = {'*': ctrl.crmSearchAdmin.buildLinks()};
+          ctrl.links = {'*': ctrl.crmSearchAdmin.buildLinks(), '0': []};
+          ctrl.links[''] = _.filter(ctrl.links['*'], {join: ''});
+          searchMeta.getSearchTasks(ctrl.savedSearch.api_entity).then(function(tasks) {
+            _.each(tasks, function (task) {
+              if (task.number === '> 0' || task.number === '=== 1') {
+                var link = {
+                  text: task.title,
+                  icon: task.icon,
+                  task: task.name,
+                  entity: task.entity,
+                  target: 'crm-popup',
+                  join: '',
+                  style: task.name === 'delete' ? 'danger' : 'default'
+                };
+                ctrl.links['*'].push(link);
+                ctrl.links[''].push(link);
+              }
+            });
+          });
         }
         if (!columnKey) {
           return ctrl.links['*'];
+        }
+        if (!canUseLinks(columnKey)) {
+          return ctrl.links['0'];
         }
         var expr = ctrl.getExprFromSelect(columnKey),
           info = searchMeta.parseExpr(expr),
@@ -254,6 +287,25 @@
         searchMeta.pickIcon().then(function(icon) {
           model[key] = icon;
         });
+      };
+
+      this.toggleAddButton = function() {
+        if (ctrl.display.settings.addButton && ctrl.display.settings.addButton.path) {
+          delete ctrl.display.settings.addButton;
+        } else {
+          var entity = searchMeta.getBaseEntity();
+          ctrl.display.settings.addButton = {
+            path: entity.addPath || 'civicrm/',
+            text: ts('Add %1', {1: entity.title}),
+            icon: 'fa-plus'
+          };
+        }
+      };
+
+      this.onChangeAddButtonPath = function() {
+        if (!ctrl.display.settings.addButton.path) {
+          delete ctrl.display.settings.addButton;
+        }
       };
 
       // Helper function to sort active from hidden columns and initialize each column with defaults
@@ -292,6 +344,19 @@
         }
       };
 
+      this.getDefaultLimit = function() {
+        return CRM.crmSearchAdmin.defaultPagerSize;
+      };
+
+      this.getDefaultSort = function() {
+        var apiEntity = ctrl.savedSearch.api_entity,
+          sort = [];
+        if (searchMeta.getEntity(apiEntity).order_by) {
+          sort.push([searchMeta.getEntity(apiEntity).order_by, 'ASC']);
+        }
+        return sort;
+      };
+
       this.fieldsForSort = function() {
         function disabledIf(key) {
           return _.findIndex(ctrl.display.settings.sort, [key]) >= 0;
@@ -308,7 +373,7 @@
               text: ts('Columns'),
               children: ctrl.crmSearchAdmin.getSelectFields(disabledIf)
             }
-          ].concat(ctrl.crmSearchAdmin.getAllFields('', ['Field', 'Custom'], disabledIf))
+          ].concat(ctrl.crmSearchAdmin.getAllFields('', ['Field', 'Custom', 'Extra'], disabledIf))
         };
       };
 
@@ -318,16 +383,6 @@
         if (_.findIndex(ctrl.display.settings[name], value) < 0) {
           ctrl.display.settings[name].push(value);
         }
-      };
-
-      // @return {Array}
-      this.getAfforms = function() {
-        if (ctrl.display.name && ctrl.crmSearchAdmin.afforms) {
-          if (!afforms || (ctrl.crmSearchAdmin.afforms[ctrl.display.name] && afforms !== ctrl.crmSearchAdmin.afforms[ctrl.display.name])) {
-            afforms = ctrl.crmSearchAdmin.afforms[ctrl.display.name] || [];
-          }
-        }
-        return afforms;
       };
 
       $scope.$watch('$ctrl.display.settings', function() {

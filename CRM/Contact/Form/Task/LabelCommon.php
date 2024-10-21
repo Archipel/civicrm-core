@@ -54,10 +54,10 @@ class CRM_Contact_Form_Task_LabelCommon {
   /**
    * Get the rows for the labels.
    *
-   * @param $contactIDs
+   * @param array $contactIDs
    * @param int $locationTypeID
    * @param bool $respectDoNotMail
-   * @param $mergeSameAddress
+   * @param bool $mergeSameAddress
    * @param bool $mergeSameHousehold
    *   UNUSED.
    *
@@ -182,7 +182,7 @@ class CRM_Contact_Form_Task_LabelCommon {
         $valuesothers = CRM_Core_BAO_Location::getValues($paramsothers, $valuesothers);
         if ($locationTypeID) {
           foreach ($valuesothers as $vals) {
-            if (CRM_Utils_Array::value('location_type_id', $vals) ==
+            if (($vals['location_type_id'] ?? NULL) ==
               $locationTypeID
             ) {
               foreach ($vals as $k => $v) {
@@ -234,7 +234,7 @@ class CRM_Contact_Form_Task_LabelCommon {
    *   return properties for address e.g
    *   [street_address => 1, supplemental_address_1 => 1, supplemental_address_2 => 1]
    */
-  public static function getAddressReturnProperties() {
+  public static function getAddressReturnProperties(): array {
     $mailingFormat = Civi::settings()->get('mailing_format');
 
     $addressFields = CRM_Utils_Address::sequence($mailingFormat);
@@ -280,7 +280,7 @@ class CRM_Contact_Form_Task_LabelCommon {
    *
    * @return array
    */
-  public function mergeSameHousehold(&$rows) {
+  public static function mergeSameHousehold(&$rows) {
     // group selected contacts by type
     $individuals = [];
     $households = [];

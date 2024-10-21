@@ -178,6 +178,7 @@ class CRM_Utils_VersionCheck {
    * Add info to the 'entities' array
    */
   private function getEntityStats() {
+    // FIXME hardcoded list = bad
     $tables = [
       'CRM_Activity_DAO_Activity' => 'is_test = 0',
       'CRM_Case_DAO_Case' => 'is_deleted = 0',
@@ -200,18 +201,23 @@ class CRM_Utils_VersionCheck {
       'CRM_Member_DAO_MembershipBlock' => 'is_active = 1',
       'CRM_Pledge_DAO_Pledge' => 'is_test = 0',
       'CRM_Pledge_DAO_PledgeBlock' => NULL,
-      'CRM_Mailing_Event_DAO_Delivered' => NULL,
+      'CRM_Mailing_Event_DAO_MailingEventDelivered' => NULL,
     ];
+    // Provide continuity in wire format.
+    $compat = ['MailingEventDelivered' => 'Delivered'];
     foreach ($tables as $daoName => $where) {
-      $dao = new $daoName();
-      if ($where) {
-        $dao->whereAdd($where);
+      if (class_exists($daoName)) {
+        /** @var \CRM_Core_DAO $dao */
+        $dao = new $daoName();
+        if ($where) {
+          $dao->whereAdd($where);
+        }
+        $short_name = substr($daoName, strrpos($daoName, '_') + 1);
+        $this->stats['entities'][] = [
+          'name' => $compat[$short_name] ?? $short_name,
+          'size' => $dao->count(),
+        ];
       }
-      $short_name = substr($daoName, strrpos($daoName, '_') + 1);
-      $this->stats['entities'][] = [
-        'name' => $short_name,
-        'size' => $dao->count(),
-      ];
     }
   }
 
@@ -221,8 +227,7 @@ class CRM_Utils_VersionCheck {
    */
   private function getExtensionStats() {
     // Core components
-    $config = CRM_Core_Config::singleton();
-    foreach ($config->enableComponents as $comp) {
+    foreach (Civi::settings()->get('enable_components') as $comp) {
       $this->stats['extensions'][] = [
         'name' => 'org.civicrm.component.' . strtolower($comp),
         'enabled' => 1,

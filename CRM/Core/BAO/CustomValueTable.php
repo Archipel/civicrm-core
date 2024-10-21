@@ -203,6 +203,14 @@ class CRM_Core_BAO_CustomValueTable {
               }
               break;
 
+            case 'EntityReference':
+              $type = 'Integer';
+              if ($value == NULL || $value === '') {
+                $type = 'Timestamp';
+                $value = NULL;
+              }
+              break;
+
             case 'RichTextEditor':
               $type = 'String';
               break;
@@ -235,13 +243,13 @@ class CRM_Core_BAO_CustomValueTable {
 
           $fieldExtends = $field['extends'] ?? NULL;
           if (
-            CRM_Utils_Array::value('entity_table', $field) === 'civicrm_contact'
+            ($field['entity_table'] ?? NULL) === 'civicrm_contact'
             || $fieldExtends === 'Contact'
             || $fieldExtends === 'Individual'
             || $fieldExtends === 'Organization'
             || $fieldExtends === 'Household'
           ) {
-            $paramFieldsExtendContactForEntities[$entityID]['custom_' . CRM_Utils_Array::value('custom_field_id', $field)] = $field['custom_field_id'] ?? NULL;
+            $paramFieldsExtendContactForEntities[$entityID]['custom_' . ($field['custom_field_id'] ?? '')] = $field['custom_field_id'] ?? NULL;
           }
         }
 
@@ -315,6 +323,7 @@ class CRM_Core_BAO_CustomValueTable {
       // the below three are FK's, and have constraints added to them
 
       case 'ContactReference':
+      case 'EntityReference':
       case 'StateProvince':
       case 'Country':
       case 'File':
@@ -375,6 +384,13 @@ class CRM_Core_BAO_CustomValueTable {
 
         if (!empty($customValue['id'])) {
           $cvParam['id'] = $customValue['id'];
+        }
+        elseif (empty($cvParam['is_multiple']) && !empty($entityID)) {
+          // dev/core#3000 Ensure that if we are not dealing with multiple record custom data and for some reason have got here without getting the id of the record in the custom table for this entityId let us give it one last shot
+          $rowId = CRM_Core_DAO::singleValueQuery("SELECT id FROM {$cvParam['table_name']} WHERE entity_id = %1", [1 => [$entityID, 'Integer']]);
+          if (!empty($rowId)) {
+            $cvParam['id'] = $rowId;
+          }
         }
         if (!array_key_exists($customValue['table_name'], $cvParams)) {
           $cvParams[$customValue['table_name']] = [];
@@ -437,7 +453,7 @@ class CRM_Core_BAO_CustomValueTable {
    *                                   Empty array if no custom values found.
    * @throws CRM_Core_Exception
    */
-  public static function &getEntityValues($entityID, $entityType = NULL, $fieldIDs = NULL, $formatMultiRecordField = FALSE, $DTparams = NULL) {
+  public static function getEntityValues($entityID, $entityType = NULL, $fieldIDs = NULL, $formatMultiRecordField = FALSE, $DTparams = NULL) {
     if (!$entityID) {
       // adding this here since an empty contact id could have serious repurcussions
       // like looping forever
@@ -456,7 +472,8 @@ class CRM_Core_BAO_CustomValueTable {
       $cond[] = "cf.id IN ( $fieldIDList )";
     }
     if (empty($cond)) {
-      $cond[] = "cg.extends IN ( 'Contact', 'Individual', 'Household', 'Organization' )";
+      $contactTypes = array_merge(['Contact'], CRM_Contact_BAO_ContactType::basicTypes(TRUE));
+      $cond[] = "cg.extends IN ( '" . implode("', '", $contactTypes) . "' )";
     }
     $cond = implode(' AND ', $cond);
 
@@ -707,7 +724,7 @@ AND    cf.id IN ( $fieldIDList )
    * @throws Exception
    * @return array
    */
-  public static function &getValues(&$params) {
+  public static function getValues($params) {
     if (empty($params)) {
       return NULL;
     }
@@ -731,14 +748,13 @@ AND    cf.id IN ( $fieldIDList )
             [1 => $idx]
           ));
         }
-        $fieldIDs[] = (int ) $idx;
+        $fieldIDs[] = (int) $idx;
       }
     }
 
-    $default = ['Contact', 'Individual', 'Household', 'Organization'];
-    if (!($type = CRM_Utils_Array::value('entityType', $params)) ||
-      in_array($params['entityType'], $default)
-    ) {
+    $default = array_merge(['Contact'], CRM_Contact_BAO_ContactType::basicTypes(TRUE));
+    $type = $params['entityType'] ?? NULL;
+    if (!$type || in_array($params['entityType'], $default)) {
       $type = NULL;
     }
     else {

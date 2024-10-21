@@ -59,13 +59,13 @@
     <name>domain_id</name>
     <title>Domain ID</title>
     <type>int unsigned</type>
-    <required>true</required>
+    <default>NULL</default>
     <pseudoconstant>
       <table>civicrm_domain</table>
       <keyColumn>id</keyColumn>
       <labelColumn>name</labelColumn>
     </pseudoconstant>
-    <comment>Which Domain is this menu item for</comment>
+    <comment>Which Domain does this setting belong to</comment>
     <html>
       <label>Domain</label>
     </html>
@@ -99,7 +99,9 @@
     <name>is_domain</name>
     <title>Is Domain Setting?</title>
     <type>boolean</type>
-    <comment>Is this setting a contact specific or site wide setting?</comment>
+    <default>0</default>
+    <required>true</required>
+    <comment>Is this setting per-domain or global?</comment>
     <add>4.1</add>
   </field>
   <field>

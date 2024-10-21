@@ -309,9 +309,9 @@ class CRM_Core_BAO_ConfigSetting {
    *   true if valid component name and enabling succeeds, else false
    */
   public static function enableComponent($componentName) {
-    $config = CRM_Core_Config::singleton();
-    if (in_array($componentName, $config->enableComponents)) {
-      // component is already enabled
+    $enabledComponents = Civi::settings()->get('enable_components');
+    if (in_array($componentName, $enabledComponents, TRUE)) {
+      // Component is already enabled
       return TRUE;
     }
 
@@ -321,12 +321,21 @@ class CRM_Core_BAO_ConfigSetting {
     }
 
     // get enabled-components from DB and add to the list
-    $enabledComponents = Civi::settings()->get('enable_components');
     $enabledComponents[] = $componentName;
-
     self::setEnabledComponents($enabledComponents);
 
     return TRUE;
+  }
+
+  /**
+   * Ensure all components are enabled
+   * @throws CRM_Core_Exception
+   */
+  public static function enableAllComponents() {
+    $allComponents = array_keys(CRM_Core_Component::getComponents());
+    if (Civi::settings()->get('enable_components') != $allComponents) {
+      self::setEnabledComponents($allComponents);
+    }
   }
 
   /**
@@ -337,20 +346,13 @@ class CRM_Core_BAO_ConfigSetting {
    * @return bool
    */
   public static function disableComponent($componentName) {
-    $config = CRM_Core_Config::singleton();
-    if (!in_array($componentName, $config->enableComponents) ||
-      !array_key_exists($componentName, CRM_Core_Component::getComponents())
-    ) {
-      // Post-condition is satisfied.
+    $enabledComponents = Civi::settings()->get('enable_components');
+    if (!in_array($componentName, $enabledComponents, TRUE)) {
+      // Component is already disabled.
       return TRUE;
     }
 
-    // get enabled-components from DB and add to the list
-    $enabledComponents = Civi::settings()->get('enable_components');
-    $enabledComponents = array_diff($enabledComponents, [$componentName]);
-
-    self::setEnabledComponents($enabledComponents);
-
+    self::setEnabledComponents(array_diff($enabledComponents, [$componentName]));
     return TRUE;
   }
 
@@ -360,8 +362,8 @@ class CRM_Core_BAO_ConfigSetting {
    * @param array $enabledComponents
    */
   public static function setEnabledComponents($enabledComponents) {
-    // The on_change trigger on this setting will trigger a cache flush
-    Civi::settings()->set('enable_components', $enabledComponents);
+    // The post_change trigger on this setting will sync component extensions, which will also flush caches
+    Civi::settings()->set('enable_components', array_values($enabledComponents));
   }
 
   /**

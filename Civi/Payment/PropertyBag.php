@@ -4,6 +4,7 @@ namespace Civi\Payment;
 use InvalidArgumentException;
 use CRM_Core_Error;
 use CRM_Core_PseudoConstant;
+use Civi\Api4\Country;
 
 /**
  * @class
@@ -27,12 +28,21 @@ class PropertyBag implements \ArrayAccess {
   protected static $propMap = [
     'amount'                      => TRUE,
     'billingStreetAddress'        => TRUE,
+    'billing_street_address'      => 'billingStreetAddress',
+    'street_address'              => 'billingStreetAddress',
     'billingSupplementalAddress1' => TRUE,
     'billingSupplementalAddress2' => TRUE,
     'billingSupplementalAddress3' => TRUE,
     'billingCity'                 => TRUE,
+    'billing_city'                => 'billingCity',
+    'city'                        => 'billingCity',
     'billingPostalCode'           => TRUE,
+    'billing_postal_code'         => 'billingPostalCode',
+    'postal_code'                 => 'billingPostalCode',
     'billingCounty'               => TRUE,
+    'billingStateProvince'        => TRUE,
+    'billing_state_province'      => 'billingStateProvince',
+    'state_province'              => 'billingStateProvince',
     'billingCountry'              => TRUE,
     'contactID'                   => TRUE,
     'contact_id'                  => 'contactID',
@@ -73,6 +83,21 @@ class PropertyBag implements \ArrayAccess {
     'isNotifyProcessorOnCancelRecur' => TRUE,
   ];
 
+  /**
+   * For unit tests only.
+   *
+   * @var array
+   */
+  public $logs = [];
+
+  /**
+   * For unit tests only. Set to the name of a function, e.g. setBillingCountry
+   * to suppress calling CRM_Core_Error::deprecatedWarning which will break tests.
+   * Useful when a test is testing THAT a deprecatedWarning is thrown.
+   *
+   * @var string
+   */
+  public $ignoreDeprecatedWarningsInFunction = '';
 
   /**
    * @var bool
@@ -147,6 +172,7 @@ class PropertyBag implements \ArrayAccess {
    * @param mixed $offset
    * @return mixed
    */
+  #[\ReturnTypeWillChange]
   public function offsetGet($offset) {
     try {
       $prop = $this->handleLegacyPropNames($offset);
@@ -189,7 +215,7 @@ class PropertyBag implements \ArrayAccess {
    * @param mixed $offset
    * @param mixed $value
    */
-  public function offsetSet($offset, $value) {
+  public function offsetSet($offset, $value): void {
     try {
       $prop = $this->handleLegacyPropNames($offset);
     }
@@ -237,7 +263,7 @@ class PropertyBag implements \ArrayAccess {
    *
    * @param mixed $offset
    */
-  public function offsetUnset ($offset) {
+  public function offsetUnset ($offset): void {
     $prop = $this->handleLegacyPropNames($offset);
     unset($this->props['default'][$prop]);
   }
@@ -258,13 +284,18 @@ class PropertyBag implements \ArrayAccess {
     if ($newName === NULL && substr($prop, -2) === '-' . \CRM_Core_BAO_LocationType::getBilling()
       && isset(static::$propMap[substr($prop, 0, -2)])
     ) {
-      $newName = substr($prop, 0, -2);
+      $billingAddressProp = substr($prop, 0, -2);
+      $newName = static::$propMap[$billingAddressProp] ?? NULL;
+      if ($newName === TRUE) {
+        // Good, modern name.
+        return $billingAddressProp;
+      }
     }
 
     if ($newName === NULL) {
       if ($silent) {
         // Only for use by offsetExists
-        return;
+        return NULL;
       }
       throw new \InvalidArgumentException("Unknown property '$prop'.");
     }
@@ -592,6 +623,27 @@ class PropertyBag implements \ArrayAccess {
   }
 
   /**
+   * BillingStateProvince getter.
+   *
+   * @return string
+   */
+  public function getBillingStateProvince($label = 'default') {
+    return $this->get('billingStateProvince', $label);
+  }
+
+  /**
+   * BillingStateProvince setter.
+   *
+   * Nb. we can't validate this unless we have the country ID too, so we don't.
+   *
+   * @param string $input
+   * @param string $label e.g. 'default'
+   */
+  public function setBillingStateProvince($input, $label = 'default') {
+    return $this->set('billingStateProvince', $label, (string) $input);
+  }
+
+  /**
    * BillingCountry getter.
    *
    * @return string
@@ -609,13 +661,60 @@ class PropertyBag implements \ArrayAccess {
    * @param string $label e.g. 'default'
    */
   public function setBillingCountry($input, $label = 'default') {
-    if (!is_string($input) || strlen($input) !== 2) {
-      throw new \InvalidArgumentException("setBillingCountry expects ISO 3166-1 alpha-2 country code.");
+    $warnings = [];
+    $munged = $input;
+    if (!is_string($input)) {
+      $warnings[] = 'Expected string';
     }
-    if (!CRM_Core_PseudoConstant::getKey('CRM_Core_BAO_Address', 'country_id', $input)) {
-      throw new \InvalidArgumentException("setBillingCountry expects ISO 3166-1 alpha-2 country code.");
+    else {
+      if (!(strlen($input) === 2 && CRM_Core_PseudoConstant::getKey('CRM_Core_BAO_Address', 'country_id', $input))) {
+        $warnings[] = 'Not ISO 3166-1 alpha-2 code.';
+      }
     }
-    return $this->set('billingCountry', $label, (string) $input);
+
+    if ($warnings) {
+      // Try to munge.
+      if (empty($input)) {
+        $munged = '';
+      }
+      else {
+        if ((is_int($input) || preg_match('/^\d+$/', $input))) {
+          // Got a number. Maybe it's an ID?
+          $munged = Country::get(FALSE)->addSelect('iso_code')->addWhere('id', '=', $input)->execute()->first()['iso_code'] ?? '';
+          if ($munged) {
+            $warnings[] = "Given input matched a country ID, assuming it was that.";
+          }
+          else {
+            $warnings[] = "Given input looked like it could be a country ID but did not match a country.";
+          }
+        }
+        elseif (is_string($input)) {
+          $munged = Country::get(FALSE)->addSelect('iso_code')->addWhere('name', '=', $input)->execute()->first()['iso_code'] ?? '';
+          if ($munged) {
+            $warnings[] = "Given input matched a country name, assuming it was that.";
+          }
+          else {
+            $warnings[] = "Given input did not match a country name.";
+          }
+        }
+        else {
+          $munged = '';
+          $warnings[] = "Given input is plain weird.";
+        }
+      }
+    }
+
+    if ($warnings) {
+      $warnings[] = "Input: " . json_encode($input) . " was munged to: " . json_encode($munged);
+      $warnings = "PropertyBag::setBillingCountry input warnings (may be errors in future):\n" . implode("\n", $warnings);
+      $this->logs[] = $warnings;
+      // Emit a deprecatedWarning except in the case that we're testing this function.
+      if (__FUNCTION__ !== $this->ignoreDeprecatedWarningsInFunction) {
+        CRM_Core_Error::deprecatedWarning($warnings);
+      }
+    }
+
+    return $this->set('billingCountry', $label, $munged);
   }
 
   /**
@@ -1013,7 +1112,7 @@ class PropertyBag implements \ArrayAccess {
    * @param string $label e.g. 'default'
    */
   public function setRecurFrequencyUnit($recurFrequencyUnit, $label = 'default') {
-    if (!preg_match('/^day|week|month|year$/', $recurFrequencyUnit)) {
+    if (!preg_match('/^day|week|month|year$/', ($recurFrequencyUnit ?? ''))) {
       throw new \InvalidArgumentException("recurFrequencyUnit must be day|week|month|year");
     }
     return $this->set('recurFrequencyUnit', $label, $recurFrequencyUnit);
@@ -1037,7 +1136,10 @@ class PropertyBag implements \ArrayAccess {
    */
   public function setRecurInstallments($recurInstallments, $label = 'default') {
     // Counts zero as positive which is ok - means no installments
-    if (!\CRM_Utils_Type::validate($recurInstallments, 'Positive')) {
+    try {
+      \CRM_Utils_Type::validate($recurInstallments, 'Positive');
+    }
+    catch (\CRM_Core_Exception $e) {
       throw new InvalidArgumentException('recurInstallments must be 0 or a positive integer');
     }
 
@@ -1074,7 +1176,7 @@ class PropertyBag implements \ArrayAccess {
     if ($input === '') {
       $input = NULL;
     }
-    if (strlen($input) > 255 || in_array($input, [FALSE, 0], TRUE)) {
+    if (strlen($input ?? '') > 255 || in_array($input, [FALSE, 0], TRUE)) {
       throw new \InvalidArgumentException('processorID field has max length of 255');
     }
     return $this->set('recurProcessorID', $label, $input);

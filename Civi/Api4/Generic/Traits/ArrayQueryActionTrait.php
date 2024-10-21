@@ -30,8 +30,21 @@ trait ArrayQueryActionTrait {
   protected function queryArray($values, $result) {
     $values = $this->filterArray($values);
     $values = $this->sortArray($values);
-    // Set total count before applying limit
-    $result->rowCount = count($values);
+
+    if (in_array('row_count', $this->getSelect())) {
+      $result->setCountMatched(count($values));
+    }
+    else {
+      // Set total count before applying limit
+      //
+      // This is kept here for backward compatibility, but could be confusing because
+      // the API behaviour is different with ArrayQueryActionTrait than with DAO
+      // queries. With DAO queries, the rowCount is only the same as the total
+      // matched count in specific cases, whereas with the implementation here we are
+      // setting rowCount explicitly to the matches count, before we apply limit.
+      $result->rowCount = count($values);
+    }
+
     $values = $this->limitArray($values);
     $values = $this->selectArray($values);
     $result->exchangeArray($values);
@@ -87,7 +100,7 @@ trait ArrayQueryActionTrait {
         return $result;
 
       default:
-        return $this->filterCompare($row, $filters);
+        return self::filterCompare($row, $filters);
     }
   }
 
@@ -97,7 +110,7 @@ trait ArrayQueryActionTrait {
    * @return bool
    * @throws \Civi\API\Exception\NotImplementedException
    */
-  private function filterCompare($row, $condition) {
+  public static function filterCompare($row, $condition) {
     if (!is_array($condition)) {
       throw new NotImplementedException('Unexpected where syntax; expecting array.');
     }
@@ -161,13 +174,15 @@ trait ArrayQueryActionTrait {
         return !in_array($value, $expected);
 
       case 'CONTAINS':
+      case 'NOT CONTAINS':
         if (is_array($value)) {
-          return in_array($expected, $value);
+          return in_array($expected, $value) == ($operator == 'CONTAINS');
         }
         elseif (is_string($value) || is_numeric($value)) {
-          return strpos((string) $value, (string) $expected) !== FALSE;
+          // Lowercase check if string contains string
+          return (strpos(strtolower((string) $value), strtolower((string) $expected)) !== FALSE) == ($operator == 'CONTAINS');
         }
-        return $value == $expected;
+        return ($value == $expected) == ($operator == 'CONTAINS');
 
       default:
         throw new NotImplementedException("Unsupported operator: '$operator' cannot be used with array data");

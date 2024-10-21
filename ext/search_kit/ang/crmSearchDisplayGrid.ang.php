@@ -1,5 +1,5 @@
 <?php
-// Module for rendering List Search Displays.
+// Module for rendering Grid Search Displays.
 return [
   'js' => [
     'ang/crmSearchDisplayGrid.module.js',
@@ -8,8 +8,11 @@ return [
   'partials' => [
     'ang/crmSearchDisplayGrid',
   ],
+  'css' => [
+    'css/crmSearchDisplayGrid.css',
+  ],
   'basePages' => ['civicrm/search', 'civicrm/admin/search'],
-  'requires' => ['crmSearchDisplay', 'crmUi', 'ui.bootstrap'],
+  'requires' => ['crmSearchDisplay', 'crmUi', 'ui.bootstrap', 'crmSearchTasks'],
   'bundles' => ['bootstrap3'],
   'exports' => [
     'crm-search-display-grid' => 'E',

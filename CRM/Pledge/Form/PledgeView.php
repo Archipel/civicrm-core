@@ -58,7 +58,7 @@ class CRM_Pledge_Form_PledgeView extends CRM_Core_Form {
     $values['financial_type'] = CRM_Utils_Array::value($values['financial_type_id'], CRM_Contribute_PseudoConstant::financialType());
 
     if ($values['status_id']) {
-      $values['pledge_status'] = CRM_Core_PseudoConstant::getKey('CRM_Pledge_BAO_Pledge', 'status_id', $values['status_id']);
+      $values['pledge_status'] = CRM_Core_PseudoConstant::getLabel('CRM_Pledge_BAO_Pledge', 'status_id', $values['status_id']);
     }
 
     $url = CRM_Utils_System::url('civicrm/contact/view/pledge',
@@ -102,7 +102,8 @@ class CRM_Pledge_Form_PledgeView extends CRM_Core_Form {
     $this->setTitle(ts('View Pledge by') . ' ' . $displayName);
 
     // do check for campaigns
-    if ($campaignId = CRM_Utils_Array::value('campaign_id', $values)) {
+    $campaignId = $values['campaign_id'] ?? NULL;
+    if ($campaignId) {
       $campaigns = CRM_Campaign_BAO_Campaign::getCampaigns($campaignId);
       $values['campaign'] = $campaigns[$campaignId];
     }

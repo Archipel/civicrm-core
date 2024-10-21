@@ -33,10 +33,13 @@ class CRM_Logging_ReportDetail extends CRM_Report_Form {
   protected $raw;
   protected $tables = [];
   protected $interval = '10 SECOND';
+  protected $dblimit;
+  protected $dboffset;
 
   protected $altered_name;
   protected $altered_by;
   protected $altered_by_id;
+  protected $layout;
 
   /**
    * detail/summary report ids
@@ -80,7 +83,7 @@ class CRM_Logging_ReportDetail extends CRM_Report_Form {
     CRM_Utils_System::resetBreadCrumb();
     $breadcrumb = [
       [
-        'title' => ts('Home'),
+        'title' => ts('Home', ['context' => 'menu']),
         'url' => CRM_Utils_System::url(),
       ],
       [
@@ -199,10 +202,10 @@ class CRM_Logging_ReportDetail extends CRM_Report_Form {
         }
 
         // special-case for multiple values. Also works for CRM-7251: preferred_communication_method
-        if ((substr($from, 0, 1) == CRM_Core_DAO::VALUE_SEPARATOR &&
-            substr($from, -1, 1) == CRM_Core_DAO::VALUE_SEPARATOR) ||
-          (substr($to, 0, 1) == CRM_Core_DAO::VALUE_SEPARATOR &&
-            substr($to, -1, 1) == CRM_Core_DAO::VALUE_SEPARATOR)
+        if ((substr(($from ?? ''), 0, 1) == CRM_Core_DAO::VALUE_SEPARATOR &&
+            substr(($from ?? ''), -1, 1) == CRM_Core_DAO::VALUE_SEPARATOR) ||
+          (substr(($to ?? ''), 0, 1) == CRM_Core_DAO::VALUE_SEPARATOR &&
+            substr(($to ?? ''), -1, 1) == CRM_Core_DAO::VALUE_SEPARATOR)
         ) {
           $froms = $tos = [];
           foreach (explode(CRM_Core_DAO::VALUE_SEPARATOR, trim($from, CRM_Core_DAO::VALUE_SEPARATOR)) as $val) {
@@ -452,7 +455,7 @@ class CRM_Logging_ReportDetail extends CRM_Report_Form {
         unset($_POST['crmPID_B'], $_POST['crmPID']);
       }
 
-      $pageId = $pageId ? $pageId : 1;
+      $pageId = $pageId ?: 1;
       $offset = ($pageId - 1) * $rowCount;
 
       $offset = CRM_Utils_Type::escape($offset, 'Int');
@@ -477,7 +480,7 @@ class CRM_Logging_ReportDetail extends CRM_Report_Form {
    * @return string
    */
   private function convertForeignKeyValuesToLabels(string $fkClassName, string $field, int $keyval): string {
-    if (property_exists($fkClassName, '_labelField')) {
+    if ($fkClassName::$_labelField) {
       $labelValue = CRM_Core_DAO::getFieldValue($fkClassName, $keyval, $fkClassName::$_labelField);
       // Not sure if this should use ts - there's not a lot of context (`%1 (id: %2)`) - and also the similar field labels above don't use ts.
       return "{$labelValue} (id: {$keyval})";

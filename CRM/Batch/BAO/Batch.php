@@ -18,7 +18,7 @@
 /**
  * Batch BAO class.
  */
-class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
+class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch implements \Civi\Core\HookInterface {
 
   /**
    * Cache for the current batch object.
@@ -34,40 +34,47 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
   public static $_exportFormat = NULL;
 
   /**
-   * Create a new batch.
-   *
+   * @deprecated
    * @param array $params
-   *
-   * @return object
-   *   $batch batch object
-   * @throws \Exception
+   * @return CRM_Batch_DAO_Batch
    */
   public static function create(&$params) {
-    if (empty($params['id']) && empty($params['name'])) {
-      $params['name'] = CRM_Utils_String::titleToVar($params['title'] ?? 'batch_ref_' . random_int(0, 100000));
-    }
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
     return self::writeRecord($params);
   }
 
   /**
-   * Retrieve the information about the batch.
+   * Callback for hook_civicrm_pre().
+   *
+   * @param \Civi\Core\Event\PreEvent $event
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public static function self_hook_civicrm_pre(\Civi\Core\Event\PreEvent $event): void {
+    if ($event->action === 'create') {
+      // Supply defaults for `title`
+      if (empty($event->params['title'])) {
+        $event->params['title'] = $event->params['name'] ?? self::generateBatchName();
+      }
+    }
+  }
+
+  /**
+   * Retrieve DB object and copy to defaults array.
    *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
-   * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
+   *   Array of criteria values.
+   * @param array|null $defaults
+   *   Array to be populated with found values.
    *
-   * @return array
-   *   CRM_Batch_BAO_Batch object on success, null otherwise
+   * @return self|null
+   *   The DAO object, if found.
+   *
+   * @deprecated
    */
-  public static function retrieve(&$params, &$defaults) {
-    $batch = new CRM_Batch_DAO_Batch();
-    $batch->copyValues($params);
-    if ($batch->find(TRUE)) {
-      CRM_Core_DAO::storeValues($batch, $defaults);
-      return $batch;
-    }
-    return NULL;
+  public static function retrieve(array $params, ?array &$defaults = NULL) {
+    $defaults = $defaults ?? [];
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -329,16 +336,7 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
         $values['id']
       );
       // CRM-21205
-      $values['currency'] = CRM_Core_DAO::singleValueQuery("
-        SELECT GROUP_CONCAT(DISTINCT ft.currency)
-        FROM  civicrm_batch batch
-        JOIN civicrm_entity_batch eb
-          ON batch.id = eb.batch_id
-        JOIN civicrm_financial_trxn ft
-          ON eb.entity_id = ft.id
-        WHERE batch.id = %1
-        GROUP BY batch.id
-      ", [1 => [$values['id'], 'Positive']]);
+      $values['currency'] = CRM_Batch_BAO_EntityBatch::getBatchCurrency($values['id']);
       $results[$values['id']] = $values;
     }
 
@@ -364,7 +362,7 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
    * @param array $params
    *   Associated array for params.
    *
-   * @return string
+   * @return string[]
    */
   public static function whereClause($params) {
     $clauses = [];
@@ -551,7 +549,7 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
    *   calculated total
    * @param $expected
    *   user-entered total
-   * @return array
+   * @return string
    */
   public static function displayTotals($actual, $expected) {
     $class = 'actual-value';
@@ -623,9 +621,9 @@ class CRM_Batch_BAO_Batch extends CRM_Batch_DAO_Batch {
     $session = CRM_Core_Session::singleton();
     $params['modified_date'] = date('YmdHis');
     $params['modified_id'] = $session->get('userID');
-    foreach ($batchIds as $key => $value) {
-      $params['id'] = $ids['batchID'] = $value;
-      self::create($params, $ids);
+    foreach ($batchIds as $id) {
+      $params['id'] = $id;
+      self::writeRecord($params);
     }
     $url = CRM_Utils_System::url('civicrm/financial/financialbatches', "reset=1&batchStatus={$params['status_id']}");
     CRM_Utils_System::redirect($url);
@@ -704,10 +702,9 @@ LEFT JOIN civicrm_contribution_soft ON civicrm_contribution_soft.contribution_id
 
     // If a custom field was passed as a param,
     // we'll take it into account.
-    $customSearchFields = [];
     if (!empty($params)) {
       foreach ($params as $name => $param) {
-        if (substr($name, 0, 6) == 'custom') {
+        if (strpos($name, 'custom') === 0) {
           $searchFields[] = $name;
         }
       }
@@ -716,7 +713,7 @@ LEFT JOIN civicrm_contribution_soft ON civicrm_contribution_soft.contribution_id
     foreach ($searchFields as $field) {
       if (isset($params[$field])) {
         $values[$field] = $params[$field];
-        if ($field == 'sort_name') {
+        if ($field === 'sort_name') {
           $from .= " LEFT JOIN civicrm_contact contact_b ON contact_b.id = civicrm_contribution.contact_id
           LEFT JOIN civicrm_email ON contact_b.id = civicrm_email.contact_id";
         }

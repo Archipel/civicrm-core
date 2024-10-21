@@ -156,19 +156,11 @@ class CRM_Contact_Form_Task_SMSCommon {
     }
 
     if (is_array($form->_contactIds) && !empty($form->_contactIds) && $toSetDefault) {
-      $returnProperties = [
-        'sort_name' => 1,
-        'phone' => 1,
-        'do_not_sms' => 1,
-        'is_deceased' => 1,
-        'display_name' => 1,
-      ];
-
-      list($form->_contactDetails) = CRM_Utils_Token::getTokenDetails($form->_contactIds,
-        $returnProperties,
-        FALSE,
-        FALSE
-      );
+      $form->_contactDetails = civicrm_api3('Contact', 'get', [
+        'id' => ['IN' => $form->_contactIds],
+        'return' => ['sort_name', 'phone', 'do_not_sms', 'is_deceased', 'display_name'],
+        'options' => ['limit' => 0],
+      ])['values'];
 
       // make a copy of all contact details
       $form->_allContactDetails = $form->_contactDetails;
@@ -199,7 +191,7 @@ class CRM_Contact_Form_Task_SMSCommon {
           unset($form->_contactDetails[$contactId]);
           continue;
         }
-        elseif ($contactDetails['phone_type_id'] != CRM_Utils_Array::value('Mobile', $phoneTypes)) {
+        elseif ($contactDetails['phone_type_id'] != ($phoneTypes['Mobile'] ?? NULL)) {
           //if phone is not primary check if non-primary phone is "Mobile"
           $filter = ['do_not_sms' => 0];
           $contactPhones = CRM_Core_BAO_Phone::allPhones($contactId, FALSE, 'Mobile', $filter);
@@ -283,7 +275,7 @@ class CRM_Contact_Form_Task_SMSCommon {
    * @param array $fields
    *   The input form values.
    * @param array $dontCare
-   * @param array $self
+   * @param self $self
    *   Additional values form 'this'.
    *
    * @return bool|array
@@ -322,7 +314,6 @@ class CRM_Contact_Form_Task_SMSCommon {
    */
   public static function postProcess(&$form) {
 
-    // check and ensure that
     $thisValues = $form->controller->exportValues($form->getName());
 
     $fromSmsProviderId = $thisValues['sms_provider_id'];

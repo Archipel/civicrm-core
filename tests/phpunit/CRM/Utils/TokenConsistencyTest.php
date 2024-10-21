@@ -46,7 +46,7 @@ class CRM_Utils_TokenConsistencyTest extends CiviUnitTestCase {
    * Post test cleanup.
    */
   public function tearDown(): void {
-    $this->quickCleanup(['civicrm_case', 'civicrm_case_type', 'civicrm_participant', 'civicrm_event'], TRUE);
+    $this->quickCleanup(['civicrm_case', 'civicrm_case_type'], TRUE);
     $this->quickCleanUpFinancialEntities();
 
     // WORKAROUND: CRM_Event_Tokens copies `civicrm_event` data into metadata cache. That should probably change, but that's a different scope-of-work.
@@ -58,8 +58,6 @@ class CRM_Utils_TokenConsistencyTest extends CiviUnitTestCase {
 
   /**
    * Test that case tokens are consistently rendered.
-   *
-   * @throws \CiviCRM_API3_Exception
    */
   public function testCaseTokenConsistency(): void {
     $this->createLoggedInUser();
@@ -67,17 +65,7 @@ class CRM_Utils_TokenConsistencyTest extends CiviUnitTestCase {
     $this->createCustomGroupWithFieldOfType(['extends' => 'Case']);
     $tokens = CRM_Core_SelectValues::caseTokens();
     $this->assertEquals($this->getCaseTokens(), $tokens);
-    $caseID = $this->getCaseID();
     $tokenString = $this->getTokenString(array_keys($this->getCaseTokens()));
-    $tokenHtml = CRM_Utils_Token::replaceCaseTokens($caseID, $tokenString, ['case' => $this->getCaseTokenKeys()]);
-    $this->assertEquals($this->getExpectedCaseTokenOutput(), $tokenHtml);
-    // Now do the same without passing in 'knownTokens'
-    $tokenHtml = CRM_Utils_Token::replaceCaseTokens($caseID, $tokenString);
-    $this->assertEquals($this->getExpectedCaseTokenOutput(), $tokenHtml);
-
-    // And check our deprecated tokens still work.
-    $tokenHtml = CRM_Utils_Token::replaceCaseTokens($caseID, '{case.case_type_id} {case.status_id}');
-    $this->assertEquals('Housing Support Ongoing', $tokenHtml);
     $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), [
       'controller' => __CLASS__,
       'smarty' => FALSE,
@@ -213,7 +201,69 @@ case.custom_1 :' . '
   }
 
   /**
+   * Test contribution tokens pulled from the contribution page.
+   */
+  public function testContributionPageTokens(): void {
+    $tokenValues = [
+      'frontend_title' => 'public title',
+      'pay_later_text' => 'pay later text',
+      'pay_later_receipt' => '<p>first line</p><p>second line</p>',
+      'is_share' => TRUE,
+      'receipt_text' => "Text in\n non html",
+    ];
+    $tokens = [];
+    foreach (array_keys($tokenValues) as $token) {
+      $tokens[] = '{contribution.contribution_page_id.' . $token . '}';
+    }
+    $tokenString = trim($this->getTokenString($tokens));
+    $this->contributionPageCreate($tokenValues);
+
+    $tokenProcessor = $this->getTokenProcessor(['schema' => ['contributionId']]);
+    $tokenProcessor->addMessage('text', $tokenString, 'text/plain');
+    $tokenProcessor->addMessage('html', $tokenString, 'text/html');
+    $tokenProcessor->addRow(['contributionId' => $this->contributionCreate(['contribution_page_id' => $this->ids['ContributionPage']['test'], 'contact_id' => $this->individualCreate()])]);
+    $tokenProcessor->evaluate();
+    $this->assertEquals('contribution.contribution_page_id.frontend_title :public title
+contribution.contribution_page_id.pay_later_text :pay later text
+contribution.contribution_page_id.pay_later_receipt :<p>first line</p><p>second line</p>
+contribution.contribution_page_id.is_share :1
+contribution.contribution_page_id.receipt_text :Text in<br />
+ non html', $tokenProcessor->getRow(0)->render('html'));
+    $this->assertEquals('contribution.contribution_page_id.frontend_title :public title
+contribution.contribution_page_id.pay_later_text :pay later text
+contribution.contribution_page_id.pay_later_receipt :first line
+
+second line
+contribution.contribution_page_id.is_share :1
+contribution.contribution_page_id.receipt_text :Text in
+ non html', $tokenProcessor->getRow(0)->render('text'));
+
+  }
+
+  /**
+   * Test that contribution recur tokens are consistently rendered.
+   */
+  public function testContributionRecurTokenRaw(): void {
+    $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), [
+      'controller' => __CLASS__,
+      'smarty' => FALSE,
+      'schema' => ['contribution_recurId'],
+    ]);
+    $tokenProcessor->addMessage('not_specified', '{contribution_recur.amount}', 'text/plain');
+    $tokenProcessor->addMessage('money', '{contribution_recur.amount|crmMoney}', 'text/plain');
+    $tokenProcessor->addMessage('raw', '{contribution_recur.amount|raw}', 'text/plain');
+    $tokenProcessor->addMessage('moneyNumber', '{contribution_recur.amount|crmMoneyNumber}', 'text/plain');
+    $tokenProcessor->addRow(['contribution_recurId' => $this->getContributionRecurID()]);
+    $tokenProcessor->evaluate();
+    $this->assertEquals('€5,990.99', $tokenProcessor->getRow(0)->render('not_specified'));
+    $this->assertEquals('€5,990.99', $tokenProcessor->getRow(0)->render('money'));
+    $this->assertEquals('5990.99', $tokenProcessor->getRow(0)->render('raw'));
+  }
+
+  /**
    * Test money format tokens can respect passed in locale.
+   *
+   * @group locale
    */
   public function testMoneyFormat(): void {
     // Our 'migration' off configured thousand separators at the moment is a define.
@@ -260,6 +310,24 @@ case.custom_1 :' . '
       '{participant.status_id}' => 'Status ID',
       '{participant.role_id}' => 'Participant Role ID',
     ];
+  }
+
+  /**
+   * Test the standard new location token format - which matches apiv4 return properties.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testLocationTokens(): void {
+    $contactID = $this->individualCreate(['email' => 'me@example.com']);
+    Address::create()->setValues([
+      'contact_id' => $contactID,
+      'is_primary' => TRUE,
+      'street_address' => 'Heartbreak Hotel',
+      'supplemental_address_1' => 'Lonely Street',
+    ])->execute();
+    $text = '{contact.first_name} {contact.email_primary.email} {contact.address_primary.street_address}';
+    $text = $this->renderText(['contactId' => $contactID], $text);
+    $this->assertEquals('Anthony me@example.com Heartbreak Hotel', $text);
   }
 
   /**
@@ -438,7 +506,7 @@ contribution_recur.frequency_unit:name :year
 contribution_recur.contribution_status_id:label :Pending Label**
 contribution_recur.contribution_status_id:name :Pending
 contribution_recur.payment_processor_id:label :Dummy (test)
-contribution_recur.payment_processor_id:name :Dummy (test)
+contribution_recur.payment_processor_id:name :Dummy_test
 contribution_recur.financial_type_id:label :Member Dues
 contribution_recur.financial_type_id:name :Member Dues
 contribution_recur.payment_instrument_id:label :Check
@@ -448,31 +516,52 @@ contribution_recur.payment_instrument_id:name :Check
   }
 
   /**
+   * Test balance token works can be rendered as raw & boolean.
+   *
+   * This is a stand in for money tokens in general but as a pseudo-field
+   * it has some added charm.
+   */
+  public function testContributionBalanceToken(): void {
+    $contributionID = $this->contributionCreate(['contact_id' => $this->individualCreate(), 'contribution_status_id' => 'Pending']);
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $contributionID,
+      'total_amount' => 1,
+    ]);
+    $text = $this->renderText(['contributionId' => $contributionID],
+      '{contribution.balance_amount} {contribution.balance_amount|raw} {contribution.balance_amount|boolean} {contribution.tax_amount|boolean}'
+    );
+    $this->assertEquals('$99.00 99.00 1 0', $text);
+  }
+
+  /**
+   * Test tokens can be capitalized.
+   */
+  public function testCapitalize(): void {
+    $this->individualCreate(['first_name' => 'bob m smith']);
+    $text = $this->renderText(['contactId' => $this->ids['Contact']['individual_0']], '{contact.first_name|capitalize}');
+    $this->assertEquals('Bob M Smith', $text);
+  }
+
+  /**
    * Test that membership tokens are consistently rendered.
    *
-   * @throws \API_Exception
    */
   public function testMembershipTokenConsistency(): void {
     $this->createLoggedInUser();
     $this->restoreMembershipTypes();
     $this->createCustomGroupWithFieldOfType(['extends' => 'Membership']);
-    $tokens = CRM_Core_SelectValues::membershipTokens();
     $expectedTokens = $this->getMembershipTokens();
-    $this->assertEquals($expectedTokens, $tokens);
+    // This get also creates...
+    $this->getMembershipID();
     $newStyleTokens = "\n{membership.status_id:label}\n{membership.membership_type_id:label}\n";
     $tokenString = $newStyleTokens . implode("\n", array_keys($this->getMembershipTokens()));
-
-    $memberships = CRM_Utils_Token::getMembershipTokenDetails([$this->getMembershipID()]);
-    $messageToken = CRM_Utils_Token::getTokens($tokenString);
-    $tokenHtml = CRM_Utils_Token::replaceEntityTokens('membership', $memberships[$this->getMembershipID()], $tokenString, $messageToken);
-    $this->assertEquals($this->getExpectedMembershipTokenOutput(), $tokenHtml);
 
     // Custom fields work in the processor so test it....
     $tokenString .= "\n{membership." . $this->getCustomFieldName('text') . '}';
     // Now compare with scheduled reminder
     $mut = new CiviMailUtils($this);
     CRM_Utils_Time::setTime('2007-01-22 15:00:00');
-    $this->callAPISuccess('action_schedule', 'create', [
+    $this->callAPISuccess('ActionSchedule', 'create', [
       'title' => 'job',
       'subject' => 'job',
       'entity_value' => 1,
@@ -483,7 +572,7 @@ contribution_recur.payment_instrument_id:name :Check
       'start_action_unit' => 'day',
       'body_html' => $tokenString,
     ]);
-    $this->callAPISuccess('job', 'send_reminder', []);
+    $this->callAPISuccess('Job', 'send_reminder', []);
     $expected = $this->getExpectedMembershipTokenOutput();
     // Unlike the legacy method custom fields are resolved by the processor.
     $expected .= "\nmy field";
@@ -497,12 +586,43 @@ contribution_recur.payment_instrument_id:name :Check
     $tokens = $tokenProcessor->listTokens();
     // Add in custom tokens as token processor supports these.
     $expectedTokens = array_merge($expectedTokens, $this->getTokensAdvertisedByTokenProcessorButNotLegacy());
-    $this->assertEquals(array_merge($expectedTokens, $this->getDomainTokens()), $tokens);
+    $this->assertEquals(array_merge($expectedTokens, $this->getDomainTokens(), $this->getRecurEntityTokens('membership')), $tokens);
     $tokenProcessor->addMessage('html', $tokenString, 'text/plain');
     $tokenProcessor->addRow(['membershipId' => $this->getMembershipID()]);
     $tokenProcessor->evaluate();
     $this->assertEquals($expected, $tokenProcessor->getRow(0)->render('html'));
 
+  }
+
+  public function testPledgeTokens(): void {
+    $pledgeID = $this->pledgeCreate(['contact_id' => $this->individualCreate(), 'create_date' => '2022-04-07', 'start_date' => '2022-04-07']);
+    $tokenProcessor = $this->getTokenProcessor(['schema' => ['pledgeId']]);
+    $list = $tokenProcessor->listTokens();
+    $this->assertEquals(array_merge($this->getPledgeTokens(), $this->getDomainTokens()), $list);
+    $tokenString = implode(', ', array_keys($this->getPledgeTokens()));
+    $tokenProcessor->addMessage('text', $tokenString, 'text/plain');
+    $tokenProcessor->addRow(['pledgeId' => $pledgeID]);
+    $tokenProcessor->evaluate();
+    $this->assertEquals($this->getExpectedPledgeTokenOutput(), $tokenProcessor->getRow(0)->render('text'));
+  }
+
+  public function getExpectedPledgeTokenOutput(): string {
+    return '$100.00, US Dollar, year, 5, 15, 5, April 7th, 2022, April 7th, 2022, , ';
+  }
+
+  public function getPledgeTokens(): array {
+    return [
+      '{pledge.amount}' => 'Total Pledged',
+      '{pledge.currency:label}' => 'Pledge Currency',
+      '{pledge.frequency_unit:label}' => 'Pledge Frequency Unit',
+      '{pledge.frequency_interval}' => 'Pledge Frequency Interval',
+      '{pledge.frequency_day}' => 'Pledge day',
+      '{pledge.installments}' => 'Pledge Number of Installments',
+      '{pledge.start_date}' => 'Pledge Start Date',
+      '{pledge.create_date}' => 'Pledge Made',
+      '{pledge.cancel_date}' => 'Pledge Cancelled Date',
+      '{pledge.end_date}' => 'Pledge End Date',
+    ];
   }
 
   /**
@@ -513,7 +633,7 @@ contribution_recur.payment_instrument_id:name :Check
   public function getTokensAdvertisedByTokenProcessorButNotLegacy(): array {
     return [
       '{membership.custom_1}' => 'Enter text here :: Group with field text',
-      '{membership.source}' => 'Source',
+      '{membership.source}' => 'Membership Source',
       '{membership.status_override_end_date}' => 'Status Override End Date',
     ];
   }
@@ -556,7 +676,7 @@ contribution_recur.payment_instrument_id:name :Check
    * @return string
    */
   protected function getExpectedParticipantTokenOutput(): string {
-    return 'participant.status_id :2
+    return "participant.status_id :2
 participant.role_id :1
 participant.register_date :February 19th, 2007
 participant.source :Wimbeldon
@@ -564,6 +684,7 @@ participant.fee_level :steep
 participant.fee_amount :$50.00
 participant.registered_by_id :
 participant.transferred_to_contact_id :
+participant.created_id :{$this->ids['Contact']['logged_in']}
 participant.role_id:label :Attendee
 participant.balance :
 participant.custom_2 :99999
@@ -575,7 +696,7 @@ participant.status_id:name :Attended
 participant.role_id:name :Attendee
 participant.is_test:label :No
 participant.must_wait :
-';
+";
   }
 
   /**
@@ -584,21 +705,23 @@ participant.must_wait :
    * @return string
    */
   protected function getExpectedEventTokenOutput(): string {
-    return 'event.id :' . $this->ids['event'][0] . '
+    return 'event.id :' . $this->ids['Event'][0] . '
 event.title :Annual CiviCRM meet
 event.start_date :October 21st, 2008
 event.end_date :October 23rd, 2008
 event.event_type_id:label :Conference
 event.summary :If you have any CiviCRM related issues or want to track where CiviCRM is heading, Sign up now
-event.contact_email :event@example.com
-event.contact_phone :456 789
+event.loc_block_id.email_id.email :event@example.com
+event.loc_block_id.phone_id.phone :456 789
 event.description :event description
-event.location :15 Walton St
+event.location :15 Walton St<br />
 Emerald City, Maine 90210
-
 event.info_url :' . CRM_Utils_System::url('civicrm/event/info', NULL, TRUE) . '&reset=1&id=1
 event.registration_url :' . CRM_Utils_System::url('civicrm/event/register', NULL, TRUE) . '&reset=1&id=1
+event.pay_later_receipt :Please transfer funds to our bank account.
 event.custom_1 :my field
+event.confirm_email_text :
+event.fee_label :Event fees
 ';
   }
 
@@ -623,7 +746,7 @@ December 21st, 2007
   /**
    * Test that membership tokens are consistently rendered.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testParticipantTokenConsistency(): void {
     $this->createLoggedInUser();
@@ -655,7 +778,6 @@ December 21st, 2007
   /**
    * Test that membership tokens are consistently rendered.
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
    */
   public function testParticipantCustomDateToken(): void {
@@ -685,6 +807,7 @@ December 21st, 2007
       '{participant.fee_amount}' => 'Fee Amount',
       '{participant.registered_by_id}' => 'Registered By Participant ID',
       '{participant.transferred_to_contact_id}' => 'Transferred to Contact ID',
+      '{participant.created_id}' => 'Created by Contact ID',
       '{participant.role_id:label}' => 'Participant Role',
       '{participant.balance}' => 'Event Balance',
       '{participant.' . $this->getCustomFieldName('participant_int') . '}' => 'Enter integer here :: participant_Group with field int',
@@ -701,6 +824,8 @@ December 21st, 2007
 
   /**
    * Test that domain tokens are consistently rendered.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testDomainTokenConsistency(): void {
     $tokens = CRM_Core_SelectValues::domainTokens();
@@ -709,14 +834,19 @@ December 21st, 2007
       'controller' => __CLASS__,
       'smarty' => FALSE,
     ]);
-    $tokens['{domain.id}'] = 'Domain ID';
-    $tokens['{domain.description}'] = 'Domain Description';
-    $tokens['{domain.now}'] = 'Current time/date';
+    $contactID = \Civi\Api4\Domain::get()->addSelect('contact_id')->execute()->first()['contact_id'];
+    Address::create()->setValues(['contact_id' => $contactID, 'city' => 'Beverley Hills', 'state_province_id:label' => 'California', 'country_id:label' => 'United States', 'postal_code' => 90210])->execute();
     $this->assertEquals($tokens, $tokenProcessor->listTokens());
+    $tokenProcessor->addMessage('message', implode("\n", array_keys($tokens)), 'text/plain');
+    $tokenProcessor->addRow();
+    $tokenProcessor->evaluate();
+    $this->assertStringContainsString('Beverley Hills
+90210
+California
+United States', $tokenProcessor->getRow(0)->render('message'));
   }
 
   /**
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
    */
   public function testDomainNow(): void {
@@ -751,7 +881,7 @@ December 21st, 2007
       $this->fail('Expected unquoted parameter to fail');
     }
     catch (\CRM_Core_Exception $e) {
-      $this->assertRegExp(';Malformed token param;', $e->getMessage());
+      $this->assertMatchesRegularExpression(';Malformed token param;', $e->getMessage());
     }
   }
 
@@ -762,32 +892,39 @@ December 21st, 2007
    */
   public function getDomainTokens(): array {
     return [
-      '{domain.name}' => ts('Domain name'),
-      '{domain.address}' => ts('Domain (organization) address'),
-      '{domain.phone}' => ts('Domain (organization) phone'),
-      '{domain.email}' => 'Domain (organization) email',
+      '{domain.name}' => ts('Domain Name'),
+      '{domain.address}' => ts('Domain (Organization) Full Address'),
+      '{domain.phone}' => ts('Domain (Organization) Phone'),
+      '{domain.email}' => 'Domain (Organization) Email',
       '{domain.id}' => ts('Domain ID'),
       '{domain.description}' => ts('Domain Description'),
       '{domain.now}' => 'Current time/date',
+      '{domain.base_url}' => 'Domain absolute base url',
+      '{domain.tax_term}' => 'Sales tax term (e.g VAT)',
+      '{domain.street_address}' => 'Domain (Organization) Street Address',
+      '{domain.supplemental_address_1}' => 'Domain (Organization) Supplemental Address',
+      '{domain.supplemental_address_2}' => 'Domain (Organization) Supplemental Address 2',
+      '{domain.supplemental_address_3}' => 'Domain (Organization) Supplemental Address 3',
+      '{domain.city}' => 'Domain (Organization) City',
+      '{domain.postal_code}' => 'Domain (Organization) Postal Code',
+      '{domain.state_province_id:label}' => 'Domain (Organization) State',
+      '{domain.country_id:label}' => 'Domain (Organization) Country',
+      '{domain.empowered_by_civicrm_image_url}' => 'Empowered By CiviCRM Image',
     ];
   }
 
   /**
    * Test that event tokens are consistently rendered.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testEventTokenConsistency(): void {
     $mut = new CiviMailUtils($this);
+    $this->createLoggedInUser();
     $this->setupParticipantScheduledReminder();
 
-    $tokens = CRM_Core_SelectValues::eventTokens();
-    $this->assertEquals(array_merge($this->getEventTokens()), $tokens);
-    $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), [
-      'controller' => __CLASS__,
-      'smarty' => FALSE,
-      'schema' => ['eventId'],
-    ]);
+    $tokens = array_merge($this->getEventTokens());
+    $tokenProcessor = $this->getTokenProcessor(['schema' => ['eventId']]);
     $this->assertEquals(array_merge($tokens, $this->getDomainTokens()), $tokenProcessor->listTokens());
 
     $expectedEventString = $this->getExpectedEventTokenOutput();
@@ -799,8 +936,8 @@ December 21st, 2007
     $mut->checkMailLog($toCheck);
     $tokens = array_keys($this->getEventTokens());
     $html = $this->getTokenString($tokens);
-    $tokenProcessor->addMessage('html', $html, 'text/plain');
-    $tokenProcessor->addRow(['eventId' => $this->ids['event'][0]]);
+    $tokenProcessor->addMessage('html', $html, 'text/html');
+    $tokenProcessor->addRow(['eventId' => $this->ids['Event'][0]]);
     $tokenProcessor->evaluate();
     $this->assertEquals($expectedEventString, $tokenProcessor->getRow(0)->render('html'));
   }
@@ -808,7 +945,7 @@ December 21st, 2007
   /**
    * Test that event tokens work absent participant tokens.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testEventTokenConsistencyNoParticipantTokens(): void {
     $mut = new CiviMailUtils($this);
@@ -829,8 +966,8 @@ December 21st, 2007
     ]);
     $html = $this->getTokenString(array_keys($this->getEventTokens()));
 
-    $tokenProcessor->addMessage('html', $html, 'text/plain');
-    $tokenProcessor->addRow(['eventId' => $this->ids['event'][0]]);
+    $tokenProcessor->addMessage('html', $html, 'text/html');
+    $tokenProcessor->addRow(['eventId' => $this->ids['Event'][0]]);
     $tokenProcessor->evaluate();
     $this->assertEquals($expected, $tokenProcessor->getRow(0)->render('html'));
 
@@ -839,7 +976,7 @@ December 21st, 2007
   /**
    * Set up scheduled reminder for participants.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setupParticipantScheduledReminder($includeParticipant = TRUE): void {
     $this->createEventAndParticipant();
@@ -873,15 +1010,39 @@ December 21st, 2007
       '{event.title}' => 'Event Title',
       '{event.start_date}' => 'Event Start Date',
       '{event.end_date}' => 'Event End Date',
-      '{event.event_type_id:label}' => 'Event Type',
+      '{event.event_type_id:label}' => 'Type',
       '{event.summary}' => 'Event Summary',
-      '{event.contact_email}' => 'Event Contact Email',
-      '{event.contact_phone}' => 'Event Contact Phone',
+      '{event.loc_block_id.email_id.email}' => 'Event Contact Email',
+      '{event.loc_block_id.phone_id.phone}' => 'Event Contact Phone',
       '{event.description}' => 'Event Description',
       '{event.location}' => 'Event Location',
       '{event.info_url}' => 'Event Info URL',
       '{event.registration_url}' => 'Event Registration URL',
+      '{event.pay_later_receipt}' => 'Pay Later Receipt Text',
       '{event.' . $this->getCustomFieldName('text') . '}' => 'Enter text here :: Group with field text',
+      '{event.confirm_email_text}' => 'Confirmation Email Text',
+      '{event.fee_label}' => 'Fee Label',
+    ];
+  }
+
+  /**
+   * @param string $entity
+   *
+   * @return string[]
+   */
+  protected function getRecurEntityTokens($entity): array {
+    return [
+      '{' . $entity . '.contribution_recur_id.id}' => 'Recurring Contribution ID',
+      '{' . $entity . '.contribution_recur_id.contact_id}' => 'Contact ID',
+      '{' . $entity . '.contribution_recur_id.amount}' => 'Amount',
+      '{' . $entity . '.contribution_recur_id.currency}' => 'Currency',
+      '{' . $entity . '.contribution_recur_id.frequency_unit}' => 'Frequency Unit',
+      '{' . $entity . '.contribution_recur_id.frequency_interval}' => 'Interval (number of units)',
+      '{' . $entity . '.contribution_recur_id.start_date}' => 'Start Date',
+      '{' . $entity . '.contribution_recur_id.cancel_date}' => 'Cancel Date',
+      '{' . $entity . '.contribution_recur_id.cancel_reason}' => 'Cancellation Reason',
+      '{' . $entity . '.contribution_recur_id.end_date}' => 'Recurring Contribution End Date',
+      '{' . $entity . '.contribution_recur_id.financial_type_id}' => 'Financial Type ID',
     ];
   }
 
@@ -901,7 +1062,7 @@ December 21st, 2007
   /**
    * Create an event with a participant.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function createEventAndParticipant(): void {
     $this->createCustomGroupWithFieldOfType(['extends' => 'Event']);
@@ -929,68 +1090,95 @@ December 21st, 2007
         'phone_id' => $phoneID,
       ],
     ])->execute()->first()['id'];
-    $this->ids['event'][0] = $this->eventCreate([
+    $this->ids['Event'][0] = $this->eventCreateUnpaid([
       'description' => 'event description',
-      $this->getCustomFieldName('text') => 'my field',
+      'end_date' => 20081023,
+      'registration_end_date' => 20081015,
+      $this->getCustomFieldName('text', 4) => 'my field',
       'loc_block_id' => $locationBlockID,
     ])['id'];
     // Create an unrelated participant record so that the ids don't match.
     // this prevents things working just because the id 'happens to be valid'
     $this->participantCreate([
       'register_date' => '2020-01-01',
-      'event_id' => $this->ids['event'][0],
+      'event_id' => $this->ids['Event'][0],
     ]);
     $this->ids['participant'][0] = $this->participantCreate([
-      'event_id' => $this->ids['event'][0],
+      'event_id' => $this->ids['Event'][0],
       'fee_amount' => 50,
       'fee_level' => 'steep',
       $this->getCustomFieldName('participant_int') => '99999',
     ]);
   }
 
-  public function testEscaping() {
-    $autoClean = [];
-    $create = function(string $entity, array $record = []) use (&$autoClean) {
-      // It's convenient to use createTestObject(), but it doesn't reproduce the normal escaping rules from QuickForm/APIv3/APIv4.
-      CRM_Utils_API_HTMLInputCoder::singleton()->encodeRow($record);
-      $dao = CRM_Core_DAO::createTestObject(CRM_Core_DAO_AllCoreTables::getFullName($entity), $record);
-
-      // We're not using transactions, and truncating 'contact' seems problematic, so we roll up our sleeves and cleanup each record...
-      $autoClean[] = CRM_Utils_AutoClean::with(function() use ($entity, $dao) {
-        CRM_Core_DAO::deleteTestObjects(CRM_Core_DAO_AllCoreTables::getFullName($entity), ['id' => $dao->id]);
-      });
-
-      return $dao;
-    };
-
+  public function testEscaping(): void {
     $context = [];
-    $context['contactId'] = $create('Contact', [
+    $context['contactId'] = $this->individualCreate([
       'first_name' => '<b>ig</b>illy brackets',
-    ])->id;
-    $context['eventId'] = $create('Event', [
+    ]);
+    $context['eventId'] = $this->eventCreateUnpaid([
       'title' => 'The Webinar',
       'description' => '<p>Some online webinar thingy.</p> <p>Attendees will need to install the <a href="http://telefoo.example.com">TeleFoo</a> app.</p>',
-    ])->id;
+    ])['id'];
 
     $messages = $expected = [];
 
     // The `first_name` does not allow HTML. Any funny characters are presented like literal text.
     $messages['contact_text'] = 'Hello {contact.first_name}!';
-    $expected['contact_text'] = "Hello <b>ig</b>illy brackets!";
+    $expected['contact_text'] = 'Hello <b>ig</b>illy brackets!';
 
-    $messages['contact_html'] = "<p>Hello {contact.first_name}!</p>";
-    $expected['contact_html'] = "<p>Hello &lt;b&gt;ig&lt;/b&gt;illy brackets!</p>";
+    $messages['contact_html'] = '<p>Hello {contact.first_name}!</p>';
+    $expected['contact_html'] = '<p>Hello &lt;b&gt;ig&lt;/b&gt;illy brackets!</p>';
 
     // The `description` does allow HTML. Any funny characters are filtered out of text.
     $messages['event_text'] = 'You signed up for this event: {event.title}: {event.description}';
-    $expected['event_text'] = 'You signed up for this event: The Webinar: Some online webinar thingy. Attendees will need to install the TeleFoo app.';
+    $expected['event_text'] = 'You signed up for this event: The Webinar: Some online webinar thingy.
 
-    $messages['event_html'] = "<p>You signed up for this event:</p> <h3>{event.title}</h3> {event.description}";
+Attendees will need to install the TeleFoo [1] app.
+
+
+Links:
+------
+[1] http://telefoo.example.com';
+
+    $messages['event_html'] = '<p>You signed up for this event:</p> <h3>{event.title}</h3> {event.description}';
     $expected['event_html'] = '<p>You signed up for this event:</p> <h3>The Webinar</h3> <p>Some online webinar thingy.</p> <p>Attendees will need to install the <a href="http://telefoo.example.com">TeleFoo</a> app.</p>';
 
     $rendered = CRM_Core_TokenSmarty::render($messages, $context);
 
     $this->assertEquals($expected, $rendered);
+  }
+
+  /**
+   * @param array $override
+   *
+   * @return \Civi\Token\TokenProcessor
+   */
+  protected function getTokenProcessor(array $override): TokenProcessor {
+    return new TokenProcessor(\Civi::dispatcher(), array_merge([
+      'controller' => __CLASS__,
+    ], $override));
+  }
+
+  /**
+   * Render the text via the token processor.
+   *
+   * @param array $rowContext
+   * @param string $text
+   * @param array $context
+   *
+   * @return string
+   */
+  protected function renderText(array $rowContext, string $text, array $context = []): string {
+    $context['schema'] = $context['schema'] ?? [];
+    foreach (array_keys($rowContext) as $key) {
+      $context['schema'][] = $key;
+    }
+    $tokenProcessor = $this->getTokenProcessor($context);
+    $tokenProcessor->addRow($rowContext);
+    $tokenProcessor->addMessage('text', $text, 'text/html');
+    $tokenProcessor->evaluate();
+    return $tokenProcessor->getRow(0)->render('text');
   }
 
 }

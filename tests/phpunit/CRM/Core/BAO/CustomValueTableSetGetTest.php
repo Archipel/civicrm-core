@@ -9,7 +9,7 @@ class CRM_Core_BAO_CustomValueTableSetGetTest extends CiviUnitTestCase {
   /**
    * Test setValues() and GetValues() methods with custom Date field
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function testSetGetValuesDate(): void {
     $contactID = $this->individualCreate();
@@ -109,7 +109,7 @@ class CRM_Core_BAO_CustomValueTableSetGetTest extends CiviUnitTestCase {
   /**
    * Test setValues() and getValues() methods with custom field YesNo(Boolean) Radio
    */
-  public function testSetGetValuesYesNoRadio() {
+  public function testSetGetValuesYesNoRadio(): void {
     $contactID = $this->individualCreate();
 
     $customGroup = $this->customGroupCreate(['is_multiple' => 1]);

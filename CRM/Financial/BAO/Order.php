@@ -124,7 +124,7 @@ class CRM_Financial_BAO_Order {
    *
    * @var bool
    */
-  protected $isPermitOverrideFinancialTypeForMultipleLines = TRUE;
+  protected $isPermitOverrideFinancialTypeForMultipleLines = FALSE;
 
   /**
    * @return bool
@@ -294,6 +294,13 @@ class CRM_Financial_BAO_Order {
   protected $priceFieldMetadata = [];
 
   /**
+   * Metadata for price field values.
+   *
+   * @var array
+   */
+  protected $priceFieldValueMetadata = [];
+
+  /**
    * Metadata for price sets.
    *
    * @var array
@@ -316,7 +323,7 @@ class CRM_Financial_BAO_Order {
    *
    * @internal use in tested core code only.
    *
-   * @param \CRM_Core_Form|NULL $form
+   * @param \CRM_Core_Form|null $form
    */
   public function setForm(?CRM_Core_Form $form): void {
     $this->form = $form;
@@ -444,7 +451,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return int
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getPriceSetID(): int {
     if (!$this->priceSetID) {
@@ -471,7 +478,7 @@ class CRM_Financial_BAO_Order {
    *
    * @param string $component [membership|contribution]
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @internal use in tested core code only.
    */
   public function setPriceSetToDefault(string $component): void {
@@ -497,7 +504,7 @@ class CRM_Financial_BAO_Order {
    *
    * @param int $eventID
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setPriceSetIDByEventPageID(int $eventID): void {
     $this->setPriceSetIDByEntity('event', $eventID);
@@ -567,7 +574,47 @@ class CRM_Financial_BAO_Order {
    * @return array
    */
   public function getPriceFieldSpec(int $id) :array {
-    return $this->getPriceFieldsMetadata()[$id];
+    return $this->getPriceFieldsMetadata()[$id] ?? $this->getPriceFieldMetadata($id);
+  }
+
+  /**
+   * Get the metadata for the given field value.
+   *
+   * @internal use in tested core code only.
+   *
+   * @param int $id
+   *
+   * @return array
+   */
+  public function getPriceFieldValueSpec(int $id) :array {
+    if (!isset($this->priceFieldValueMetadata[$id])) {
+      $this->priceFieldValueMetadata[$id] = PriceFieldValue::get(FALSE)->addWhere('id', '=', $id)->execute()->first();
+    }
+    return $this->priceFieldValueMetadata[$id];
+  }
+
+  /**
+   * Get the default values for line items using this price field value id.
+   *
+   * @param int $id
+   *
+   * @return array
+   */
+  public function getPriceFieldValueDefaults(int $id): array {
+    $valueDefaults = array_intersect_key($this->getPriceFieldValueSpec($id), array_fill_keys([
+      'financial_type_id',
+      'non_deductible_amount',
+      'membership_type_id',
+      'membership_num_terms',
+      'amount',
+      'description',
+      'price_field_id',
+      'label',
+    ], TRUE));
+    $valueDefaults['qty'] = 1;
+    $valueDefaults['unit_price'] = $valueDefaults['amount'];
+    unset($valueDefaults['amount']);
+    return $valueDefaults;
   }
 
   /**
@@ -582,6 +629,28 @@ class CRM_Financial_BAO_Order {
       $this->getPriceSetMetadata();
     }
     return $this->priceFieldMetadata;
+  }
+
+  /**
+   * Get the metadata for the given price field.
+   *
+   * Note this uses a different method to getPriceFieldMetadata.
+   *
+   * There is an assumption in the code currently that all purchases
+   * are within a single price set. However, discussions have been around
+   * the idea that when form-builder supports contributions price sets will
+   * not be used as form-builder in itself is a configuration unit.
+   *
+   * Currently there are couple of unit tests that mix & match & rather than
+   * updating the tests to avoid notices when orders are loaded for receipting,
+   * the migration to this new method is starting....
+   *
+   * @param int $id
+   *
+   * @return array
+   */
+  public function getPriceFieldMetadata(int $id): array {
+    return CRM_Price_BAO_PriceField::getPriceField($id);
   }
 
   /**
@@ -606,11 +675,21 @@ class CRM_Financial_BAO_Order {
   public function getPriceSetMetadata(): array {
     if (empty($this->priceSetMetadata)) {
       $priceSetMetadata = CRM_Price_BAO_PriceSet::getCachedPriceSetDetail($this->getPriceSetID());
+      // @todo - make sure this is an array - commented out for now as this PR is against the rc.
+      // $priceSetMetadata['extends'] = explode(CRM_Core_DAO::VALUE_SEPARATOR, $priceSetMetadata['extends']);
       $this->setPriceFieldMetadata($priceSetMetadata['fields']);
       unset($priceSetMetadata['fields']);
       $this->priceSetMetadata = $priceSetMetadata;
     }
     return $this->priceSetMetadata;
+  }
+
+  public function isMembershipPriceSet() {
+    if (!CRM_Core_Component::isEnabled('CiviMember')) {
+      return FALSE;
+    }
+    $extends = explode(CRM_Core_DAO::VALUE_SEPARATOR, $this->getPriceSetMetadata()['extends']);
+    return in_array(CRM_Core_Component::getComponentID('CiviMember'), $extends, FALSE);
   }
 
   /**
@@ -636,7 +715,7 @@ class CRM_Financial_BAO_Order {
    *
    * @param array $input
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   public function setPriceSelectionFromUnfilteredInput(array $input): void {
     foreach ($input as $fieldName => $value) {
@@ -657,7 +736,7 @@ class CRM_Financial_BAO_Order {
   /**
    * Get the id of the price field to use when just an amount is provided.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    *
    * @return int
    */
@@ -674,7 +753,7 @@ class CRM_Financial_BAO_Order {
   /**
    * Get the id of the price field to use when just an amount is provided.
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    *
    * @return int
    */
@@ -693,7 +772,7 @@ class CRM_Financial_BAO_Order {
    *
    * return array
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getLineItems():array {
     if (empty($this->lineItems)) {
@@ -708,7 +787,7 @@ class CRM_Financial_BAO_Order {
    * This ensures the line items are indexed by
    * price field id - as required by the contribution BAO.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getPriceFieldIndexedLineItems(): array {
     $lines = [];
@@ -723,7 +802,7 @@ class CRM_Financial_BAO_Order {
    *
    * return array
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getMembershipLineItems():array {
     $lines = $this->getLineItems();
@@ -744,7 +823,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return array
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getMembershipTypes(): array {
     $types = [];
@@ -759,7 +838,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return array
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getRenewableMembershipTypes(): array {
     $types = [];
@@ -774,7 +853,7 @@ class CRM_Financial_BAO_Order {
   /**
    * @return array
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function calculateLineItems(): array {
     $lineItems = [];
@@ -790,15 +869,24 @@ class CRM_Financial_BAO_Order {
     $params['financial_type_id'] = 0;
     if ($this->getTemplateContributionID()) {
       $lineItems = $this->getLinesFromTemplateContribution();
+      // Set the price set ID from the first line item (we need to set this here
+      // to prevent a loop later when we retrieve the price field metadata to
+      // set the 'title' (as accessed from workflow message templates).
+      // Contributions *should* all have line items, but historically, imports did not create them.
+      if ($lineItems) {
+        $this->setPriceSetID($lineItems[0]['price_field_id.price_set_id']);
+      }
     }
     else {
       foreach ($this->getPriceOptions() as $fieldID => $valueID) {
-        $this->setPriceSetIDFromSelectedField($fieldID);
-        $throwAwayArray = [];
-        // @todo - still using getLine for now but better to bring it to this class & do a better job.
-        $newLines = CRM_Price_BAO_PriceSet::getLine($params, $throwAwayArray, $this->getPriceSetID(), $this->getPriceFieldSpec($fieldID), $fieldID)[1];
-        foreach ($newLines as $newLine) {
-          $lineItems[$newLine['price_field_value_id']] = $newLine;
+        if ($valueID !== '') {
+          $this->setPriceSetIDFromSelectedField($fieldID);
+          $throwAwayArray = [];
+          // @todo - still using getLine for now but better to bring it to this class & do a better job.
+          $newLines = CRM_Price_BAO_PriceSet::getLine($params, $throwAwayArray, $this->getPriceSetID(), $this->getPriceFieldSpec($fieldID), $fieldID)[1];
+          foreach ($newLines as $newLine) {
+            $lineItems[$newLine['price_field_value_id']] = $newLine;
+          }
         }
       }
     }
@@ -817,13 +905,14 @@ class CRM_Financial_BAO_Order {
       if ($this->isOverrideLineItemFinancialType($lineItem['financial_type_id']) !== FALSE) {
         $lineItem['financial_type_id'] = $this->getOverrideFinancialTypeID();
       }
-      $taxRate = $this->getTaxRate((int) $lineItem['financial_type_id']);
+      $lineItem['tax_rate'] = $taxRate = $this->getTaxRate((int) $lineItem['financial_type_id']);
       if ($this->getOverrideTotalAmount() !== FALSE) {
         $this->addTotalsToLineBasedOnOverrideTotal((int) $lineItem['financial_type_id'], $lineItem);
       }
       elseif ($taxRate) {
         $lineItem['tax_amount'] = ($taxRate / 100) * $lineItem['line_total'];
       }
+      $lineItem['title'] = $this->getLineItemTitle($lineItem);
     }
     return $lineItems;
   }
@@ -833,7 +922,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return float
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getTotalTaxAmount() :float {
     $amount = 0.0;
@@ -848,7 +937,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return float
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getTotalAmount() :float {
     $amount = 0.0;
@@ -863,7 +952,7 @@ class CRM_Financial_BAO_Order {
    *
    * @return float
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getMembershipTotalAmount() :float {
     $amount = 0.0;
@@ -891,7 +980,7 @@ class CRM_Financial_BAO_Order {
   /**
    * @param $fieldID
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function setPriceSetIDFromSelectedField($fieldID): void {
     if (!isset($this->priceSetID)) {
@@ -914,7 +1003,7 @@ class CRM_Financial_BAO_Order {
    * @param array $lineItem
    * @param int|string $index
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @internal tested core code usage only.
    * @internal use in tested core code only.
    *
@@ -941,7 +1030,16 @@ class CRM_Financial_BAO_Order {
       $this->addTotalsToLineBasedOnOverrideTotal((int) $lineItem['financial_type_id'], $lineItem);
     }
     else {
-      $lineItem['tax_amount'] = ($this->getTaxRate($lineItem['financial_type_id']) / 100) * $lineItem['line_total'];
+      if (!empty($lineItem['price_field_value_id'])) {
+        // Let's make sure it is an integer not '2' for sanity.
+        $lineItem['price_field_value_id'] = (int) $lineItem['price_field_value_id'];
+        $lineItem = array_merge($this->getPriceFieldValueDefaults($lineItem['price_field_value_id']), $lineItem);
+      }
+      if (!isset($lineItem['line_total'])) {
+        $lineItem['line_total'] = $lineItem['qty'] * $lineItem['unit_price'];
+      }
+      $lineItem['tax_rate'] = $this->getTaxRate($lineItem['financial_type_id']);
+      $lineItem['tax_amount'] = ($lineItem['tax_rate'] / 100) * $lineItem['line_total'];
     }
     if (!empty($lineItem['membership_type_id'])) {
       $lineItem['entity_table'] = 'civicrm_membership';
@@ -951,6 +1049,24 @@ class CRM_Financial_BAO_Order {
     }
     if ($this->getPriceSetID() === $this->getDefaultPriceSetForComponent('contribution')) {
       $this->fillDefaultContributionLine($lineItem);
+    }
+    if (empty($lineItem['label'])) {
+      $lineItem['label'] = PriceFieldValue::get(FALSE)->addWhere('id', '=', (int) $lineItem['price_field_value_id'])->addSelect('label')->execute()->first()['label'];
+    }
+    if (empty($lineItem['price_field_id']) && !empty($lineItem['membership_type_id'])) {
+      // We have to 'guess' the price field since the calling code hasn't
+      // passed it in (which it really should but ... history).
+      foreach ($this->priceFieldMetadata as $pricefield) {
+        foreach ($pricefield['options'] ?? [] as $option) {
+          if ((int) $option['membership_type_id'] === $lineItem['membership_type_id']) {
+            $lineItem['price_field_id'] = $pricefield['id'];
+            $lineItem['price_field_value_id'] = $option['id'];
+          }
+        }
+      }
+    }
+    if (empty($lineItem['title'])) {
+      $lineItem['title'] = $this->getLineItemTitle($lineItem);
     }
     $this->lineItems[$index] = $lineItem;
   }
@@ -1005,6 +1121,7 @@ class CRM_Financial_BAO_Order {
         foreach ($field['options'] as $option) {
           if ((int) $option['membership_type_id'] === (int) $lineItem['membership_type_id']) {
             $lineItem['price_field_id'] = $field['id'];
+            $lineItem['price_field_id.label'] = $field['label'];
             $lineItem['price_field_value_id'] = $option['id'];
             $lineItem['qty'] = 1;
           }
@@ -1030,23 +1147,29 @@ class CRM_Financial_BAO_Order {
    * @return void
    */
   protected function addTotalsToLineBasedOnOverrideTotal(int $financialTypeID, array &$lineItem): void {
-    $taxRate = $this->getTaxRate($financialTypeID);
+    $lineItem['tax_rate'] = $taxRate = $this->getTaxRate($financialTypeID);
     if ($taxRate) {
       // Total is tax inclusive.
       $lineItem['tax_amount'] = ($taxRate / 100) * $this->getOverrideTotalAmount() / (1 + ($taxRate / 100));
-      $lineItem['line_total'] = $lineItem['unit_price'] = $this->getOverrideTotalAmount() - $lineItem['tax_amount'];
+      $lineItem['line_total'] = $this->getOverrideTotalAmount() - $lineItem['tax_amount'];
     }
     else {
-      $lineItem['line_total'] = $lineItem['unit_price'] = $this->getOverrideTotalAmount();
+      $lineItem['line_total'] = $this->getOverrideTotalAmount();
+    }
+    if (!empty($lineItem['qty'])) {
+      $lineItem['unit_price'] = $lineItem['line_total'] / $lineItem['qty'];
+    }
+    else {
+      $lineItem['unit_price'] = $lineItem['line_total'];
     }
   }
 
   /**
    * Get the line items from a template.
    *
-   * @return \Civi\Api4\Generic\Result
+   * @return array
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function getLinesFromTemplateContribution(): array {
     $lines = $this->getLinesForContribution();
@@ -1065,7 +1188,7 @@ class CRM_Financial_BAO_Order {
    *
    * @internal core tested code only.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   public function getLineItemForV3OrderApi(): array {
     $lineItems = [];
@@ -1080,7 +1203,7 @@ class CRM_Financial_BAO_Order {
 
   /**
    * @return array
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   protected function getLinesForContribution(): array {
@@ -1091,6 +1214,8 @@ class CRM_Financial_BAO_Order {
         'entity_id',
         'entity_table',
         'price_field_id',
+        'price_field_id.label',
+        'price_field_id.price_set_id',
         'price_field_value_id',
         'financial_type_id',
         'label',
@@ -1111,7 +1236,7 @@ class CRM_Financial_BAO_Order {
    * @param string $component
    *
    * @return int
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function getDefaultPriceSetForComponent(string $component): int {
     if (!isset($this->defaultPriceSets[$component])) {
@@ -1128,18 +1253,42 @@ class CRM_Financial_BAO_Order {
    *
    * @param array $lineItem
    *
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function fillDefaultContributionLine(array &$lineItem): void {
     $defaults = [
       'qty' => 1,
       'price_field_id' => $this->getDefaultPriceFieldID(),
+      'price_field_id.label' => $this->defaultPriceField['label'],
       'price_field_value_id' => $this->getDefaultPriceFieldValueID(),
       'entity_table' => 'civicrm_contribution',
       'unit_price' => $lineItem['line_total'],
       'label' => ts('Contribution Amount'),
     ];
     $lineItem = array_merge($defaults, $lineItem);
+  }
+
+  /**
+   * Get a 'title' for the line item.
+   *
+   * This descriptor is used in message templates. It could conceivably
+   * by used elsewhere but if so determination would likely move to the api.
+   *
+   * @param array $lineItem
+   *
+   * @return string
+   */
+  private function getLineItemTitle(array $lineItem): string {
+    // Title is used in output for workflow templates.
+    $htmlType = $this->getPriceFieldSpec($lineItem['price_field_id'])['html_type'] ?? NULL;
+    $lineItemTitle = (!$htmlType || $htmlType === 'Text') ? $lineItem['label'] : $this->getPriceFieldSpec($lineItem['price_field_id'])['label'] . ' - ' . $lineItem['label'];
+    if (!empty($lineItem['price_field_value_id'])) {
+      $description = $this->priceFieldValueMetadata[$lineItem['price_field_value_id']]['description'] ?? '';
+      if ($description) {
+        $lineItemTitle .= ' ' . CRM_Utils_String::ellipsify($description, 30);
+      }
+    }
+    return $lineItemTitle ?? '';
   }
 
 }

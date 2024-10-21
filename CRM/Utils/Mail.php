@@ -43,8 +43,8 @@ class CRM_Utils_Mail {
         throw new CRM_Core_Exception(ts('There is no valid smtp server setting. Click <a href=\'%1\'>Administer >> System Setting >> Outbound Email</a> to set the SMTP Server.', [1 => CRM_Utils_System::url('civicrm/admin/setting/smtp', 'reset=1')]));
       }
 
-      $params['host'] = $mailingInfo['smtpServer'] ? $mailingInfo['smtpServer'] : 'localhost';
-      $params['port'] = $mailingInfo['smtpPort'] ? $mailingInfo['smtpPort'] : 25;
+      $params['host'] = $mailingInfo['smtpServer'] ?: 'localhost';
+      $params['port'] = $mailingInfo['smtpPort'] ?: 25;
 
       if ($mailingInfo['smtpAuth']) {
         $params['username'] = $mailingInfo['smtpUsername'];
@@ -142,7 +142,8 @@ class CRM_Utils_Mail {
 
   /**
    * Wrapper function to send mail in CiviCRM. Hooks are called from this function. The input parameter
-   * is an associateive array which holds the values of field needed to send an email. These are:
+   * is an associateive array which holds the values of field needed to send an email. Note that these
+   * parameters are case-sensitive. The Parameters are:
    *
    * from    : complete from envelope
    * toName  : name of person to send email
@@ -159,6 +160,7 @@ class CRM_Utils_Mail {
    *   fullPath : complete pathname to the file
    *   mime_type: mime type of the attachment
    *   cleanName: the user friendly name of the attachmment
+   * contactId : contact id to send the email to (optional)
    *
    * @param array $params
    *   (by reference).
@@ -183,13 +185,19 @@ class CRM_Utils_Mail {
       return FALSE;
     }
 
-    $textMessage = $params['text'] ?? NULL;
-    $htmlMessage = $params['html'] ?? NULL;
-    $attachments = $params['attachments'] ?? NULL;
-
-    // CRM-6224
-    if (trim(CRM_Utils_String::htmlToText($htmlMessage)) == '') {
+    $htmlMessage = $params['html'] ?? FALSE;
+    if (trim(CRM_Utils_String::htmlToText((string) $htmlMessage)) === '') {
       $htmlMessage = FALSE;
+    }
+    $attachments = $params['attachments'] ?? NULL;
+    if (!empty($params['text'])) {
+      $textMessage = $params['text'];
+    }
+    else {
+      $textMessage = CRM_Utils_String::htmlToText($htmlMessage);
+      // Render the &amp; entities in text mode, so that the links work.
+      // This is copied from the Action Schedule send code.
+      $textMessage = str_replace('&amp;', '&', $textMessage);
     }
 
     $headers = [];
@@ -199,8 +207,8 @@ class CRM_Utils_Mail {
     }
     $headers['From'] = $params['from'];
     $headers['To'] = self::formatRFC822Email(
-      CRM_Utils_Array::value('toName', $params),
-      CRM_Utils_Array::value('toEmail', $params),
+      $params['toName'] ?? NULL,
+      $params['toEmail'] ?? NULL,
       FALSE
     );
 
@@ -216,10 +224,10 @@ class CRM_Utils_Mail {
     $headers['Content-Type'] = $htmlMessage ? 'multipart/mixed; charset=utf-8' : 'text/plain; charset=utf-8';
     $headers['Content-Disposition'] = 'inline';
     $headers['Content-Transfer-Encoding'] = '8bit';
-    $headers['Return-Path'] = CRM_Utils_Array::value('returnPath', $params, $defaultReturnPath);
+    $headers['Return-Path'] = $params['returnPath'] ?? $defaultReturnPath;
 
     // CRM-11295: Omit reply-to headers if empty; this avoids issues with overzealous mailservers
-    $replyTo = CRM_Utils_Array::value('replyTo', $params, CRM_Utils_Array::value('from', $params));
+    $replyTo = ($params['replyTo'] ?? ($params['from'] ?? NULL));
 
     if (!empty($replyTo)) {
       $headers['Reply-To'] = $replyTo;
@@ -350,16 +358,6 @@ class CRM_Utils_Mail {
   }
 
   /**
-   * @param $to
-   * @param $headers
-   * @param $message
-   * @deprecated
-   */
-  public static function logger(&$to, &$headers, &$message) {
-    CRM_Utils_Mail_Logger::log($to, $headers, $message);
-  }
-
-  /**
    * Get the email address itself from a formatted full name + address string
    *
    * Ugly but working.
@@ -436,7 +434,7 @@ class CRM_Utils_Mail {
 
   /**
    * @param string $name
-   * @param $email
+   * @param string $email
    * @param bool $useQuote
    *
    * @return null|string
@@ -444,7 +442,7 @@ class CRM_Utils_Mail {
   public static function formatRFC822Email($name, $email, $useQuote = FALSE) {
     $result = NULL;
 
-    $name = trim($name);
+    $name = trim($name ?? '');
 
     // strip out double quotes if present at the beginning AND end
     if (substr($name, 0, 1) == '"' &&
@@ -572,7 +570,7 @@ class CRM_Utils_Mail {
    * contact ID in RFC822 format.
    *
    * @param string $from
-   *   contact ID or formatted "From address", eg. 12 or "Fred Bloggs" <fred@example.org>
+   *   civicrm_email.id or formatted "From address", eg. 12 or "Fred Bloggs" <fred@example.org>
    * @return string
    *   The RFC822-formatted email header (display name + address)
    */

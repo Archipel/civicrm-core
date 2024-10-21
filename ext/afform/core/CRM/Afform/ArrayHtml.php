@@ -111,7 +111,7 @@ class CRM_Afform_ArrayHtml {
         continue;
       }
       if (!preg_match('/^[a-zA-Z0-9\-]+$/', $attrName)) {
-        throw new \RuntimeException("Malformed HTML attribute");
+        throw new \RuntimeException("Malformed HTML attribute $attrName → $attrValue");
       }
 
       $type = $this->pickAttrType($tag, $attrName);
@@ -235,6 +235,10 @@ class CRM_Afform_ArrayHtml {
         else {
           $arr['#children'] = $this->convertNodesToArray($node->childNodes);
         }
+      }
+      // Empty containers should still get a #children attribute
+      elseif (in_array($node->tagName, ['div', 'fieldset'], TRUE)) {
+        $arr['#children'] = [];
       }
       return $arr;
     }

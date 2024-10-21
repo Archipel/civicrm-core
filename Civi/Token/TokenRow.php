@@ -144,6 +144,11 @@ class TokenRow {
   /**
    * Update the value of a token.
    *
+   * If you are reading this it probably means you can't follow this function.
+   * Don't worry - I've stared at it & all I see is a bunch of letters. However,
+   * the answer to your problem is almost certainly that you are passing in null
+   * rather than an empty string for 'c'.
+   *
    * @param string|array $a
    * @param string|array $b
    * @param mixed $c
@@ -183,10 +188,16 @@ class TokenRow {
       'id' => $entityID,
     ]);
     $fieldValue = \CRM_Utils_Array::value($customFieldName, $record, '');
-
+    $originalValue = $fieldValue;
     // format the raw custom field value into proper display value
     if (isset($fieldValue)) {
       $fieldValue = (string) \CRM_Core_BAO_CustomField::displayValue($fieldValue, $customFieldID);
+    }
+    // This is a bit of a clumsy wy of detecting a link field but if you look into the displayValue
+    // function you will understand.... By assigning the url as a plain token the text version can
+    // use it as plain text (not html re-converted which kinda works but not in subject lines)
+    if (is_string($fieldValue) && is_string($originalValue) && strpos($fieldValue, '<a href') !== FALSE && strpos($originalValue, '<a href') === FALSE) {
+      $this->format('text/plain')->tokens($entity, $customFieldName, $originalValue);
     }
 
     return $this->format('text/html')->tokens($entity, $customFieldName, $fieldValue);
@@ -275,7 +286,7 @@ class TokenRow {
                 $htmlTokens[$entity][$field] = \CRM_Utils_String::purifyHTML($value);
               }
               else {
-                $htmlTokens[$entity][$field] = is_object($value) ? $value : htmlentities($value);
+                $htmlTokens[$entity][$field] = is_object($value) ? $value : nl2br(htmlentities($value, ENT_QUOTES));
               }
             }
           }
@@ -287,7 +298,8 @@ class TokenRow {
         foreach ($htmlTokens as $entity => $values) {
           foreach ($values as $field => $value) {
             if (!$value instanceof \DateTime && !$value instanceof Money) {
-              $value = html_entity_decode(strip_tags($value));
+              // rtrim removes trailing lines from <p> tags.
+              $value = rtrim(\CRM_Utils_String::htmlToText($value));
             }
             if (!isset($textTokens[$entity][$field])) {
               $textTokens[$entity][$field] = $value;
@@ -350,7 +362,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    *
    * @return bool
    */
-  public function offsetExists($offset) {
+  public function offsetExists($offset): bool {
     return isset($this->tokenProcessor->rowContexts[$this->tokenRow][$offset])
       || isset($this->tokenProcessor->context[$offset]);
   }
@@ -362,6 +374,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    *
    * @return string
    */
+  #[\ReturnTypeWillChange]
   public function &offsetGet($offset) {
     if (isset($this->tokenProcessor->rowContexts[$this->tokenRow][$offset])) {
       return $this->tokenProcessor->rowContexts[$this->tokenRow][$offset];
@@ -379,7 +392,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    * @param string $offset
    * @param mixed $value
    */
-  public function offsetSet($offset, $value) {
+  public function offsetSet($offset, $value): void {
     $this->tokenProcessor->rowContexts[$this->tokenRow][$offset] = $value;
   }
 
@@ -388,7 +401,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    *
    * @param mixed $offset
    */
-  public function offsetUnset($offset) {
+  public function offsetUnset($offset): void {
     unset($this->tokenProcessor->rowContexts[$this->tokenRow][$offset]);
   }
 
@@ -397,6 +410,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    *
    * @return \ArrayIterator
    */
+  #[\ReturnTypeWillChange]
   public function getIterator() {
     return new \ArrayIterator($this->createMergedArray());
   }
@@ -406,7 +420,7 @@ class TokenRowContext implements \ArrayAccess, \IteratorAggregate, \Countable {
    *
    * @return int
    */
-  public function count() {
+  public function count(): int {
     return count($this->createMergedArray());
   }
 

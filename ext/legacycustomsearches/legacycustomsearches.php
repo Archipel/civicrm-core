@@ -15,39 +15,12 @@ function legacycustomsearches_civicrm_config(&$config) {
 }
 
 /**
- * Implements hook_civicrm_xmlMenu().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_xmlMenu
- */
-function legacycustomsearches_civicrm_xmlMenu(&$files) {
-  _legacycustomsearches_civix_civicrm_xmlMenu($files);
-}
-
-/**
  * Implements hook_civicrm_install().
  *
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_install
  */
 function legacycustomsearches_civicrm_install() {
   _legacycustomsearches_civix_civicrm_install();
-}
-
-/**
- * Implements hook_civicrm_postInstall().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_postInstall
- */
-function legacycustomsearches_civicrm_postInstall() {
-  _legacycustomsearches_civix_civicrm_postInstall();
-}
-
-/**
- * Implements hook_civicrm_uninstall().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_uninstall
- */
-function legacycustomsearches_civicrm_uninstall() {
-  _legacycustomsearches_civix_civicrm_uninstall();
 }
 
 /**
@@ -60,113 +33,43 @@ function legacycustomsearches_civicrm_enable() {
 }
 
 /**
- * Implements hook_civicrm_disable().
+ * Determine the sql
+ * @param array $savedSearch
+ * @param int $groupID
+ * @param string $sql
  *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_disable
+ * @throws \CRM_Core_Exception
  */
-function legacycustomsearches_civicrm_disable() {
-  _legacycustomsearches_civix_civicrm_disable();
+function legacycustomsearches_civicrm_buildGroupContactCache(array $savedSearch, int $groupID, string &$sql): void {
+  if (empty($savedSearch['search_custom_id'])) {
+    return;
+  }
+  $savedSearchID = $savedSearch['id'];
+  $excludeClause = "
+    NOT IN (
+    SELECT contact_id FROM civicrm_group_contact
+    WHERE civicrm_group_contact.status = 'Removed'
+    AND civicrm_group_contact.group_id = $groupID )";
+  $addSelect = "$groupID AS group_id";
+  $ssParams = CRM_Contact_BAO_SavedSearch::getFormValues($savedSearchID);
+
+  $customSearchClass = $ssParams['customSearchClass'];
+  // check if there is a special function - formatSavedSearchFields defined in the custom search form
+  if (method_exists($customSearchClass, 'formatSavedSearchFields')) {
+    $customSearchClass::formatSavedSearchFields($ssParams);
+  }
+
+  // CRM-7021 rectify params to what proximity search expects if there is a value for prox_distance
+  if (!empty($ssParams)) {
+    CRM_Contact_BAO_ProximityQuery::fixInputParams($ssParams);
+  }
+  $searchSQL = CRM_Contact_BAO_SearchCustom::customClass($ssParams['customSearchID'], $savedSearchID)->contactIDs();
+  $searchSQL = str_replace('ORDER BY contact_a.id ASC', '', $searchSQL);
+  if (strpos($searchSQL, 'WHERE') === FALSE) {
+    $searchSQL .= " WHERE contact_a.id $excludeClause";
+  }
+  else {
+    $searchSQL .= " AND contact_a.id $excludeClause";
+  }
+  $sql = preg_replace("/^\s*SELECT /", "SELECT $addSelect, ", $searchSQL);
 }
-
-/**
- * Implements hook_civicrm_upgrade().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_upgrade
- */
-function legacycustomsearches_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
-  return _legacycustomsearches_civix_civicrm_upgrade($op, $queue);
-}
-
-/**
- * Implements hook_civicrm_managed().
- *
- * Generate a list of entities to create/deactivate/delete when this module
- * is installed, disabled, uninstalled.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_managed
- */
-function legacycustomsearches_civicrm_managed(&$entities) {
-  _legacycustomsearches_civix_civicrm_managed($entities);
-}
-
-/**
- * Implements hook_civicrm_caseTypes().
- *
- * Generate a list of case-types.
- *
- * Note: This hook only runs in CiviCRM 4.4+.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_caseTypes
- */
-function legacycustomsearches_civicrm_caseTypes(&$caseTypes) {
-  _legacycustomsearches_civix_civicrm_caseTypes($caseTypes);
-}
-
-/**
- * Implements hook_civicrm_angularModules().
- *
- * Generate a list of Angular modules.
- *
- * Note: This hook only runs in CiviCRM 4.5+. It may
- * use features only available in v4.6+.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_angularModules
- */
-function legacycustomsearches_civicrm_angularModules(&$angularModules) {
-  _legacycustomsearches_civix_civicrm_angularModules($angularModules);
-}
-
-/**
- * Implements hook_civicrm_alterSettingsFolders().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_alterSettingsFolders
- */
-function legacycustomsearches_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
-  _legacycustomsearches_civix_civicrm_alterSettingsFolders($metaDataFolders);
-}
-
-/**
- * Implements hook_civicrm_entityTypes().
- *
- * Declare entity types provided by this module.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
- */
-function legacycustomsearches_civicrm_entityTypes(&$entityTypes) {
-  _legacycustomsearches_civix_civicrm_entityTypes($entityTypes);
-}
-
-/**
- * Implements hook_civicrm_themes().
- */
-function legacycustomsearches_civicrm_themes(&$themes) {
-  _legacycustomsearches_civix_civicrm_themes($themes);
-}
-
-// --- Functions below this ship commented out. Uncomment as required. ---
-
-/**
- * Implements hook_civicrm_preProcess().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_preProcess
- */
-//function legacycustomsearches_civicrm_preProcess($formName, &$form) {
-//
-//}
-
-/**
- * Implements hook_civicrm_navigationMenu().
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_navigationMenu
- */
-//function legacycustomsearches_civicrm_navigationMenu(&$menu) {
-//  _legacycustomsearches_civix_insert_navigation_menu($menu, 'Mailings', array(
-//    'label' => E::ts('New subliminal message'),
-//    'name' => 'mailing_subliminal_message',
-//    'url' => 'civicrm/mailing/subliminal',
-//    'permission' => 'access CiviMail',
-//    'operator' => 'OR',
-//    'separator' => 0,
-//  ));
-//  _legacycustomsearches_civix_navigationMenu($menu);
-//}

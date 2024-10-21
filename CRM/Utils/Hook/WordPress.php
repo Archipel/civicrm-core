@@ -93,7 +93,7 @@ class CRM_Utils_Hook_WordPress extends CRM_Utils_Hook {
 
       // only pass the arguments that have values
       $args = array_slice(
-        array(&$arg1, &$arg2, &$arg3, &$arg4, &$arg5, &$arg6),
+        [&$arg1, &$arg2, &$arg3, &$arg4, &$arg5, &$arg6],
         0,
         $numParams
       );
@@ -149,8 +149,6 @@ class CRM_Utils_Hook_WordPress extends CRM_Utils_Hook {
    *
    * We need to do this to preserve the CiviCRM hook signatures for hooks that require
    * a return value, since the WordPress Plugin API seems to be incompatible with them.
-   *
-   * Copied and adapted from: CRM/Utils/Hook/Drupal6.php
    */
   public function buildModuleList() {
     if ($this->isBuilt === FALSE) {

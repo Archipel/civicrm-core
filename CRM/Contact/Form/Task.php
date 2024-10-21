@@ -130,8 +130,10 @@ class CRM_Contact_Form_Task extends CRM_Core_Form_Task {
 
     $form->_task = self::$_searchFormValues['task'] ?? NULL;
 
+    $isSelectedContacts = (self::$_searchFormValues['radio_ts'] ?? NULL) === 'ts_sel';
+    $form->assign('isSelectedContacts', $isSelectedContacts);
     // all contacts or action = save a search
-    if ((CRM_Utils_Array::value('radio_ts', self::$_searchFormValues) == 'ts_all') ||
+    if (((self::$_searchFormValues['radio_ts'] ?? NULL) == 'ts_all') ||
       ($form->_task == CRM_Contact_Task::SAVE_SEARCH)
     ) {
       // since we don't store all contacts in prevnextcache, when user selects "all" use query to retrieve contacts
@@ -152,7 +154,7 @@ class CRM_Contact_Form_Task extends CRM_Core_Form_Task {
         }
       }
     }
-    elseif (CRM_Utils_Array::value('radio_ts', self::$_searchFormValues) == 'ts_sel') {
+    elseif ($isSelectedContacts) {
       // selected contacts only
       // need to perform action on only selected contacts
       $insertString = [];
@@ -184,7 +186,8 @@ class CRM_Contact_Form_Task extends CRM_Core_Form_Task {
 
     //contact type for pick up profiles as per selected contact types with subtypes
     //CRM-5521
-    if ($selectedTypes = CRM_Utils_Array::value('contact_type', self::$_searchFormValues)) {
+    $selectedTypes = self::$_searchFormValues['contact_type'] ?? NULL;
+    if ($selectedTypes) {
       if (!is_array($selectedTypes)) {
         $selectedTypes = explode(' ', $selectedTypes);
       }
@@ -199,13 +202,11 @@ class CRM_Contact_Form_Task extends CRM_Core_Form_Task {
       }
     }
 
-    if (CRM_Utils_Array::value('radio_ts', self::$_searchFormValues) == 'ts_sel'
+    if ($isSelectedContacts
       && ($form->_action != CRM_Core_Action::COPY)
     ) {
-      $sel = self::$_searchFormValues['radio_ts'] ?? NULL;
-      $form->assign('searchtype', $sel);
       $result = self::getSelectedContactNames();
-      $form->assign("value", $result);
+      $form->assign('value', $result);
     }
 
     if (!empty($form->_contactIds)) {
@@ -227,7 +228,7 @@ class CRM_Contact_Form_Task extends CRM_Core_Form_Task {
    * to use a trait based approach. For now this is renamed to
    * permit the use of a non-static function with this name
    *
-   * @param $form CRM_Core_Form
+   * @param CRM_Core_Form_Task $form
    *
    * @return array $contactIds
    */

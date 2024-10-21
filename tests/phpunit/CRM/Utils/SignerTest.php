@@ -15,7 +15,12 @@
  */
 class CRM_Utils_SignerTest extends CiviUnitTestCase {
 
-  public function testSignValidate() {
+  public function setUp(): void {
+    parent::setUp();
+    $this->useTransaction();
+  }
+
+  public function testSignValidate(): void {
     $cases = [];
     $cases[] = [
       'signParams' => [
@@ -134,7 +139,7 @@ class CRM_Utils_SignerTest extends CiviUnitTestCase {
       $isValid = $validator->validate($signature, $case['validateParams']);
 
       if ($isValid !== $case['isValid']) {
-        $this->fail("Case ${caseId}: Mismatch: " . var_export($case, TRUE));
+        $this->fail("Case {$caseId}: Mismatch: " . var_export($case, TRUE));
       }
       $this->assertTrue(TRUE, 'Validation yielded expected result');
     }

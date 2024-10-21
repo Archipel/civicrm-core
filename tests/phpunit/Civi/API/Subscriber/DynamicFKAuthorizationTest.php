@@ -3,7 +3,7 @@ namespace Civi\API\Subscriber;
 
 use Civi\API\Kernel;
 use Civi\API\Provider\StaticProvider;
-use Symfony\Component\EventDispatcher\EventDispatcher;
+use Civi\Core\CiviEventDispatcher;
 
 /**
  */
@@ -19,7 +19,7 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
   const FORBIDDEN_ID = 30;
 
   /**
-   * @var \Symfony\Component\EventDispatcher\EventDispatcher
+   * @var \Civi\Core\CiviEventDispatcher
    */
   public $dispatcher;
 
@@ -30,7 +30,6 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
 
   protected function setUp(): void {
     parent::setUp();
-    \CRM_Core_DAO_AllCoreTables::init(TRUE);
 
     \CRM_Core_DAO_AllCoreTables::registerEntityType('FakeFile', 'CRM_Fake_DAO_FakeFile', 'fake_file');
     $fileProvider = new StaticProvider(
@@ -68,7 +67,7 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
       ]
     );
 
-    $this->dispatcher = new EventDispatcher();
+    $this->dispatcher = new CiviEventDispatcher();
     $this->kernel = new Kernel($this->dispatcher);
     $this->kernel
       ->registerApiProvider($fileProvider)
@@ -100,11 +99,6 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
       'select',
       ['fake_widget', 'fake_forbidden']
     ));
-  }
-
-  protected function tearDown(): void {
-    parent::tearDown();
-    \CRM_Core_DAO_AllCoreTables::init(TRUE);
   }
 
   /**
@@ -178,12 +172,13 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
   }
 
   /**
-   * @param $entity
-   * @param $action
+   * @param string $entity
+   * @param string $action
    * @param array $params
+   *
    * @dataProvider okDataProvider
    */
-  public function testOk($entity, $action, $params) {
+  public function testOk(string $entity, string $action, array $params): void {
     $params['version'] = 3;
     $params['debug'] = 1;
     $params['check_permissions'] = 1;
@@ -214,14 +209,14 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
       '$params' => $params,
       '$result' => $result,
     ], TRUE));
-    $this->assertRegExp($expectedError, $result['error_message']);
+    $this->assertMatchesRegularExpression($expectedError, $result['error_message']);
   }
 
   /**
    * Test whether trusted API calls bypass the permission check
    *
    */
-  public function testNotDelegated() {
+  public function testNotDelegated(): void {
     $entity = 'FakeFile';
     $action = 'create';
     $params = [
@@ -234,7 +229,7 @@ class DynamicFKAuthorizationTest extends \CiviUnitTestCase {
     // run with permission check
     $result = $this->kernel->runSafe('FakeFile', 'create', $params);
     $this->assertTrue((bool) $result['is_error'], 'Undelegated entity with check_permissions = 1 should fail');
-    $this->assertRegExp('/Unrecognized target entity table \(civicrm_membership\)/', $result['error_message']);
+    $this->assertMatchesRegularExpression('/Unrecognized target entity table \(civicrm_membership\)/', $result['error_message']);
     // repeat without permission check
     $params['check_permissions'] = 0;
     $result = $this->kernel->runSafe('FakeFile', 'create', $params);

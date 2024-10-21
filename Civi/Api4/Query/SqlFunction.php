@@ -12,7 +12,14 @@
 namespace Civi\Api4\Query;
 
 /**
- * Base class for all Sql functions.
+ * Base class for all APIv4 Sql function definitions.
+ *
+ * SqlFunction classes don't actually process data, SQL itself does the real work.
+ * The role of each SqlFunction class is to:
+ *
+ * 1. Whitelist a standard SQL function, or define a custom one, for use by APIv4 (it doesn't allow any that don't have a SQLFunction class).
+ * 2. Document what the function does and what arguments it accepts.
+ * 3. Tell APIv4 how to treat the inputs and how to format the outputs.
  *
  * @package Civi\Api4\Query
  */
@@ -22,6 +29,12 @@ abstract class SqlFunction extends SqlExpression {
    * @var array[]
    */
   protected $args = [];
+
+  /**
+   * Pseudoconstant suffix (for functions with option lists)
+   * @var string
+   */
+  private $suffix;
 
   /**
    * Used for categorizing functions in the UI
@@ -40,7 +53,12 @@ abstract class SqlFunction extends SqlExpression {
    * Parse the argument string into an array of function arguments
    */
   protected function initialize() {
-    $arg = trim(substr($this->expr, strpos($this->expr, '(') + 1, -1));
+    $matches = [];
+    // Capture function argument string and possible suffix
+    preg_match('/[_A-Z]+\((.*)\)(:[a-z]+)?$/', $this->expr, $matches);
+    $arg = $matches[1];
+    $this->setSuffix($matches[2] ?? NULL);
+    // Parse function arguments string, match to declared function params
     foreach ($this->getParams() as $idx => $param) {
       $prefix = NULL;
       $name = $param['name'] ?: ($idx + 1);
@@ -59,7 +77,7 @@ abstract class SqlFunction extends SqlExpression {
           continue;
         }
         if (!$prefix && !$param['optional']) {
-          throw new \API_Exception("Missing param $name for SQL function " . static::getName());
+          throw new \CRM_Core_Exception("Missing param $name for SQL function " . static::getName());
         }
       }
       elseif ($param['flag_before']) {
@@ -76,7 +94,7 @@ abstract class SqlFunction extends SqlExpression {
           count($exprs) < $param['min_expr'] &&
           !(!$exprs && $param['optional'])
         ) {
-          throw new \API_Exception("Too few arguments to param $name for SQL function " . static::getName());
+          throw new \CRM_Core_Exception("Too few arguments to param $name for SQL function " . static::getName());
         }
         $this->args[$idx]['expr'] = $exprs;
 
@@ -84,54 +102,81 @@ abstract class SqlFunction extends SqlExpression {
       }
     }
     if (trim($arg)) {
-      throw new \API_Exception("Too many arguments given for SQL function " . static::getName());
+      throw new \CRM_Core_Exception("Too many arguments given for SQL function " . static::getName());
     }
   }
 
   /**
-   * Change $dataType according to output of function
+   * Set $dataType and convert value by suffix
    *
+   * @param string|null $dataType
+   * @param array $values
+   * @param string $key
    * @see \Civi\Api4\Utils\FormattingUtil::formatOutputValues
-   * @param string $value
-   * @param string $dataType
-   * @return string
    */
-  public function formatOutputValue($value, &$dataType) {
+  public function formatOutputValue(?string &$dataType, array &$values, string $key): void {
     if (static::$dataType) {
       $dataType = static::$dataType;
     }
-    return $value;
+    if (isset($values[$key]) && $this->suffix && $this->suffix !== 'id') {
+      $dataType = 'String';
+      $value =& $values[$key];
+      $option = $this->getOptions()[$value] ?? NULL;
+      // Option contains an array of suffix keys
+      if (is_array($option)) {
+        $value = $option[$this->suffix] ?? NULL;
+      }
+      // Flat arrays are name/value pairs
+      elseif ($this->suffix === 'label') {
+        $value = $option;
+      }
+      // Name needs no transformation, and any other suffix is invalid
+      elseif ($this->suffix !== 'name') {
+        $value = NULL;
+      }
+    }
   }
 
   /**
    * Render the expression for insertion into the sql query
    *
-   * @param array $fieldList
+   * @param \Civi\Api4\Query\Api4Query $query
+   * @param bool $includeAlias
    * @return string
    */
-  public function render(array $fieldList): string {
+  public function render(Api4Query $query, bool $includeAlias = FALSE): string {
     $output = '';
     foreach ($this->args as $arg) {
-      $rendered = $this->renderArg($arg, $fieldList);
+      $rendered = $this->renderArg($arg, $query);
       if (strlen($rendered)) {
         $output .= (strlen($output) ? ' ' : '') . $rendered;
       }
     }
+    return $this->renderExpression($output) . ($includeAlias ? " AS `{$this->getAlias()}`" : '');
+  }
+
+  /**
+   * Render the final expression
+   *
+   * @param string $output
+   * @return string
+   */
+  protected function renderExpression(string $output): string {
     return $this->getName() . '(' . $output . ')';
   }
 
   /**
    * @param array $arg
-   * @param array $fieldList
+   * @param \Civi\Api4\Query\Api4Query $query
    * @return string
    */
-  private function renderArg($arg, $fieldList): string {
+  private function renderArg($arg, Api4Query $query): string {
     $rendered = implode(' ', $arg['prefix']);
     foreach ($arg['expr'] ?? [] as $idx => $expr) {
       if (strlen($rendered) || $idx) {
         $rendered .= $idx ? ', ' : ' ';
       }
-      $rendered .= $expr->render($fieldList);
+      $rendered .= $expr->render($query);
     }
     if ($arg['suffix']) {
       $rendered .= (strlen($rendered) ? ' ' : '') . implode(' ', $arg['suffix']);
@@ -143,7 +188,7 @@ abstract class SqlFunction extends SqlExpression {
    * @inheritDoc
    */
   public function getAlias(): string {
-    return $this->alias ?? $this->getName() . ':' . implode('_', $this->fields);
+    return $this->alias ?? $this->getName() . ':' . implode('_', $this->fields) . ($this->suffix ? ':' . $this->suffix : '');
   }
 
   /**
@@ -163,7 +208,7 @@ abstract class SqlFunction extends SqlExpression {
     $params = [];
     foreach (static::params() as $param) {
       // Merge in defaults to ensure each param has these properties
-      $params[] = $param + [
+      $param += [
         'name' => NULL,
         'label' => ts('Select'),
         'min_expr' => 1,
@@ -174,6 +219,10 @@ abstract class SqlFunction extends SqlExpression {
         'must_be' => ['SqlField', 'SqlFunction', 'SqlString', 'SqlNumber', 'SqlNull'],
         'api_default' => NULL,
       ];
+      if (!$param['max_expr']) {
+        $param['must_be'] = [];
+      }
+      $params[] = $param;
     }
     return $params;
   }
@@ -182,7 +231,7 @@ abstract class SqlFunction extends SqlExpression {
 
   /**
    * Get the arguments passed to this sql function instance.
-   * @return array[]
+   * @return array{prefix: array, suffix: array, expr: SqlExpression}[]
    */
   public function getArgs(): array {
     return $this->args;
@@ -193,6 +242,38 @@ abstract class SqlFunction extends SqlExpression {
    */
   public static function getCategory(): string {
     return static::$category;
+  }
+
+  /**
+   * For functions which output a finite set of values,
+   * this allows the API to treat it as pseudoconstant options.
+   *
+   * e.g. MONTH() only returns integers 1-12, which can be formatted like
+   * [1 => January, 2 => February, etc.]
+   *
+   * @return array|null
+   */
+  public static function getOptions(): ?array {
+    return NULL;
+  }
+
+  /**
+   * All functions return 'SqlFunction' as their type.
+   *
+   * To get the function name @see SqlFunction::getName()
+   * @return string
+   */
+  public function getType(): string {
+    return 'SqlFunction';
+  }
+
+  /**
+   * @param string|null $suffix
+   */
+  private function setSuffix(?string $suffix): void {
+    $this->suffix = $suffix ?
+      str_replace(':', '', $suffix) :
+      NULL;
   }
 
   /**

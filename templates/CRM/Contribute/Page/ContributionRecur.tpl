@@ -25,7 +25,7 @@
       {else}
         <tr><td class="label">{ts}Amount{/ts}</td><td>{$recur.amount|crmMoney:$recur.currency}{if $is_test} ({ts}test{/ts}){/if}</td></tr>
       {/if}
-      <tr><td class="label">{ts}Frequency{/ts}</td><td>every {$recur.frequency_interval} {$recur.frequency_unit}</td></tr>
+      <tr><td class="label">{ts}Frequency{/ts}</td><td>{ts 1=$recur.frequency_interval 2=$recur.frequency_unit}every %1 %2{/ts}</td></tr>
       {if !empty($recur.installments)}<tr><td class="label">{ts}Installments{/ts}</td><td>{$recur.installments}</td></tr>{/if}
       <tr><td class="label">{ts}Status{/ts}</td><td>{$recur.contribution_status}</td></tr>
       <tr><td class="label">{ts}Start Date{/ts}</td><td>{$recur.start_date|crmDate}</td></tr>
@@ -35,7 +35,7 @@
       {if !empty($recur.cancel_reason)}<tr><td class="label">{ts}Cancel Reason{/ts}</td><td>{$recur.cancel_reason}</td></tr>{/if}
       {if !empty($recur.end_date)}<tr><td class="label">{ts}End Date{/ts}</td><td>{$recur.end_date|crmDate}</td></tr>{/if}
       {if $recur.processor_id}<tr><td class="label">{ts}Processor ID{/ts}</td><td>{$recur.processor_id}</td></tr>{/if}
-      {if !empty($recur.trxn_id)}<tr><td class="label">{ts}Transaction ID{/ts}</td><td>{$recur.trxn_id}</td></tr>{/if}
+      {if !empty($recur.trxn_id) && ($recur.processor_id neq $recur.trxn_id)}<tr><td class="label">{ts}Transaction ID{/ts}</td><td>{$recur.trxn_id}</td></tr>{/if}
       {if $recur.invoice_id}<tr><td class="label">{ts}Invoice ID{/ts}</td><td>{$recur.invoice_id}</td></tr>{/if}
       <tr><td class="label">{ts}Cycle Day{/ts}</td><td>{$recur.cycle_day}</td></tr>
       {if !empty($recur.next_sched_contribution_date) && $recur.contribution_status_id neq 3}<tr><td class="label">{ts}Next Contribution{/ts}</td><td>{$recur.next_sched_contribution_date|crmDate}</td></tr>{/if}

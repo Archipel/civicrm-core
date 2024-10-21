@@ -4,7 +4,7 @@ use CRM_Afform_ExtensionUtil as E;
 /**
  * Collection of upgrade steps.
  */
-class CRM_Afform_Upgrader extends CRM_Afform_Upgrader_Base {
+class CRM_Afform_Upgrader extends CRM_Extension_Upgrader_Base {
 
   /**
    * Update names of blocks and joins
@@ -30,8 +30,17 @@ class CRM_Afform_Upgrader extends CRM_Afform_Upgrader_Base {
       $html = str_replace(array_keys($replacements), array_values($replacements), $html);
       file_put_contents($fileName, $html);
     }
+    $this->updateBlockMetadata($scanner);
 
-    // Update form metadata with new block property names
+    return TRUE;
+  }
+
+  /**
+   * Update form metadata with new block property names
+   * @param CRM_Afform_AfformScanner $scanner
+   */
+  private function updateBlockMetadata(CRM_Afform_AfformScanner $scanner): void {
+    $localDir = $scanner->getSiteLocalPath();
     $replacements = [
       'join' => 'join_entity',
       'block' => 'entity_type',
@@ -46,14 +55,16 @@ class CRM_Afform_Upgrader extends CRM_Afform_Upgrader_Base {
       }
       if (!empty($meta['entity_type'])) {
         $meta['type'] = 'block';
+        if ($meta['entity_type'] === '*') {
+          unset($meta['entity_type']);
+        }
       }
       file_put_contents($fileName, json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
-    return TRUE;
   }
 
   /**
-   * Upgrade 1000 - install civicrm_afform_submission table
+   * Upgrade 1001 - install civicrm_afform_submission table
    * @return bool
    */
   public function upgrade_1001(): bool {
@@ -61,6 +72,30 @@ class CRM_Afform_Upgrader extends CRM_Afform_Upgrader_Base {
     if (!CRM_Core_DAO::singleValueQuery("SHOW TABLES LIKE 'civicrm_afform_submission'")) {
       $this->executeSqlFile('sql/auto_install.sql');
     }
+    return TRUE;
+  }
+
+  /**
+   * Upgrade 1002 - repeat block metadata update to fix errors when saving blocks
+   * @see #22963
+   * @return bool
+   */
+  public function upgrade_1002(): bool {
+    $this->ctx->log->info('Applying update 1002 - repeat block metadata update.');
+    $scanner = new CRM_Afform_AfformScanner();
+    $this->updateBlockMetadata($scanner);
+
+    return TRUE;
+  }
+
+  /**
+   * Upgrade 1003 - add status column to afform submissions
+   * @see https://lab.civicrm.org/dev/core/-/issues/4232
+   * @return bool
+   */
+  public function upgrade_1003(): bool {
+    $this->ctx->log->info('Applying update 1003 - add status column to afform submissions.');
+    $this->addColumn('civicrm_afform_submission', 'status_id', "INT UNSIGNED NOT NULL  DEFAULT 1 COMMENT 'fk to Afform Submission Status options in civicrm_option_values'");
     return TRUE;
   }
 

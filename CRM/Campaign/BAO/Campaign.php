@@ -38,17 +38,9 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
       if (empty($params['created_id'])) {
         $params['created_id'] = CRM_Core_Session::getLoggedInContactID();
       }
-
-      if (empty($params['created_date'])) {
-        $params['created_date'] = date('YmdHis');
-      }
-
-      if (empty($params['name'])) {
-        $params['name'] = CRM_Utils_String::titleToVar($params['title'], 64);
-      }
     }
 
-    /* @var \CRM_Campaign_DAO_Campaign $campaign */
+    /** @var \CRM_Campaign_DAO_Campaign $campaign */
     $campaign = self::writeRecord($params);
 
     /* Create the campaign group record */
@@ -65,11 +57,6 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
       }
     }
 
-    //store custom data
-    if (!empty($params['custom']) && is_array($params['custom'])) {
-      CRM_Core_BAO_CustomValueTable::store($params['custom'], 'civicrm_campaign', $campaign->id);
-    }
-
     return $campaign;
   }
 
@@ -82,6 +69,7 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
    * @return bool|int
    */
   public static function del($id) {
+    CRM_Core_Error::deprecatedFunctionWarning('deleteRecord');
     try {
       self::deleteRecord(['id' => $id]);
     }
@@ -92,27 +80,14 @@ class CRM_Campaign_BAO_Campaign extends CRM_Campaign_DAO_Campaign {
   }
 
   /**
-   * Retrieve DB object based on input parameters.
-   *
-   * It also stores all the retrieved values in the default array.
-   *
+   * @deprecated
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
    * @param array $defaults
-   *   (reference ) an assoc array to hold the flattened values.
-   *
-   * @return \CRM_Campaign_DAO_Campaign|null
+   * @return self|null
    */
-  public static function retrieve(&$params, &$defaults) {
-    $campaign = new CRM_Campaign_DAO_Campaign();
-
-    $campaign->copyValues($params);
-
-    if ($campaign->find(TRUE)) {
-      CRM_Core_DAO::storeValues($campaign, $defaults);
-      return $campaign;
-    }
-    return NULL;
+  public static function retrieve($params, &$defaults) {
+    CRM_Core_Error::deprecatedFunctionWarning('API');
+    return self::commonRetrieve(self::class, $params, $defaults);
   }
 
   /**
@@ -267,7 +242,7 @@ Order By  camp.title";
 
       //do check for component.
       if ($doCheckForComponent) {
-        $campaigns['isCampaignEnabled'] = $isValid = self::isCampaignEnable();
+        $campaigns['isCampaignEnabled'] = $isValid = self::isComponentEnabled();
       }
 
       //do check for permissions.
@@ -295,11 +270,12 @@ Order By  camp.title";
 
   /**
    * Is CiviCampaign enabled.
-   *
+   * @deprecated
    * @return bool
    */
   public static function isCampaignEnable(): bool {
-    return in_array('CiviCampaign', CRM_Core_Config::singleton()->enableComponents, TRUE);
+    CRM_Core_Error::deprecatedFunctionWarning('isComponentEnabled');
+    return self::isComponentEnabled();
   }
 
   /**
@@ -394,7 +370,7 @@ INNER JOIN civicrm_option_group grp ON ( campaign_type.option_group_id = grp.id 
     if (array_key_exists('is_active', $params)) {
       $active = "( campaign.is_active = 1 )";
       if (!empty($params['is_active'])) {
-        $active = "( campaign.is_active = 0 OR campaign.is_active IS NULL )";
+        $active = "campaign.is_active = 0";
       }
       $where[] = $active;
     }
@@ -491,17 +467,13 @@ INNER JOIN  civicrm_group grp ON ( grp.id = campgrp.entity_id )
   }
 
   /**
-   * Update the is_active flag in the db.
-   *
+   * @deprecated - this bypasses hooks.
    * @param int $id
-   *   Id of the database record.
    * @param bool $is_active
-   *   Value we want to set the is_active field.
-   *
    * @return bool
-   *   true if we found and updated the object, else false
    */
   public static function setIsActive($id, $is_active) {
+    CRM_Core_Error::deprecatedFunctionWarning('writeRecord');
     return CRM_Core_DAO::setFieldValue('CRM_Campaign_DAO_Campaign', $id, 'is_active', $is_active);
   }
 
@@ -599,16 +571,8 @@ INNER JOIN  civicrm_group grp ON ( grp.id = campgrp.entity_id )
         ['id' => 'campaigns', 'multiple' => 'multiple', 'class' => 'crm-select2']
       );
     }
-    $infoFields = [
-      'elementName',
-      'hasAccessCampaign',
-      'isCampaignEnabled',
-      'showCampaignInSearch',
-    ];
-    foreach ($infoFields as $fld) {
-      $campaignInfo[$fld] = $$fld;
-    }
-    $form->assign('campaignInfo', $campaignInfo);
+
+    $form->assign('campaignElementName', $showCampaignInSearch ? $elementName : '');
   }
 
   /**

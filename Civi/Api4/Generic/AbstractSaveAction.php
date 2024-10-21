@@ -32,10 +32,13 @@ use Civi\Api4\Utils\CoreUtil;
  * @method array getDefaults()
  * @method $this setReload(bool $reload) Specify whether complete objects will be returned after saving.
  * @method bool getReload()
+ * @method $this setMatch(array $match) Specify fields to match for update.
+ * @method bool getMatch()
  *
  * @package Civi\Api4\Generic
  */
 abstract class AbstractSaveAction extends AbstractAction {
+  use Traits\MatchParamTrait;
 
   /**
    * Array of $ENTITIES to save.
@@ -70,12 +73,12 @@ abstract class AbstractSaveAction extends AbstractAction {
   protected $reload = FALSE;
 
   /**
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   protected function validateValues() {
     $idField = CoreUtil::getIdFieldName($this->getEntityName());
-    // FIXME: There should be a protocol to report a full list of errors... Perhaps a subclass of API_Exception?
+    // FIXME: There should be a protocol to report a full list of errors... Perhaps a subclass of CRM_Core_Exception?
     $unmatched = [];
     foreach ($this->records as $record) {
       if (empty($record[$idField])) {
@@ -83,7 +86,7 @@ abstract class AbstractSaveAction extends AbstractAction {
       }
     }
     if ($unmatched) {
-      throw new \API_Exception("Mandatory values missing from Api4 {$this->getEntityName()}::{$this->getActionName()}: " . implode(", ", $unmatched), "mandatory_missing", ["fields" => $unmatched]);
+      throw new \CRM_Core_Exception("Mandatory values missing from Api4 {$this->getEntityName()}::{$this->getActionName()}: " . implode(", ", $unmatched), "mandatory_missing", ["fields" => $unmatched]);
     }
 
     if ($this->checkPermissions) {
@@ -117,6 +120,7 @@ abstract class AbstractSaveAction extends AbstractAction {
 
   /**
    * @return string
+   * @deprecated
    */
   protected function getIdField() {
     return CoreUtil::getInfoItem($this->getEntityName(), 'primary_key')[0];

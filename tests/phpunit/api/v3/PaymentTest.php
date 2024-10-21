@@ -18,42 +18,12 @@
  */
 class api_v3_PaymentTest extends CiviUnitTestCase {
 
-  protected $_individualId;
-
-  protected $_financialTypeId = 1;
-
-  /**
-   * Should financials be checked after the test but before tear down.
-   *
-   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
-   * are some test data issues and some real bugs currently blocking.
-   *
-   * @var bool
-   */
-  protected $isValidateFinancialsOnPostAssert = TRUE;
-
-  /**
-   * Setup function.
-   *
-   * @throws \CiviCRM_API3_Exception
-   */
-  public function setUp(): void {
-    parent::setUp();
-
-    $this->_apiversion = 3;
-    $this->_individualId = $this->individualCreate();
-    CRM_Core_Config::singleton()->userPermissionClass->permissions = [];
-  }
-
   /**
    * Clean up after each test.
-   *
-   * @throws \Exception
    */
   public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
     $this->quickCleanup(['civicrm_uf_match']);
-    unset(CRM_Core_Config::singleton()->userPermissionClass->permissions);
     parent::tearDown();
   }
 
@@ -63,15 +33,14 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * @throws \CRM_Core_Exception
    */
   public function testGetPayment(): void {
-    $p = [
-      'contact_id' => $this->_individualId,
+    $contribution = $this->callAPISuccess('Contribution', 'create', [
+      'contact_id' => $this->individualCreate(),
       'receive_date' => '2010-01-20',
       'total_amount' => 100.00,
-      'financial_type_id' => $this->_financialTypeId,
+      'financial_type_id' => 'Donation',
       'trxn_id' => 23456,
       'contribution_status_id' => 1,
-    ];
-    $contribution = $this->callAPISuccess('contribution', 'create', $p);
+    ]);
 
     $params = [
       'contribution_id' => $contribution['id'],
@@ -83,7 +52,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     CRM_Core_Config::singleton()->userPermissionClass->permissions[] = 'access CiviContribute';
     $this->callAPISuccess('payment', 'get', $params);
 
-    $payment = $this->callAPIAndDocument('payment', 'get', $params, __FUNCTION__, __FILE__);
+    $payment = $this->callAPISuccess('payment', 'get', $params);
     $this->assertEquals(1, $payment['count']);
 
     $expectedResult = [
@@ -105,12 +74,10 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   /**
    * Test multiple payments for contribution and assert if option
    * and is_payment returns the correct list of payments.
-   *
-   * @throws \CRM_Core_Exception
    */
   public function testMultiplePaymentsForContribution(): void {
     $params = [
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'total_amount' => 100,
       'contribution_status_id' => 'Pending',
     ];
@@ -151,12 +118,11 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * Retrieve Payment using trxn_id.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function testGetPaymentWithTrxnID(): void {
     $individual2 = $this->individualCreate();
     $params1 = [
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'trxn_id' => 111111,
       'total_amount' => 10,
     ];
@@ -219,7 +185,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $contribution = $this->callAPISuccessGetSingle('Contribution', ['id' => $contribution['id']]);
     $this->assertNotEmpty($contribution['receipt_date']);
     $mut->checkMailLog([
-      'Price Field - Price Field 1        1   $ 100.00    $ 100.00',
+      'Fundraising Dinner -...            1    $100.00     $100.00',
       'event place',
       'streety street',
     ]);
@@ -231,12 +197,11 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * @throws \CRM_Core_Exception
    */
   public function testFullRefundWithPaymentAlreadyRefunded(): void {
-    $params1 = [
-      'contact_id' => $this->_individualId,
+    $contributionID1 = $this->contributionCreate([
+      'contact_id' => $this->individualCreate(),
       'trxn_id' => 111111,
       'total_amount' => 10,
-    ];
-    $contributionID1 = $this->contributionCreate($params1);
+    ]);
     $paymentParams = ['contribution_id' => $contributionID1];
     $this->callAPISuccess('Payment', 'create', ['total_amount' => '-10', 'contribution_id' => $contributionID1]);
     $this->callAPISuccess('payment', 'get', $paymentParams);
@@ -250,7 +215,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    */
   public function testNegativePaymentWithNegativeContribution(): void {
     $params1 = [
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'trxn_id' => 111111,
       'total_amount' => -10,
     ];
@@ -293,10 +258,10 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $mut->checkMailLog([
       'From: "FIXME" <info@EXAMPLE.ORG>',
       'Dear Anthony,',
-      'Total Fee: $ 300.00',
-      'This Payment Amount: $ 50.00',
+      'Total Fee: $300.00',
+      'This Payment Amount: $50.00',
       //150 was paid in the 1st payment.
-      'Balance Owed: $ 100.00',
+      'Balance Owed: $100.00',
       'Event Information and Location',
       'Paid By: Check',
       'Check Number: 345',
@@ -321,7 +286,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'contribution_id' => $contribution['id'],
       'total_amount' => 150,
     ];
-    $payment = $this->callAPISuccess('payment', 'create', $params);
+    $payment = $this->callAPISuccess('Payment', 'create', $params);
 
     // Here we set the email to an  invalid email & use check_permissions, domain email should be used.
     $email = $this->callAPISuccess('Email', 'create', ['contact_id' => 1, 'email' => 'bob@example.com']);
@@ -331,9 +296,9 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'From: "FIXME" <info@EXAMPLE.ORG>',
       'Dear Anthony,',
       'Below you will find a receipt for this payment.',
-      'Total Fee: $ 300.00',
-      'This Payment Amount: $ 150.00',
-      'Balance Owed: $ 0.00',
+      'Total Fee: $300.00',
+      'Total Paid: $300.00',
+      'This Payment Amount: $150.00',
       'Thank you for completing this payment.',
     ]);
   }
@@ -382,19 +347,17 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $mut->checkMailLog([
       'Dear Anthony,',
       'A refund has been issued based on changes in your registration selections.',
-      'Total Fee: $ 300' . $decimalSeparator . '00',
-      'Refund Amount: $ -30' . $decimalSeparator . '00',
+      'Total Fee: $300' . $decimalSeparator . '00',
+      'Refund Amount: -$30' . $decimalSeparator . '00',
       'Event Information and Location',
       'Paid By: Check',
       'Transaction Date: November 13th, 2018 12:01 PM',
-      'Total Paid: $ 170' . $decimalSeparator . '00',
+      'Total Paid: $170' . $decimalSeparator . '00',
     ]);
   }
 
   /**
    * Test adding a payment to a pending multi-line order.
-   *
-   * @throws \CRM_Core_Exception
    */
   public function testCreatePaymentPendingOrderNoLineItems(): void {
     $order = $this->createPendingParticipantOrder();
@@ -407,14 +370,13 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   /**
    * Test that Payment.create does not fail if the line items are missing.
    *
-   * In the original spec it was anticipated that financial items would not be created
-   * for pending contributions in some circumstances. We've backed away from this and
-   * I mostly could not find a way to do it through the UI. But I did seem to once &
-   * I want to be sure that if they ARE missing no fatal occurs so this tests
-   * that in an artificial way.
+   * In the original spec it was anticipated that financial items would not be
+   * created for pending contributions in some circumstances. We've backed away
+   * from this and I mostly could not find a way to do it through the UI. But I
+   * did seem to once & I want to be sure that if they ARE missing no fatal
+   * occurs so this tests that in an artificial way.
    *
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\Core\Exception\DBQueryException
    */
   public function testAddPaymentMissingFinancialItems(): void {
     $contribution = $this->callAPISuccess('Contribution', 'create', [
@@ -431,8 +393,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * Add participant with contribution
    *
    * @return array
-   *
-   * @throws \CRM_Core_Exception
    */
   protected function createPendingParticipantOrder(): array {
     return $this->callAPISuccess('Order', 'create', $this->getParticipantOrderParams());
@@ -451,7 +411,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'contribution_id' => $contribution['id'],
       'total_amount' => 50,
     ];
-    $payment = $this->callAPIAndDocument('payment', 'create', $params, __FUNCTION__, __FILE__);
+    $payment = $this->callAPISuccess('payment', 'create', $params);
     $this->checkPaymentIsValid($payment['id'], $contribution['id']);
 
     $params = [
@@ -506,8 +466,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    *
    * @param array $payment
    * @param array $expectedResult
-   *
-   * @throws \CRM_Core_Exception
    */
   public function checkPaymentResult(array $payment, array $expectedResult): void {
     $refreshedPayment = $this->callAPISuccessGetSingle('Payment', ['financial_trxn_id' => $payment['id']]);
@@ -534,7 +492,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     foreach ($lineItems as $id => $ignore) {
       $params['line_item'][] = [$id => array_pop($amounts)];
     }
-    $payment = $this->callAPIAndDocument('Payment', 'create', $params, __FUNCTION__, __FILE__, 'Payment with line item', 'CreatePaymentWithLineItems');
+    $payment = $this->callAPISuccess('Payment', 'create', $params);
     $this->checkPaymentIsValid($payment['id'], $contribution['id']);
 
     $params = [
@@ -593,14 +551,12 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
 
   /**
    * Test negative payment using create API.
-   *
-   * @throws \CRM_Core_Exception
    */
   public function testRefundPayment(): void {
     $result = $this->callAPISuccess('Contribution', 'create', [
       'financial_type_id' => 'Donation',
       'total_amount' => 100,
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
     ]);
     $contributionID = $result['id'];
 
@@ -632,14 +588,12 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
 
   /**
    * Test negative payment using create API when the "cancelled_payment_id" param is set.
-   *
-   * @throws \CRM_Core_Exception
    */
   public function testRefundPaymentWithCancelledPaymentId(): void {
     $result = $this->callAPISuccess('Contribution', 'create', [
       'financial_type_id' => 'Donation',
       'total_amount' => 100,
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
     ]);
     $contributionID = $result['id'];
 
@@ -681,7 +635,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
 
     array_push(CRM_Core_Config::singleton()->userPermissionClass->permissions, 'access CiviCRM', 'edit contributions');
 
-    $this->callAPIAndDocument('payment', 'cancel', $cancelParams, __FUNCTION__, __FILE__);
+    $this->callAPISuccess('payment', 'cancel', $cancelParams);
 
     $payment = $this->callAPISuccess('payment', 'get', $params);
     $this->assertEquals(2, $payment['count']);
@@ -713,7 +667,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $this->callAPIFailure('payment', 'delete', $deleteParams, 'API permission check failed for Payment/delete call; insufficient permission: require access CiviCRM and access CiviContribute and delete in CiviContribute');
 
     array_push(CRM_Core_Config::singleton()->userPermissionClass->permissions, 'access CiviCRM', 'delete in CiviContribute');
-    $this->callAPIAndDocument('payment', 'delete', $deleteParams, __FUNCTION__, __FILE__);
+    $this->callAPISuccess('payment', 'delete', $deleteParams);
     $this->callAPISuccessGetCount('payment', $params, 0);
 
     $this->callAPISuccess('Contribution', 'Delete', ['id' => $contribution['id']]);
@@ -789,7 +743,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $this->callAPIFailure('payment', 'create', $params, 'API permission check failed for Payment/create call; insufficient permission: require access CiviCRM and access CiviContribute and edit contributions');
 
     CRM_Core_Config::singleton()->userPermissionClass->permissions = ['administer CiviCRM', 'access CiviContribute', 'access CiviCRM', 'edit contributions'];
-    $payment = $this->callAPIAndDocument('payment', 'create', $params, __FUNCTION__, __FILE__, 'Update Payment', 'UpdatePayment');
+    $payment = $this->callAPISuccess('payment', 'create', $params);
 
     $this->validateAllPayments();
     // Check for proportional cancelled payment against line items.
@@ -848,9 +802,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   /**
    * Test that a contribution can be overpaid with the payment api.
    *
-   * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function testCreatePaymentOverPay(): void {
@@ -867,7 +819,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * Test create payment api for pay later contribution
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function testCreatePaymentPayLater(): void {
     $this->createLoggedInUser();
@@ -875,7 +826,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $contributionParams = [
       'total_amount' => 100,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 2,
       'is_pay_later' => 1,
@@ -932,9 +883,76 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test net amount is set when fee amount is passed in.
+   * Test create payment api for pay later contribution
    *
    * @throws \CRM_Core_Exception
+   */
+  public function testCreatePaymentMultipleTrxnID(): void {
+    $this->createLoggedInUser();
+    $processorID  = $this->paymentProcessorCreate();
+    $contributionParams = [
+      'total_amount' => 100,
+      'currency' => 'USD',
+      'contact_id' => $this->individualCreate(),
+      'financial_type_id' => 1,
+      'contribution_status_id' => 2,
+      'is_pay_later' => 1,
+      'trxn_id' => 'trxn_1',
+    ];
+    $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
+    //add payment for pay later transaction
+    $params = [
+      'contribution_id' => $contribution['id'],
+      'total_amount' => 100,
+      'card_type_id' => 'Visa',
+      'pan_truncation' => '1234',
+      'trxn_result_code' => 'Startling success',
+      'payment_instrument_id' => $processorID,
+      'trxn_id' => 'trxn_2',
+    ];
+    $payment = $this->callAPISuccess('Payment', 'create', $params);
+    $expectedResult = [
+      $payment['id'] => [
+        'from_financial_account_id' => 7,
+        'to_financial_account_id' => 6,
+        'total_amount' => 100,
+        'status_id' => 1,
+        'is_payment' => 1,
+        'card_type_id' => 1,
+        'pan_truncation' => '1234',
+        'trxn_result_code' => 'Startling success',
+        'trxn_id' => 'trxn_2',
+        'payment_instrument_id' => 1,
+      ],
+    ];
+    $this->checkPaymentResult($payment, $expectedResult);
+    // Check entity financial trxn created properly
+    $params = [
+      'entity_id' => $contribution['id'],
+      'entity_table' => 'civicrm_contribution',
+      'financial_trxn_id' => $payment['id'],
+    ];
+    $eft = $this->callAPISuccess('EntityFinancialTrxn', 'get', $params);
+    $this->assertEquals(100, $eft['values'][$eft['id']]['amount']);
+    $params = [
+      'entity_table' => 'civicrm_financial_item',
+      'financial_trxn_id' => $payment['id'],
+    ];
+    $eft = $this->callAPISuccess('EntityFinancialTrxn', 'get', $params);
+    $this->assertEquals(100, $eft['values'][$eft['id']]['amount']);
+    // Check contribution for completed status
+    $contribution = $this->callAPISuccess('contribution', 'get', ['id' => $contribution['id']]);
+    $this->assertEquals('Completed', $contribution['values'][$contribution['id']]['contribution_status']);
+    $this->assertEquals('trxn_1,trxn_2', $contribution['values'][$contribution['id']]['trxn_id']);
+    $this->assertEquals(100.00, $contribution['values'][$contribution['id']]['total_amount']);
+    $this->callAPISuccess('Contribution', 'Delete', [
+      'id' => $contribution['id'],
+    ]);
+    $this->validateAllPayments();
+  }
+
+  /**
+   * Test net amount is set when fee amount is passed in.
    */
   public function testNetAmount(): void {
     $order = $this->createPendingParticipantOrder();
@@ -963,7 +981,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $contributionParams = [
       'total_amount' => 100,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 2,
     ];
@@ -996,7 +1014,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * Test create payment api for failed contribution.
    *
    * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function testCreatePaymentOnFailedContribution(): void {
     $this->createLoggedInUser();
@@ -1004,7 +1021,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $contributionParams = [
       'total_amount' => 50,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 'Failed',
     ];
@@ -1031,7 +1048,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $contributionParams = [
       'total_amount' => 100,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 'Pending',
       'is_pay_later' => 1,
@@ -1081,8 +1098,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * @param $contributionID
    * @param $partialAmount
    * @param $totalAmount
-   *
-   * @throws \CRM_Core_Exception
    */
   public function createPartialPaymentOnContribution($contributionID, $partialAmount, $totalAmount): void {
     //Create partial payment
@@ -1120,16 +1135,13 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
 
   /**
    * Test create payment api for pay later contribution with partial payment.
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function testCreatePaymentPayLaterPartialPayment(): void {
     $this->createLoggedInUser();
     $contributionParams = [
       'total_amount' => 100,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 2,
       'is_pay_later' => 1,
@@ -1177,22 +1189,19 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'id' => $contribution['id'],
     ]);
     $this->callAPISuccess('OptionValue', 'get', ['name' => 'Completed', 'option_group_id' => 'contribution_status', 'api.OptionValue.create' => ['label' => 'Completed']]);
-    $this->callAPISuccessGetCount('Activity', ['target_contact_id' => $this->_individualId, 'activity_type_id' => 'Payment'], 2);
+    $this->callAPISuccessGetCount('Activity', ['target_contact_id' => $this->ids['Contact']['individual_0'], 'activity_type_id' => 'Payment'], 2);
   }
 
   /**
    * Test that Payment.create uses the to_account of the payment processor.
-   *
-   * @throws \CiviCRM_API3_Exception
-   * @throws \CRM_Core_Exception
    */
   public function testPaymentWithProcessorWithOddFinancialAccount(): void {
-    $processor = $this->dummyProcessorCreate(['financial_account_id' => 'Deposit Bank Account', 'payment_instrument_id' => 'Cash']);
-    $processor2 = $this->dummyProcessorCreate(['financial_account_id' => 'Payment Processor Account', 'name' => 'p2', 'payment_instrument_id' => 'EFT']);
+    $processor = $this->dummyProcessorCreate(['financial_account_id:name' => 'Deposit Bank Account', 'payment_instrument_id:name' => 'Cash']);
+    $processor2 = $this->dummyProcessorCreate(['financial_account_id:name' => 'Payment Processor Account', 'name' => 'p2', 'payment_instrument_id:name' => 'EFT']);
     $contributionParams = [
       'total_amount' => 100,
       'currency' => 'USD',
-      'contact_id' => $this->_individualId,
+      'contact_id' => $this->individualCreate(),
       'financial_type_id' => 1,
       'contribution_status_id' => 'Pending',
     ];
@@ -1225,7 +1234,7 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'is_primary' => 1,
     ];
     // api requires contact_id - perhaps incorrectly but use add to get past that.
-    $address = CRM_Core_BAO_Address::add($addressParams);
+    $address = CRM_Core_BAO_Address::writeRecord($addressParams);
 
     $location = $this->callAPISuccess('LocBlock', 'create', ['address_id' => $address->id]);
     $this->callAPISuccess('Event', 'create', [
@@ -1243,8 +1252,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    * @param int $paymentID
    * @param int $contributionID
    * @param int $amount
-   *
-   * @throws \CRM_Core_Exception
    */
   protected function checkPaymentIsValid(int $paymentID, int $contributionID, int $amount = 50): void {
     $payment = $this->callAPISuccess('Payment', 'getsingle', ['financial_trxn_id' => $paymentID]);
@@ -1285,9 +1292,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
    *
    * @see https://github.com/civicrm/civicrm-core/pull/17688
    * @see https://lab.civicrm.org/dev/financial/-/issues/139
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \CiviCRM_API3_Exception
    */
   public function testPaymentCreateTrxnIdAndDates(): void {
 

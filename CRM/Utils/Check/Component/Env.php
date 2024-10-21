@@ -251,9 +251,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       return $messages;
     }
 
-    $config = CRM_Core_Config::singleton();
-
-    if (in_array('CiviMail', $config->enableComponents) &&
+    if (CRM_Core_Component::isEnabled('CiviMail') &&
       CRM_Core_BAO_MailSettings::defaultDomain() == "EXAMPLE.ORG"
     ) {
       $message = new CRM_Utils_Check_Message(
@@ -589,7 +587,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
     try {
       $remotes = $extensionSystem->getBrowser()->getExtensions();
     }
-    catch (CRM_Extension_Exception $e) {
+    catch (CRM_Extension_Exception | \GuzzleHttp\Exception\GuzzleException $e) {
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__,
         $e->getMessage(),
@@ -600,9 +598,32 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       return $messages;
     }
 
-    $keys = array_keys($manager->getStatuses());
+    $stauses = $manager->getStatuses();
+    $keys = array_keys($stauses);
+    $enabled = array_keys(array_filter($stauses, function($status) {
+      return $status === CRM_Extension_Manager::STATUS_INSTALLED;
+    }));
+    // Extensions belonging to enabled components are required
+    $enabledComponents = array_map(['CRM_Utils_String', 'convertStringToSnakeCase'], Civi::settings()->get('enable_components'));
+    // And extensions tagged `mgmg:required` must be enabled
+    $requiredExtensions = array_merge($enabledComponents, $mapper->getKeysByTag('mgmt:required'));
     sort($keys);
-    $updates = $errors = $okextensions = [];
+    $updates = $errors = $okextensions = $missingRequired = [];
+
+    $extPrettyLabel = function($key) use ($mapper) {
+      // We definitely know a $key, but we may not have a $label.
+      // Which is too bad - because it would be nicer if $label could be the reliable start of the string.
+      $keyFmt = '<code>' . htmlentities($key) . '</code>';
+      try {
+        $info = $mapper->keyToInfo($key);
+        if ($info->label) {
+          return sprintf('"<em>%s</em>" (%s)', htmlentities($info->label), $keyFmt);
+        }
+      }
+      catch (CRM_Extension_Exception $ex) {
+        return "($keyFmt)";
+      }
+    };
 
     foreach ($keys as $key) {
       try {
@@ -615,11 +636,20 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       $row = CRM_Admin_Page_Extensions::createExtendedInfo($obj);
       switch ($row['status']) {
         case CRM_Extension_Manager::STATUS_INSTALLED_MISSING:
-          $errors[] = ts('%1 extension (%2) is installed but missing files.', [1 => $row['label'] ?? NULL, 2 => $key]);
+          $errors[] = ts('%1 is installed but missing files.', [1 => $extPrettyLabel($key)]);
           break;
 
         case CRM_Extension_Manager::STATUS_INSTALLED:
-          if (!empty($remotes[$key]) && version_compare($row['version'], $remotes[$key]->version, '<')) {
+          $missingDependencies = array_diff($row['requires'], $enabled);
+          if (!empty($row['requires']) && $missingDependencies) {
+            $errors[] = ts('%1 has a missing dependency on %2', [
+              1 => $extPrettyLabel($key),
+              2 => implode(', ', array_map($extPrettyLabel, $missingDependencies)),
+              'plural' => '%1 has missing dependencies: %2',
+              'count' => count($missingDependencies),
+            ]);
+          }
+          elseif (!empty($remotes[$key]) && version_compare($row['version'], $remotes[$key]->version, '<')) {
             $updates[] = $row['label'] . ': ' . $mapper->getUpgradeLink($remotes[$key], $row);
           }
           else {
@@ -634,7 +664,29 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
             }
           }
           break;
+
+        default:
+          if (in_array($key, $requiredExtensions, TRUE)) {
+            $missingRequired[$key] = $row['label'];
+          }
       }
+    }
+
+    if ($missingRequired) {
+      $requiredMessage = new CRM_Utils_Check_Message(
+        __FUNCTION__ . 'Required:' . implode(',', array_keys($missingRequired)),
+        ts('The extension %1 is required and must be enabled.', [1 => implode(', ', $missingRequired)]),
+        ts('Required Extension'),
+        \Psr\Log\LogLevel::ERROR,
+        'fa-exclamation-triangle'
+      );
+      $requiredMessage->addAction(
+        ts('Enable %1', [1 => implode(', ', $missingRequired)]),
+        '',
+        'api3',
+        ['Extension', 'install', ['keys' => array_keys($missingRequired)]]
+      );
+      $messages[] = $requiredMessage;
     }
 
     if (!$okextensions && !$updates && !$errors) {
@@ -652,8 +704,15 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
     if ($errors) {
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__ . 'Error',
-        '<ul><li>' . implode('</li><li>', $errors) . '</li></ul>',
-        ts('Extension Error'),
+          ts('There is one extension error:', [
+            'count' => count($errors),
+            'plural' => 'There are %count extension errors:',
+          ])
+          . '<ul><li>' . implode('</li><li>', $errors) . '</li></ul>'
+          . ts('To resolve any errors, go to <a %1>Manage Extensions</a>.', [
+            1 => 'href="' . CRM_Utils_System::url('civicrm/admin/extensions', 'reset=1') . '"',
+          ]),
+        ts('Extension Error', ['count' => count($errors), 'plural' => 'Extension Errors']),
         \Psr\Log\LogLevel::ERROR,
         'fa-plug'
       );
@@ -676,6 +735,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       else {
         $message = ts('All extensions are up-to-date:');
       }
+      natcasesort($okextensions);
       $messages[] = new CRM_Utils_Check_Message(
         __FUNCTION__ . 'Ok',
         $message . '<ul><li>' . implode('</li><li>', $okextensions) . '</li></ul>',
@@ -685,6 +745,92 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
       );
     }
 
+    return $messages;
+  }
+
+  /**
+   * Ensure that *some* CiviCRM components (component-extensions) are enabled.
+   *
+   * It is believed that some sites lost their list of active-components due to a flawed
+   * upgrade-step circa 5.62/5.63. The upgrade-step has been fixed (civicrm-core#27075),
+   * but some sites may still have bad configurations.
+   *
+   * This problem should generally be obvious after running web-based upgrader, but it's not obvious
+   * in scripted+CLI upgrades.
+   *
+   * @return array
+   * @throws \CRM_Core_Exception
+   * @throws \Civi\API\Exception\UnauthorizedException
+   */
+  public function checkComponents(): array {
+    $messages = [];
+
+    $setting = Civi::settings()->get('enable_components');
+    $exts = \Civi\Api4\Extension::get(FALSE)
+      ->addWhere('key', 'LIKE', 'civi_%')
+      ->addWhere('status', '=', 'installed')
+      ->execute()
+      ->indexBy('key')->column('status');
+    if (empty($setting) || empty($exts)) {
+      $messages[] = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        ts('None of the CiviCRM components are enabled. This is theoretically legal, but it is most likely a misconfiguration.<br/> Please inspect and re-save the <a %1>component settings</a>.', [
+          1 => sprintf('target="_blank" href="%s"', Civi::url('backend://civicrm/admin/setting/component?reset=1', 'ah')),
+        ]),
+        ts('Missing Components'),
+        \Psr\Log\LogLevel::WARNING,
+        'fa-server'
+      );
+    }
+
+    return $messages;
+  }
+
+  /**
+   * @return CRM_Utils_Check_Message[]
+   */
+  public function checkScheduledJobLogErrors() {
+    $jobs = civicrm_api3('Job', 'get', [
+      'sequential' => 1,
+      'return' => ["id", "name", "last_run"],
+      'is_active' => 1,
+      'options' => ['limit' => 0],
+    ]);
+    $html = '';
+    foreach ($jobs['values'] as $job) {
+      $lastExecutionMessage = civicrm_api3('JobLog', 'get', [
+        'sequential' => 1,
+        'return' => ["description"],
+        'job_id' => $job['id'],
+        'options' => ['sort' => "id desc", 'limit' => 1],
+      ])['values'][0]['description'] ?? NULL;
+      if (!empty($lastExecutionMessage) && strpos($lastExecutionMessage, 'Failure') !== FALSE) {
+        $viewLogURL = CRM_Utils_System::url('civicrm/admin/joblog', "jid={$job['id']}&reset=1");
+        $html .= '<tr>
+          <td>' . $job['name'] . ' </td>
+          <td>' . $lastExecutionMessage . '</td>
+          <td>' . $job['last_run'] . '</td>
+          <td><a href="' . $viewLogURL . '">' . ts('View Job Log') . '</a></td>
+        </tr>';
+      }
+    }
+    if (empty($html)) {
+      return [];
+    }
+
+    $message = '<p>' . ts('The following scheduled jobs failed on the last run:') . '</p>
+      <p><table><thead><tr><th>' . ts('Job') . '</th><th>' . ts('Message') . '</th><th>' . ts('Last Run') . '</th><th></th>
+      </tr></thead><tbody>' . $html . '
+      </tbody></table></p>';
+
+    $msg = new CRM_Utils_Check_Message(
+      __FUNCTION__,
+      $message,
+      ts('Scheduled Job Failures'),
+      \Psr\Log\LogLevel::WARNING,
+      'fa-server'
+    );
+    $messages[] = $msg;
     return $messages;
   }
 
@@ -927,7 +1073,7 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
     $messages = [];
     $version = CRM_Utils_SQL::getDatabaseVersion();
     $minRecommendedVersion = CRM_Upgrade_Incremental_General::MIN_RECOMMENDED_MYSQL_VER;
-    $mariaDbRecommendedVersion = '10.1';
+    $mariaDbRecommendedVersion = CRM_Upgrade_Incremental_General::MIN_RECOMMENDED_MARIADB_VER;
     $upcomingCiviChangeVersion = '5.34';
     if (version_compare(CRM_Utils_SQL::getDatabaseVersion(), $minRecommendedVersion, '<')) {
       $messages[] = new CRM_Utils_Check_Message(
@@ -956,6 +1102,27 @@ class CRM_Utils_Check_Component_Env extends CRM_Utils_Check_Component {
         \Psr\Log\LogLevel::WARNING,
         'fa-server'
       );
+    }
+    return $messages;
+  }
+
+  public function checkAngularModuleSettings() {
+    $messages = [];
+    $modules = Civi::container()->get('angular')->getModules();
+    foreach ($modules as $name => $module) {
+      if (!empty($module['settings'])) {
+        $messages[] = new CRM_Utils_Check_Message(
+          __FUNCTION__ . $name,
+          ts('The Angular file "%1" from extension "%2" must be updated to use "settingsFactory" instead of "settings". <a %3>Developer info...</a>', [
+            1 => $name,
+            2 => $module['ext'],
+            3 => 'target="_blank" href="https://github.com/civicrm/civicrm-core/pull/19052"',
+          ]),
+          ts('Unsupported Angular Setting'),
+          \Psr\Log\LogLevel::WARNING,
+          'fa-code'
+        );
+      }
     }
     return $messages;
   }

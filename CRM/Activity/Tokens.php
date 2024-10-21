@@ -20,18 +20,7 @@ use Civi\Token\Event\TokenValueEvent;
 use Civi\Token\TokenRow;
 
 /**
- * Class CRM_Member_Tokens
- *
  * Generate "activity.*" tokens.
- *
- * This TokenSubscriber was originally produced by refactoring the code from the
- * scheduled-reminder system with the goal of making that system
- * more flexible. The current implementation is still coupled to
- * scheduled-reminders. It would be good to figure out a more generic
- * implementation which is not tied to scheduled reminders, although
- * that is outside the current scope.
- *
- * This has been enhanced to work with PDF/letter merge
  */
 class CRM_Activity_Tokens extends CRM_Core_EntityTokens {
 
@@ -48,7 +37,7 @@ class CRM_Activity_Tokens extends CRM_Core_EntityTokens {
    * @inheritDoc
    */
   public function alterActionScheduleQuery(MailingQueryEvent $e): void {
-    if ($e->mapping->getEntity() !== $this->getExtendableTableName()) {
+    if ($e->mapping->getEntityTable($e->actionSchedule) !== $this->getExtendableTableName()) {
       return;
     }
 
@@ -81,43 +70,13 @@ class CRM_Activity_Tokens extends CRM_Core_EntityTokens {
       parent::evaluateToken($row, $entity, $realField, $prefetch);
       $row->format('text/plain')->tokens($entity, $field, $row->tokens['activity'][$realField]);
     }
-    elseif ($field === 'case_id') {
-      // An activity can be linked to multiple cases so case_id is always an array.
-      // We just return the first case ID for the token.
-      // this weird hack might exist because apiv3 is weird &
-      $caseID = CRM_Core_DAO::singleValueQuery('SELECT case_id FROM civicrm_case_activity WHERE activity_id = %1 LIMIT 1', [1 => [$activityId, 'Integer']]);
-      $row->tokens($entity, $field, $caseID ?? '');
-    }
     else {
       parent::evaluateToken($row, $entity, $field, $prefetch);
     }
   }
 
   /**
-   * Get tokens that are special or calculated for this enitty.
-   *
-   * @return array|array[]
-   */
-  protected function getBespokeTokens(): array {
-    $tokens = [];
-    if (array_key_exists('CiviCase', CRM_Core_Component::getEnabledComponents())) {
-      $tokens['case_id'] = ts('Activity Case ID');
-      return [
-        'case_id' => [
-          'title' => ts('Activity Case ID'),
-          'name' => 'case_id',
-          'type' => 'calculated',
-          'options' => NULL,
-          'data_type' => 'Integer',
-          'audience' => 'user',
-        ],
-      ];
-    }
-    return $tokens;
-  }
-
-  /**
-   * Get fields Fieldshistorically not advertised for tokens.
+   * Get fields historically not advertised for tokens.
    *
    * @return string[]
    */

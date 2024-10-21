@@ -24,7 +24,7 @@ trait WorkflowMessageTestTrait {
 
   /**
    * @return \Civi\Api4\Generic\AbstractGetAction
-   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function findExamples(): \Civi\Api4\Generic\AbstractGetAction {
     return \Civi\Api4\ExampleData::get(0)
@@ -71,6 +71,7 @@ trait WorkflowMessageTestTrait {
     if ($prefix === NULL) {
       $prefix = sprintf('[%s] ', $this->getWorkflowName());
     }
+    $this->assertEquals($refInstance->getWorkflowName(), $cmpInstance->getWorkflowName(), "{$prefix}Should have same workflow name)");
     $this->assertEquals($refInstance->export('tplParams'), $cmpInstance->export('tplParams'), "{$prefix}Should have same export(tplParams)");
     $this->assertEquals($refInstance->export('tokenContext'), $cmpInstance->export('tokenContext'), "{$prefix}should have same export(tokenContext)");
     $this->assertEquals($refInstance->export('envelope'), $cmpInstance->export('envelope'), "{$prefix}Should have same export(envelope)");

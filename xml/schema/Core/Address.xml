@@ -13,6 +13,11 @@
     <uniqueName>address_id</uniqueName>
     <type>int unsigned</type>
     <export>true</export>
+    <usage>
+      <import>false</import>
+      <export>true</export>
+      <duplicate_matching>false</duplicate_matching>
+    </usage>
     <title>Address ID</title>
     <required>true</required>
     <comment>Unique Address ID</comment>
@@ -64,9 +69,10 @@
   </index>
   <field>
     <name>is_primary</name>
-    <title>Primary address</title>
+    <title>Is Primary</title>
     <type>boolean</type>
     <default>0</default>
+    <required>true</required>
     <comment>Is this the primary address.</comment>
     <add>2.0</add>
     <html>
@@ -83,6 +89,7 @@
     <title>Is Billing Address</title>
     <type>boolean</type>
     <default>0</default>
+    <required>true</required>
     <comment>Is this the billing address.</comment>
     <add>2.0</add>
     <html>
@@ -266,6 +273,8 @@
       <keyColumn>id</keyColumn>
       <labelColumn>name</labelColumn>
       <abbrColumn>abbreviation</abbrColumn>
+      <!-- No 'name' suffix tells SearchKit to use Autocomplete. See #25053 -->
+      <suffixes>label,abbr</suffixes>
     </pseudoconstant>
     <html>
       <type>ChainSelect</type>
@@ -294,6 +303,8 @@
       <keyColumn>id</keyColumn>
       <labelColumn>name</labelColumn>
       <abbrColumn>abbreviation</abbrColumn>
+      <!-- No 'name' suffix tells SearchKit to use Autocomplete. See #25053 -->
+      <suffixes>label,abbr</suffixes>
     </pseudoconstant>
     <localize_context>province</localize_context>
     <html>
@@ -350,6 +361,7 @@
     <title>USPS Code</title>
     <type>varchar</type>
     <length>32</length>
+    <deprecated>true</deprecated>
     <comment>USPS Bulk mailing code.</comment>
     <add>1.1</add>
   </field>
@@ -364,6 +376,8 @@
       <labelColumn>name</labelColumn>
       <nameColumn>iso_code</nameColumn>
       <abbrColumn>iso_code</abbrColumn>
+      <!-- No 'name' suffix tells SearchKit to use Autocomplete. See #25053 -->
+      <suffixes>label,abbr</suffixes>
     </pseudoconstant>
     <localize_context>country</localize_context>
     <html>
@@ -418,6 +432,7 @@
     <title>Is Manually Geocoded</title>
     <type>boolean</type>
     <default>0</default>
+    <required>true</required>
     <comment>Is this a manually entered geo code</comment>
     <add>4.3</add>
     <html>

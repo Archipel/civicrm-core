@@ -7,14 +7,20 @@
  */
 
 /**
- * CiviCRM API wrapper function.
+ * The original API wrapper.
+ *
+ * @deprecated
+ * Not recommended for new code but ok for existing code to continue using.
+ *
+ * Calling `civicrm_api()` is functionally identical to `civicrm_api3()` or `civicrm_api4()` except:
+ *   1. It requires `$params['version']`.
+ *   2. It catches exceptions and returns an array like `['is_error' => 1, 'error_message' => ...]`.
+ * This is disfavored for typical business-logic/hooks/forms/etc.
+ * However, if an existing caller handles `civicrm_api()`-style errors, then there is no functional benefit to reworking it.
  *
  * @param string $entity
- *   type of entities to deal with
  * @param string $action
- *   create, get, delete or some special action name.
  * @param array $params
- *   array to be passed to function
  *
  * @return array|int|Civi\Api4\Generic\Result
  */
@@ -56,7 +62,7 @@ function civicrm_api(string $entity, string $action, array $params) {
  *     e.g. `$index = ['name' => 'title']` will return an array of strings - the 'title' field keyed by the 'name' field.
  *
  * @return \Civi\Api4\Generic\Result
- * @throws \API_Exception
+ * @throws \CRM_Core_Exception
  * @throws \Civi\API\Exception\NotImplementedException
  */
 function civicrm_api4(string $entity, string $action, array $params = [], $index = NULL) {
@@ -97,7 +103,7 @@ function civicrm_api4(string $entity, string $action, array $params = [], $index
   elseif (CRM_Utils_Rule::integer($index)) {
     $item = $result->itemAt($index);
     if (is_null($item)) {
-      throw new \API_Exception("Index $index not found in api results");
+      throw new \CRM_Core_Exception("Index $index not found in api results");
     }
     // Attempt to return a Result object if item is array, otherwise just return the item
     if (!is_array($item)) {
@@ -117,21 +123,19 @@ function civicrm_api4(string $entity, string $action, array $params = [], $index
  * Throws exception.
  *
  * @param string $entity
- *   Type of entities to deal with.
  * @param string $action
- *   Create, get, delete or some special action name.
  * @param array $params
- *   Array to be passed to function.
  *
- * @throws CiviCRM_API3_Exception
+ * @throws CRM_Core_Exception
  *
- * @return array
+ * @return array|int
+ *   Dependent on the $action
  */
 function civicrm_api3(string $entity, string $action, array $params = []) {
   $params['version'] = 3;
   $result = \Civi::service('civi_api_kernel')->runSafe($entity, $action, $params);
   if (is_array($result) && !empty($result['is_error'])) {
-    throw new CiviCRM_API3_Exception($result['error_message'], CRM_Utils_Array::value('error_code', $result, 'undefined'), $result);
+    throw new CRM_Core_Exception($result['error_message'], CRM_Utils_Array::value('error_code', $result, 'undefined'), $result);
   }
   return $result;
 }
@@ -158,10 +162,6 @@ function _civicrm_api3_api_getfields(&$apiRequest) {
   if (strtolower($apiRequest['action'] == 'getfields')) {
     // the main param getfields takes is 'action' - however this param is not compatible with REST
     // so we accept 'api_action' as an alias of action on getfields
-    if (!empty($apiRequest['params']['api_action'])) {
-      //  $apiRequest['params']['action'] = $apiRequest['params']['api_action'];
-      // unset($apiRequest['params']['api_action']);
-    }
     return ['action' => ['api.aliases' => ['api_action']]];
   }
   $getFieldsParams = ['action' => $apiRequest['action']];
@@ -179,7 +179,7 @@ function _civicrm_api3_api_getfields(&$apiRequest) {
  * 'format.is_success' => 1
  * will result in a boolean success /fail being returned if that is what you need.
  *
- * @param $result
+ * @param mixed $result
  *
  * @return bool
  *   true if error, false otherwise

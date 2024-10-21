@@ -70,7 +70,7 @@
 {/if}
 
 <tr>
-  {include file="CRM/Core/DatePickerRangeWrapper.tpl" fieldName="activity_date_time" colspan="2"}
+  {include file="CRM/Core/DatePickerRangeWrapper.tpl" fieldName="activity_date_time" to='' from='' colspan="2" hideRelativeLabel=0 class =''}
   <td>&nbsp;</td>
 </tr>
 <tr>
@@ -114,8 +114,8 @@
 {/if}
 
 {* campaign in activity search *}
-{include file="CRM/Campaign/Form/addCampaignToComponent.tpl"
-campaignContext="componentSearch" campaignTrClass='' campaignTdClass=''}
+{include file="CRM/Campaign/Form/addCampaignToSearch.tpl"
+campaignTrClass='' campaignTdClass=''}
 
 {if !empty($activityGroupTree)}
   <tr id="activityCustom">

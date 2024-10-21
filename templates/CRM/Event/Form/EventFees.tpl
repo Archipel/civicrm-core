@@ -56,9 +56,7 @@
       {assign var=isShowBillingBlock value=true}
         <tr class="crm-event-eventfees-form-block-record_contribution">
             <td class="label">{$form.record_contribution.label}</td>
-            <td>{$form.record_contribution.html}<br />
-                <span class="description">{ts}Check this box to enter payment information. You will also be able to generate a customized receipt.{/ts}</span>
-            </td>
+            <td>{$form.record_contribution.html}</td>
         </tr>
         <tr id="payment_information" class="crm-event-eventfees-form-block-payment_information">
            <td class ='html-adjust' colspan=2>
@@ -66,7 +64,7 @@
              <table id="recordContribution" class="form-layout" style="width:auto;">
                 <tr class="crm-event-eventfees-form-block-financial_type_id">
                     <td class="label">{$form.financial_type_id.label}<span class="crm-marker"> *</span></td>
-                    <td>{$form.financial_type_id.html}<br /><span class="description">{ts}Select the appropriate financial type for this payment.{/ts}</span></td>
+                    <td>{$form.financial_type_id.html}</td>
                 </tr>
                 <tr class="crm-event-eventfees-form-block-total_amount"><td class="label">{$form.total_amount.label}</td><td>{$form.total_amount.html}</td></tr>
                 <tr>
@@ -96,23 +94,25 @@
       <table class="form-layout" style="width:auto;">
          <tr class="crm-event-eventfees-form-block-send_receipt">
             <td class="label">{if $paid}{ts}Send Confirmation and Receipt{/ts}{else}{ts}Send Confirmation{/ts}{/if}</td>
-            <td>{$form.send_receipt.html}<br>
-              {if $paid}
-                <span class="description">{ts 1=$email}Automatically email a confirmation and receipt to %1?{/ts}</span></td>
-              {else}
-                <span class="description">{ts 1=$email}Automatically email a confirmation to %1?{/ts}</span></td>
+            <td>{$form.send_receipt.html}
+              {if $email}
+                {if $paid}
+                  <span class="description">{ts 1=$email}Automatically email a confirmation and receipt to %1?{/ts}</span></td>
+                {else}
+                  <span class="description">{ts 1=$email}Automatically email a confirmation to %1?{/ts}</span></td>
+                {/if}
               {/if}
         </tr>
         <tr id="from-email" class="crm-event-eventfees-form-block-from_email_address">
           <td class="label">{$form.from_email_address.label}</td>
-          <td>{$form.from_email_address.html} {help id="id-from_email" file="CRM/Contact/Form/Task/Email.hlp" isAdmin=$isAdmin}</td>
+          <td>{$form.from_email_address.html}  {help id="id-from_email" file="CRM/Contact/Form/Task/Help/Email/id-from_email.hlp"}</td>
         </tr>
         <tr id='notice' class="crm-event-eventfees-form-block-receipt_text">
         <td class="label">{$form.receipt_text.label}</td>
-          <td><span class="description">
-             {ts}Enter a message you want included at the beginning of the confirmation email. EXAMPLE: 'Thanks for registering for this event.'{/ts}
-             </span><br />
-             {$form.receipt_text.html|crmAddClass:huge}
+          <td>{$form.receipt_text.html|crmAddClass:huge}<br />
+             <span class="description">
+             {ts}Enter a message you want included at the beginning of the confirmation email.{/ts}
+             </span>
           </td>
         </tr>
       </table>
@@ -122,7 +122,7 @@
       <table class="form-layout" style="width:auto;">
        <tr class="crm-event-eventfees-form-block-send_receipt">
           <td class="label">{if $paid}{ts}Send Confirmation and Receipt{/ts}{else}{ts}Send Confirmation{/ts}{/if}</td>
-          <td>{$form.send_receipt.html}<br>
+          <td>{$form.send_receipt.html}
             {if $paid}
               <span class="description">{ts 1='<span id="email-address"></span>'}Automatically email a confirmation and receipt to %1?{/ts}</span>
             {else}
@@ -132,14 +132,15 @@
       </tr>
       <tr id="from-email" class="crm-event-eventfees-form-block-from_email_address">
         <td class="label">{$form.from_email_address.label}</td>
-        <td>{$form.from_email_address.html} {help id="id-from_email" file="CRM/Contact/Form/Task/Email.hlp" isAdmin=$isAdmin}</td>
+        <td>{$form.from_email_address.html} {help id="id-from_email" file="CRM/Contact/Form/Task/Help/Email/id-from_email.hlp"}</td>
       </tr>
       <tr id='notice' class="crm-event-eventfees-form-block-receipt_text">
         <td class="label">{$form.receipt_text.label}</td>
-        <td><span class="description">
-          {ts}Enter a message you want included at the beginning of the confirmation email. EXAMPLE: 'Thanks for registering for this event.'{/ts}
-           </span><br />
-          {$form.receipt_text.html|crmAddClass:huge}</td>
+          <td>{$form.receipt_text.html|crmAddClass:huge}<br />
+             <span class="description">
+             {ts}Enter a message you want included at the beginning of the confirmation email.{/ts}
+             </span>
+          </td>
         </tr>
       </table>
     </fieldset>

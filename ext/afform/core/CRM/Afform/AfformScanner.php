@@ -36,9 +36,8 @@ class CRM_Afform_AfformScanner {
    * @return array
    *   Ex: ['view-individual' => ['/var/www/foo/afform/view-individual']]
    */
-  public function findFilePaths() {
-    if (!CRM_Core_Config::singleton()->debug) {
-      // FIXME: Use a separate setting. Maybe use the asset-builder cache setting?
+  public function findFilePaths(): array {
+    if ($this->isUseCachedPaths()) {
       $paths = $this->cache->get('afformAllPaths');
       if ($paths !== NULL) {
         return $paths;
@@ -49,10 +48,9 @@ class CRM_Afform_AfformScanner {
 
     $mapper = CRM_Extension_System::singleton()->getMapper();
     foreach ($mapper->getModules() as $module) {
-      /** @var $module CRM_Core_Module */
       try {
         if ($module->is_active) {
-          $this->appendFilePaths($paths, dirname($mapper->keyToPath($module->name)) . DIRECTORY_SEPARATOR . 'ang', 20);
+          $this->appendFilePaths($paths, dirname($mapper->keyToPath($module->name)) . DIRECTORY_SEPARATOR . 'ang', $module->name);
         }
       }
       catch (CRM_Extension_Exception_MissingException $e) {
@@ -60,10 +58,26 @@ class CRM_Afform_AfformScanner {
       }
     }
 
-    $this->appendFilePaths($paths, $this->getSiteLocalPath(), 10);
+    $this->appendFilePaths($paths, $this->getSiteLocalPath(), '');
 
-    $this->cache->set('afformAllPaths', $paths);
+    if ($this->isUseCachedPaths()) {
+      $this->cache->set('afformAllPaths', $paths);
+    }
     return $paths;
+  }
+
+  /**
+   * Is the cache to be used.
+   *
+   * Skipping the cache helps developers moving files around & messes with developers
+   * debugging performance. It's a cruel world.
+   *
+   * FIXME: Use a separate setting. Maybe use the asset-builder cache setting?
+   *
+   * @return bool
+   */
+  private function isUseCachedPaths(): bool {
+    return !CRM_Core_Config::singleton()->debug;
   }
 
   /**
@@ -135,7 +149,7 @@ class CRM_Afform_AfformScanner {
       'is_dashlet' => FALSE,
       'is_public' => FALSE,
       'is_token' => FALSE,
-      'permission' => 'access CiviCRM',
+      'permission' => ['access CiviCRM'],
       'type' => 'system',
     ];
 
@@ -143,7 +157,7 @@ class CRM_Afform_AfformScanner {
     if ($metaFile !== NULL) {
       $r = array_merge($defaults, json_decode(file_get_contents($metaFile), 1));
       // Previous revisions of GUI allowed permission==''. array_merge() doesn't catch all forms of missing-ness.
-      if ($r['permission'] === '') {
+      if (empty($r['permission'])) {
         $r['permission'] = $defaults['permission'];
       }
       return $r;
@@ -157,23 +171,19 @@ class CRM_Afform_AfformScanner {
   }
 
   /**
-   * Adds has_local & has_base to an afform metadata record
+   * Adds base_module, has_local & has_base to an afform metadata record
    *
    * @param array $record
    */
   public function addComputedFields(&$record) {
     $name = $record['name'];
-    // Ex: $allPaths['viewIndividual'][0] == '/var/www/foo/afform/view-individual'].
+    // Ex: $allPaths['viewIndividual']['org.civicrm.foo'] == '/var/www/foo/afform/view-individual'].
     $allPaths = $this->findFilePaths()[$name] ?? [];
-    // $activeLayoutPath = $this->findFilePath($name, self::LAYOUT_FILE);
-    // $activeMetaPath = $this->findFilePath($name, self::METADATA_FILE);
-    $localLayoutPath = $this->createSiteLocalPath($name, self::LAYOUT_FILE);
-    $localMetaPath = $this->createSiteLocalPath($name, self::METADATA_FILE);
-
-    $record['has_local'] = file_exists($localLayoutPath) || file_exists($localMetaPath);
+    // Empty string key refers to the site local path
+    $record['has_local'] = isset($allPaths['']);
     if (!isset($record['has_base'])) {
-      $record['has_base'] = ($record['has_local'] && count($allPaths) > 1)
-        || (!$record['has_local'] && count($allPaths) > 0);
+      $record['base_module'] = \CRM_Utils_Array::first(array_filter(array_keys($allPaths)));
+      $record['has_base'] = !empty($record['base_module']);
     }
   }
 
@@ -211,16 +221,17 @@ class CRM_Afform_AfformScanner {
    *   Ex: ['foo' => [0 => '/var/www/org.example.foobar/ang']]
    * @param string $parent
    *   Ex: '/var/www/org.example.foobar/afform/'
-   * @param int $priority
-   *   Lower priority files override higher priority files.
+   * @param string $module
+   *   Name of module or '' empty string for local files.
    */
-  private function appendFilePaths(&$formPaths, $parent, $priority) {
+  private function appendFilePaths(&$formPaths, $parent, $module) {
     $files = preg_grep(self::FILE_REGEXP, (array) glob("$parent/*"));
 
     foreach ($files as $file) {
       $fileBase = preg_replace(self::FILE_REGEXP, '', $file);
       $name = basename($fileBase);
-      $formPaths[$name][$priority] = $fileBase;
+      $formPaths[$name][$module] = $fileBase;
+      // Local files get top priority
       ksort($formPaths[$name]);
     }
   }

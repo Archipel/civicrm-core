@@ -22,6 +22,7 @@ class CRM_Member_Form_Task_PDFLetterTest extends CiviUnitTestCase {
   public function tearDown(): void {
     $this->quickCleanUpFinancialEntities();
     CRM_Utils_Hook::singleton()->reset();
+    parent::tearDown();
   }
 
   /**
@@ -77,8 +78,8 @@ class CRM_Member_Form_Task_PDFLetterTest extends CiviUnitTestCase {
       }
     }
 
-    /* @var CRM_Member_Form_Task_PDFLetter $form */
-    $form = $this->getFormObject('CRM_Member_Form_Task_PDFLetter', [
+    /** @var CRM_Member_Form_Task_PDFLetter $form */
+    $form = $this->getSearchFormObject('CRM_Member_Form_Task_PDFLetter', [
       'subject' => '{contact.first_name} {membership.source}',
       'html_message' => $htmlMessage,
     ], NULL, $searchFormValues);
@@ -108,9 +109,9 @@ class CRM_Member_Form_Task_PDFLetterTest extends CiviUnitTestCase {
       'Test Fee' => 'fee',
       'Test Type' => 'membership_type_id:label',
       'Test Status' => 'status_id:label',
-      'Test Join Date' => 'join_date',
-      'Test Start Date' => 'start_date',
-      'Test End Date' => 'end_date',
+      'Test Member Since' => 'join_date',
+      'Test Membership Start Date' => 'start_date',
+      'Test Membership Expiration Date' => 'end_date',
     ];
 
     $html = '';

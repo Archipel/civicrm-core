@@ -2,8 +2,8 @@
 <tr class="crm-setting-form-block-{$setting_name}">
   <td class="label">{$form.$setting_name.label}</td>
   <td>
-    {if !empty($fieldSpec.wrapper_element)}
-      {$fieldSpec.wrapper_element.0}{$form.$setting_name.html}{$fieldSpec.wrapper_element.1}
+    {if array_key_exists('wrapper_element', $fieldSpec) && !empty($fieldSpec.wrapper_element)}
+      {$fieldSpec.wrapper_element.0|smarty:nodefaults}{$form.$setting_name.html}{$fieldSpec.wrapper_element.1|smarty:nodefaults}
     {else}
       {$form.$setting_name.html}
     {/if}

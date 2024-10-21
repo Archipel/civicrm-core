@@ -62,10 +62,15 @@ class CRM_Core_Payment_ProcessorForm {
 
     $form->assign('currency', $form->getCurrency());
 
+    $form->assign('paymentAgreementTitle', $form->_paymentProcessor['object']->getText('agreementTitle', []));
+    $form->assign('paymentAgreementText', $form->_paymentProcessor['object']->getText('agreementText', []));
+
     // also set cancel subscription url
     if (!empty($form->_paymentProcessor['is_recur']) && !empty($form->_values['is_recur'])) {
       $form->_values['cancelSubscriptionUrl'] = $form->_paymentObject->subscriptionURL(NULL, NULL, 'cancel');
     }
+
+    $paymentProcessorBillingFields = array_keys($form->_paymentProcessor['object']->getBillingAddressFields());
 
     if (!empty($form->_values['custom_pre_id'])) {
       $profileAddressFields = [];
@@ -73,7 +78,7 @@ class CRM_Core_Payment_ProcessorForm {
         NULL, FALSE, NULL, CRM_Core_Permission::CREATE, NULL);
 
       foreach ((array) $fields as $key => $value) {
-        CRM_Core_BAO_UFField::assignAddressField($key, $profileAddressFields, ['uf_group_id' => $form->_values['custom_pre_id']]);
+        CRM_Core_BAO_UFField::assignAddressField($key, $profileAddressFields, ['uf_group_id' => $form->_values['custom_pre_id']], $paymentProcessorBillingFields);
       }
       if (count($profileAddressFields)) {
         $form->set('profileAddressFields', $profileAddressFields);

@@ -21,15 +21,17 @@ class CRM_Api4_Page_Api4Explorer extends CRM_Core_Page {
 
   public function run() {
     $apiDoc = new ReflectionFunction('civicrm_api4');
-    $groupOptions = civicrm_api4('Group', 'getFields', ['loadOptions' => TRUE, 'select' => ['options', 'name'], 'where' => [['name', 'IN', ['visibility', 'group_type']]]]);
+    $extensions = \CRM_Extension_System::singleton()->getMapper();
 
     $vars = [
       'operators' => CoreUtil::getOperators(),
       'basePath' => Civi::resources()->getUrl('civicrm'),
       'schema' => (array) \Civi\Api4\Entity::get()->setChain(['fields' => ['$name', 'getFields']])->execute(),
       'docs' => \Civi\Api4\Utils\ReflectionUtils::parseDocBlock($apiDoc->getDocComment()),
-      'functions' => self::getSqlFunctions(),
-      'groupOptions' => array_column((array) $groupOptions, 'options', 'name'),
+      'functions' => CoreUtil::getSqlFunctions(),
+      'authxEnabled' => $extensions->isActiveModule('authx'),
+      'suffixes' => \Civi\Api4\Utils\FormattingUtil::$pseudoConstantSuffixes,
+      'restUrl' => rtrim(CRM_Utils_System::url('civicrm/ajax/api4/CRMAPI4ENTITY/CRMAPI4ACTION', NULL, TRUE, NULL, FALSE, TRUE), '/'),
     ];
     Civi::resources()
       ->addVars('api4', $vars)
@@ -43,31 +45,6 @@ class CRM_Api4_Page_Api4Explorer extends CRM_Core_Page {
       ->useApp(['defaultRoute' => '/explorer']);
 
     parent::run();
-  }
-
-  /**
-   * Gets info about all available sql functions
-   * @return array
-   */
-  public static function getSqlFunctions() {
-    $fns = [];
-    foreach (glob(Civi::paths()->getPath('[civicrm.root]/Civi/Api4/Query/SqlFunction*.php')) as $file) {
-      $matches = [];
-      if (preg_match('/(SqlFunction[A-Z_]+)\.php$/', $file, $matches)) {
-        $className = '\Civi\Api4\Query\\' . $matches[1];
-        if (is_subclass_of($className, '\Civi\Api4\Query\SqlFunction')) {
-          $fns[] = [
-            'name' => $className::getName(),
-            'title' => $className::getTitle(),
-            'description' => $className::getDescription(),
-            'params' => $className::getParams(),
-            'category' => $className::getCategory(),
-            'dataType' => $className::getDataType(),
-          ];
-        }
-      }
-    }
-    return $fns;
   }
 
 }

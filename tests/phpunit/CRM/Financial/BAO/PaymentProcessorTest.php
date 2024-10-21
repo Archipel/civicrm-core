@@ -20,7 +20,7 @@ class CRM_Financial_BAO_PaymentProcessorTest extends CiviUnitTestCase {
   /**
    * Check method create()
    */
-  public function testGetCreditCards() {
+  public function testGetCreditCards(): void {
     $params = [
       'name' => 'API_Test_PP_Type',
       'title' => 'API Test Payment Processor Type',
@@ -48,11 +48,10 @@ class CRM_Financial_BAO_PaymentProcessorTest extends CiviUnitTestCase {
   /**
    * Test the processor retrieval function.
    *
-   * @throws \API_Exception
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function testGetProcessors() {
+  public function testGetProcessors(): void {
     $testProcessor = $this->dummyProcessorCreate();
     $testProcessorID = $testProcessor->getID();
     $liveProcessorID = $testProcessorID + 1;
@@ -91,7 +90,7 @@ class CRM_Financial_BAO_PaymentProcessorTest extends CiviUnitTestCase {
   /**
    * Test the Manual processor supports 'NoEmailProvided'
    */
-  public function testManualProcessorSupportsNoEmailProvided() {
+  public function testManualProcessorSupportsNoEmailProvided(): void {
     $processors = CRM_Financial_BAO_PaymentProcessor::getPaymentProcessors(['NoEmailProvided']);
     $found = FALSE;
     foreach ($processors as $processor) {

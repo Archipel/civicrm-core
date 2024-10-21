@@ -13,16 +13,20 @@
 namespace Civi\Api4\Service\Schema;
 
 use Civi\Api4\Entity;
-use Civi\Api4\Event\Events;
 use Civi\Api4\Event\SchemaMapBuildEvent;
 use Civi\Api4\Service\Schema\Joinable\CustomGroupJoinable;
 use Civi\Api4\Service\Schema\Joinable\Joinable;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Civi\Core\Service\AutoService;
+use Civi\Core\CiviEventDispatcherInterface;
 use CRM_Core_DAO_AllCoreTables as AllCoreTables;
 
-class SchemaMapBuilder {
+/**
+ * @service schema_map_builder
+ */
+class SchemaMapBuilder extends AutoService {
+
   /**
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
+   * @var \Civi\Core\CiviEventDispatcherInterface
    */
   protected $dispatcher;
   /**
@@ -31,9 +35,10 @@ class SchemaMapBuilder {
   protected $apiEntities;
 
   /**
-   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $dispatcher
+   * @inject dispatcher
+   * @param \Civi\Core\CiviEventDispatcherInterface $dispatcher
    */
-  public function __construct(EventDispatcherInterface $dispatcher) {
+  public function __construct(CiviEventDispatcherInterface $dispatcher) {
     $this->dispatcher = $dispatcher;
     $this->apiEntities = array_keys((array) Entity::get(FALSE)->addSelect('name')->execute()->indexBy('name'));
   }
@@ -46,7 +51,7 @@ class SchemaMapBuilder {
     $this->loadTables($map);
 
     $event = new SchemaMapBuildEvent($map);
-    $this->dispatcher->dispatch(Events::SCHEMA_MAP_BUILD, $event);
+    $this->dispatcher->dispatch('api.schema_map.build', $event);
 
     return $map;
   }
@@ -58,9 +63,9 @@ class SchemaMapBuilder {
    */
   private function loadTables(SchemaMap $map) {
     /** @var \CRM_Core_DAO $daoName */
-    foreach (AllCoreTables::get() as $daoName => $data) {
+    foreach (AllCoreTables::get() as $data) {
       $table = new Table($data['table']);
-      foreach ($daoName::fields() as $fieldData) {
+      foreach ($data['class']::fields() as $fieldData) {
         $this->addJoins($table, $fieldData['name'], $fieldData);
       }
       $map->addTable($table);
@@ -82,14 +87,6 @@ class SchemaMapBuilder {
     if ($fkClass) {
       $tableName = AllCoreTables::getTableForClass($fkClass);
       $fkKey = $data['FKKeyColumn'] ?? 'id';
-      // Backward-compatibility for older api calls using e.g. "contact" instead of "contact_id"
-      if (strpos($field, '_id')) {
-        $alias = str_replace('_id', '', $field);
-        $joinable = new Joinable($tableName, $fkKey, $alias);
-        $joinable->setJoinType($joinable::JOIN_TYPE_MANY_TO_ONE);
-        $joinable->setDeprecated();
-        $table->addTableLink($field, $joinable);
-      }
       $joinable = new Joinable($tableName, $fkKey, $field);
       $joinable->setJoinType($joinable::JOIN_TYPE_MANY_TO_ONE);
       $table->addTableLink($field, $joinable);
@@ -107,9 +104,15 @@ class SchemaMapBuilder {
     if (!$customInfo) {
       return;
     }
+    $select = ['f.name', 'f.data_type', 'f.label', 'f.column_name', 'f.option_group_id', 'f.serialize', 'f.fk_entity'];
+    // Prevent errors during upgrade by only selecting fields supported by the current version
+    $supportedFields = \CRM_Utils_Array::prefixKeys(\CRM_Core_BAO_CustomField::getSupportedFields(), 'f.');
+    $select = array_intersect($select, array_keys($supportedFields));
+    // Also select fields from the custom_group table (these fields are so old we don't have to worry about upgrade issues)
+    $select = array_merge(['g.name as custom_group_name', 'g.table_name', 'g.is_multiple'], $select);
     $fieldData = \CRM_Utils_SQL_Select::from('civicrm_custom_field f')
       ->join('custom_group', 'INNER JOIN civicrm_custom_group g ON g.id = f.custom_group_id')
-      ->select(['g.name as custom_group_name', 'g.table_name', 'g.is_multiple', 'f.name', 'f.data_type', 'label', 'column_name', 'option_group_id', 'serialize'])
+      ->select($select)
       ->where('g.extends IN (@entity)', ['@entity' => $customInfo['extends']])
       ->where('g.is_active')
       ->where('f.is_active')
@@ -136,6 +139,12 @@ class SchemaMapBuilder {
       if (!empty($fieldData->is_multiple)) {
         $joinable = new Joinable($baseTable->getName(), $customInfo['column'], AllCoreTables::convertEntityNameToLower($entityName));
         $customTable->addTableLink('entity_id', $joinable);
+      }
+
+      if ($fieldData->data_type === 'EntityReference' && isset($fieldData->fk_entity)) {
+        $targetTable = AllCoreTables::getTableForEntityName($fieldData->fk_entity);
+        $joinable = new Joinable($targetTable, 'id', $fieldData->name);
+        $customTable->addTableLink($fieldData->column_name, $joinable);
       }
 
       if ($fieldData->data_type === 'ContactReference') {

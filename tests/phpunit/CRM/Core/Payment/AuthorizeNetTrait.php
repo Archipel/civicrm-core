@@ -51,7 +51,7 @@ trait CRM_Core_Payment_AuthorizeNetTrait {
    *
    * @param int|null $id
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function setupMockHandler($id = NULL) {
     if ($id) {
@@ -75,7 +75,7 @@ trait CRM_Core_Payment_AuthorizeNetTrait {
   /**
    * Create an AuthorizeNet processors with a configured mock handler.
    *
-   * @throws \CiviCRM_API3_Exception
+   * @throws \CRM_Core_Exception
    */
   protected function createAuthorizeNetProcessor() {
     $processorID = $this->paymentProcessorAuthorizeNetCreate(['is_test' => FALSE]);
@@ -88,7 +88,7 @@ trait CRM_Core_Payment_AuthorizeNetTrait {
    *
    * @param array $expected
    */
-  protected function assertRequestValid($expected = []) {
+  protected function assertRequestValid(array $expected = []): void {
     $expected = array_merge([
       'x_card_num' => '4111111111111111',
       'x_card_code' => 123,

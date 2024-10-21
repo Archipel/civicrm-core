@@ -7,6 +7,13 @@
   <add>1.8</add>
   <log>true</log>
   <component>CiviContribute</component>
+  <paths>
+    <add>civicrm/admin/price/field/edit?reset=1&amp;action=add&amp;sid=[price_set_id]</add>
+    <update>civicrm/admin/price/field/edit?reset=1&amp;action=update&amp;sid=[price_set_id]&amp;fid=[id]</update>
+    <delete>civicrm/admin/price/field/edit?reset=1&amp;action=delete&amp;sid=[price_set_id]&amp;fid=[id]</delete>
+    <preview>civicrm/admin/price/field/edit?reset=1&amp;action=preview&amp;sid=[price_set_id]&amp;fid=[id]</preview>
+    <browse>civicrm/admin/price/field</browse>
+  </paths>
   <field>
     <name>id</name>
     <title>Price Field ID</title>
@@ -35,7 +42,7 @@
       <labelColumn>title</labelColumn>
     </pseudoconstant>
     <html>
-      <type>Select</type>
+      <type>EntityRef</type>
       <label>Price Set</label>
     </html>
     <add>1.8</add>
@@ -95,6 +102,7 @@
     <title>Price Field Quantity Required?</title>
     <type>boolean</type>
     <default>0</default>
+    <required>true</required>
     <comment>Enter a quantity for this field?</comment>
     <add>1.8</add>
     <html>
@@ -143,6 +151,7 @@
     <title>Price Field Show Amounts?</title>
     <type>boolean</type>
     <default>1</default>
+    <required>true</required>
     <comment>Should the price be displayed next to the label for each option?</comment>
     <html>
       <type>CheckBox</type>
@@ -165,9 +174,11 @@
     <type>boolean</type>
     <comment>Is this price field active</comment>
     <default>1</default>
+    <required>true</required>
     <add>1.8</add>
     <html>
       <type>CheckBox</type>
+      <label>Enabled</label>
     </html>
   </field>
   <field>
@@ -176,6 +187,7 @@
     <type>boolean</type>
     <comment>Is this price field required (value must be > 1)</comment>
     <default>1</default>
+    <required>true</required>
     <add>1.8</add>
     <html>
       <type>CheckBox</type>
