@@ -405,7 +405,6 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     error_reporting(E_ALL);
 
     $this->renameLabels();
-    $this->_sethtmlGlobals();
     $this->ensureMySQLMode(['IGNORE_SPACE', 'ERROR_FOR_DIVISION_BY_ZERO', 'STRICT_TRANS_TABLES']);
   }
 
@@ -487,37 +486,37 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   /**
    * Create default domain contacts for the two domains added during test class.
    * database population.
-   *
-   * @throws \API_Exception
    */
   public function createDomainContacts(): void {
-    $this->organizationCreate(['api.Email.create' => ['email' => 'fixme.domainemail@example.org']]);
-    $this->organizationCreate([
-      'organization_name' => 'Second Domain',
-      'api.Email.create' => ['email' => 'domainemail2@example.org'],
-      'api.Address.create' => [
-        'street_address' => '15 Main St',
-        'location_type_id' => 1,
-        'city' => 'Collinsville',
-        'country_id' => 1228,
-        'state_province_id' => 1003,
-        'postal_code' => 6022,
-      ],
-    ]);
-    OptionValue::replace(FALSE)->addWhere(
-      'option_group_id:name', '=', 'from_email_address'
-    )->setDefaults([
-      'is_default' => 1,
-      'name' => '"FIXME" <info@EXAMPLE.ORG>',
-      'label' => '"FIXME" <info@EXAMPLE.ORG>',
-    ])->setRecords([['domain_id' => 1], ['domain_id' => 2]])->execute();
+    try {
+      $this->organizationCreate(['api.Email.create' => ['email' => 'fixme.domainemail@example.org']]);
+      $this->organizationCreate([
+        'organization_name' => 'Second Domain',
+        'api.Email.create' => ['email' => 'domainemail2@example.org'],
+        'api.Address.create' => [
+          'street_address' => '15 Main St',
+          'location_type_id' => 1,
+          'city' => 'Collinsville',
+          'country_id' => 1228,
+          'state_province_id' => 1003,
+          'postal_code' => 6022,
+        ],
+      ]);
+      OptionValue::replace(FALSE)->addWhere(
+        'option_group_id:name', '=', 'from_email_address'
+      )->setDefaults([
+        'is_default' => 1,
+        'name' => '"FIXME" <info@EXAMPLE.ORG>',
+        'label' => '"FIXME" <info@EXAMPLE.ORG>',
+      ])->setRecords([['domain_id' => 1], ['domain_id' => 2]])->execute();
+    }
+    catch (API_Exception $e) {
+      $this->fail('failed to re-instate domain contacts ' . $e->getMessage());
+    }
   }
 
   /**
    *  Common teardown functions for all unit tests.
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \API_Exception
    */
   protected function tearDown(): void {
     $this->_apiversion = 3;
@@ -855,7 +854,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @return int
    *   $id of participant created
    */
-  public function participantCreate($params = []) {
+  public function participantCreate(array $params = []) {
     if (empty($params['contact_id'])) {
       $params['contact_id'] = $this->individualCreate();
     }
@@ -1097,9 +1096,8 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *   Name-value pair for an event.
    *
    * @return array
-   * @throws \CRM_Core_Exception
    */
-  public function eventCreate($params = []) {
+  public function eventCreate(array $params = []): array {
     // if no contact was passed, make up a dummy event creator
     if (!isset($params['contact_id'])) {
       $params['contact_id'] = $this->_contactCreate([
@@ -1113,7 +1111,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $params = array_merge([
       'title' => 'Annual CiviCRM meet',
       'summary' => 'If you have any CiviCRM related issues or want to track where CiviCRM is heading, Sign up now',
-      'description' => 'This event is intended to give brief idea about progess of CiviCRM and giving solutions to common user issues',
+      'description' => 'This event is intended to give brief idea about progress of CiviCRM and giving solutions to common user issues',
       'event_type_id' => 1,
       'is_public' => 1,
       'start_date' => 20081021,
@@ -1129,7 +1127,9 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
       'is_email_confirm' => 1,
     ], $params);
 
-    return $this->callAPISuccess('Event', 'create', $params);
+    $event = $this->callAPISuccess('Event', 'create', $params);
+    $this->ids['event'][] = $event['id'];
+    return $event;
   }
 
   /**
@@ -1857,13 +1857,10 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *
    * @param array $tablesToTruncate
    * @param bool $dropCustomValueTables
-   *
-   * @throws \CRM_Core_Exception
-   * @throws \API_Exception
    */
-  public function quickCleanup($tablesToTruncate, $dropCustomValueTables = FALSE) {
+  public function quickCleanup(array $tablesToTruncate, $dropCustomValueTables = FALSE): void {
     if ($this->tx) {
-      throw new \CRM_Core_Exception("CiviUnitTestCase: quickCleanup() is not compatible with useTransaction()");
+      $this->fail('CiviUnitTestCase: quickCleanup() is not compatible with useTransaction()');
     }
     if ($dropCustomValueTables) {
       $this->cleanupCustomGroups();
@@ -1874,20 +1871,18 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
 
     $tablesToTruncate = array_unique(array_merge($this->_tablesToTruncate, $tablesToTruncate));
 
-    CRM_Core_DAO::executeQuery("SET FOREIGN_KEY_CHECKS = 0;");
+    CRM_Core_DAO::executeQuery('SET FOREIGN_KEY_CHECKS = 0;');
     foreach ($tablesToTruncate as $table) {
       $sql = "TRUNCATE TABLE $table";
       CRM_Core_DAO::executeQuery($sql);
     }
-    CRM_Core_DAO::executeQuery("SET FOREIGN_KEY_CHECKS = 1;");
+    CRM_Core_DAO::executeQuery('SET FOREIGN_KEY_CHECKS = 1;');
   }
 
   /**
    * Clean up financial entities after financial tests (so we remember to get all the tables :-))
-   *
-   * @throws \CRM_Core_Exception
    */
-  public function quickCleanUpFinancialEntities() {
+  public function quickCleanUpFinancialEntities(): void {
     $tablesToTruncate = [
       'civicrm_activity',
       'civicrm_activity_contact',
@@ -1923,9 +1918,19 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $this->restoreDefaultPriceSetConfig();
     $this->disableTaxAndInvoicing();
     $this->setCurrencySeparators(',');
-    FinancialType::delete(FALSE)->addWhere(
-      'name', 'NOT IN', ['Donation' , 'Member Dues', 'Campaign Contribution', 'Event Fee']
-    )->execute();
+    try {
+      FinancialType::delete(FALSE)->addWhere(
+        'name', 'NOT IN', [
+          'Donation',
+          'Member Dues',
+          'Campaign Contribution',
+          'Event Fee',
+        ]
+      )->execute();
+    }
+    catch (API_Exception $e) {
+      $this->fail('failed to cleanup financial types ' . $e->getMessage());
+    }
     CRM_Core_PseudoConstant::flush('taxRates');
     System::singleton()->flushProcessors();
     // @fixme this parameter is leaking - it should not be defined as a class static
@@ -2243,178 +2248,6 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   }
 
   /**
-   * FIXME: something NULLs $GLOBALS['_HTML_QuickForm_registered_rules'] when the tests are ran all together
-   * (NB unclear if this is still required)
-   */
-  public function _sethtmlGlobals() {
-    $GLOBALS['_HTML_QuickForm_registered_rules'] = [
-      'required' => [
-        'html_quickform_rule_required',
-        'HTML/QuickForm/Rule/Required.php',
-      ],
-      'maxlength' => [
-        'html_quickform_rule_range',
-        'HTML/QuickForm/Rule/Range.php',
-      ],
-      'minlength' => [
-        'html_quickform_rule_range',
-        'HTML/QuickForm/Rule/Range.php',
-      ],
-      'rangelength' => [
-        'html_quickform_rule_range',
-        'HTML/QuickForm/Rule/Range.php',
-      ],
-      'email' => [
-        'html_quickform_rule_email',
-        'HTML/QuickForm/Rule/Email.php',
-      ],
-      'regex' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'lettersonly' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'alphanumeric' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'numeric' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'nopunctuation' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'nonzero' => [
-        'html_quickform_rule_regex',
-        'HTML/QuickForm/Rule/Regex.php',
-      ],
-      'callback' => [
-        'html_quickform_rule_callback',
-        'HTML/QuickForm/Rule/Callback.php',
-      ],
-      'compare' => [
-        'html_quickform_rule_compare',
-        'HTML/QuickForm/Rule/Compare.php',
-      ],
-    ];
-    // FIXME: …ditto for $GLOBALS['HTML_QUICKFORM_ELEMENT_TYPES']
-    $GLOBALS['HTML_QUICKFORM_ELEMENT_TYPES'] = [
-      'group' => [
-        'HTML/QuickForm/group.php',
-        'HTML_QuickForm_group',
-      ],
-      'hidden' => [
-        'HTML/QuickForm/hidden.php',
-        'HTML_QuickForm_hidden',
-      ],
-      'reset' => [
-        'HTML/QuickForm/reset.php',
-        'HTML_QuickForm_reset',
-      ],
-      'checkbox' => [
-        'HTML/QuickForm/checkbox.php',
-        'HTML_QuickForm_checkbox',
-      ],
-      'file' => [
-        'HTML/QuickForm/file.php',
-        'HTML_QuickForm_file',
-      ],
-      'image' => [
-        'HTML/QuickForm/image.php',
-        'HTML_QuickForm_image',
-      ],
-      'password' => [
-        'HTML/QuickForm/password.php',
-        'HTML_QuickForm_password',
-      ],
-      'radio' => [
-        'HTML/QuickForm/radio.php',
-        'HTML_QuickForm_radio',
-      ],
-      'button' => [
-        'HTML/QuickForm/button.php',
-        'HTML_QuickForm_button',
-      ],
-      'submit' => [
-        'HTML/QuickForm/submit.php',
-        'HTML_QuickForm_submit',
-      ],
-      'select' => [
-        'HTML/QuickForm/select.php',
-        'HTML_QuickForm_select',
-      ],
-      'hiddenselect' => [
-        'HTML/QuickForm/hiddenselect.php',
-        'HTML_QuickForm_hiddenselect',
-      ],
-      'text' => [
-        'HTML/QuickForm/text.php',
-        'HTML_QuickForm_text',
-      ],
-      'textarea' => [
-        'HTML/QuickForm/textarea.php',
-        'HTML_QuickForm_textarea',
-      ],
-      'fckeditor' => [
-        'HTML/QuickForm/fckeditor.php',
-        'HTML_QuickForm_FCKEditor',
-      ],
-      'tinymce' => [
-        'HTML/QuickForm/tinymce.php',
-        'HTML_QuickForm_TinyMCE',
-      ],
-      'dojoeditor' => [
-        'HTML/QuickForm/dojoeditor.php',
-        'HTML_QuickForm_dojoeditor',
-      ],
-      'link' => [
-        'HTML/QuickForm/link.php',
-        'HTML_QuickForm_link',
-      ],
-      'advcheckbox' => [
-        'HTML/QuickForm/advcheckbox.php',
-        'HTML_QuickForm_advcheckbox',
-      ],
-      'date' => [
-        'HTML/QuickForm/date.php',
-        'HTML_QuickForm_date',
-      ],
-      'static' => [
-        'HTML/QuickForm/static.php',
-        'HTML_QuickForm_static',
-      ],
-      'header' => [
-        'HTML/QuickForm/header.php',
-        'HTML_QuickForm_header',
-      ],
-      'html' => [
-        'HTML/QuickForm/html.php',
-        'HTML_QuickForm_html',
-      ],
-      'hierselect' => [
-        'HTML/QuickForm/hierselect.php',
-        'HTML_QuickForm_hierselect',
-      ],
-      'autocomplete' => [
-        'HTML/QuickForm/autocomplete.php',
-        'HTML_QuickForm_autocomplete',
-      ],
-      'xbutton' => [
-        'HTML/QuickForm/xbutton.php',
-        'HTML_QuickForm_xbutton',
-      ],
-      'advmultiselect' => [
-        'HTML/QuickForm/advmultiselect.php',
-        'HTML_QuickForm_advmultiselect',
-      ],
-    ];
-  }
-
-  /**
    * Set up an acl allowing contact to see 2 specified groups
    *  - $this->_permissionedGroup & $this->_permissionedDisabledGroup
    *
@@ -2582,7 +2415,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @param array $recurParams (Optional)
    * @param array $contributionParams (Optional)
    */
-  public function setupRecurringPaymentProcessorTransaction($recurParams = [], $contributionParams = []): void {
+  public function setupRecurringPaymentProcessorTransaction(array $recurParams = [], array $contributionParams = []): void {
     $this->ids['campaign'][0] = $this->callAPISuccess('Campaign', 'create', ['title' => 'get the money'])['id'];
     $contributionParams = array_merge([
       'total_amount' => '200',
@@ -2869,6 +2702,22 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
 
     $priceField = CRM_Price_BAO_PriceField::create($paramsField);
     return $this->callAPISuccess('PriceFieldValue', 'get', ['price_field_id' => $priceField->id]);
+  }
+
+  /**
+   * Replace the template with a test-oriented template designed to show all the variables.
+   *
+   * @param string $templateName
+   * @param string $input
+   * @param string $type
+   */
+  protected function swapMessageTemplateForInput(string $templateName, string $input, string $type = 'html'): void {
+    CRM_Core_DAO::executeQuery(
+      "UPDATE civicrm_msg_template
+      SET msg_{$type} = %1
+      WHERE workflow_name = '{$templateName}'
+      AND is_default = 1", [1 => [$input, 'String']]
+    );
   }
 
   /**
@@ -3335,9 +3184,19 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    *
    * @param string $pageName
    *
+   * @param array $searchFormValues
+   *   Values for the search form if the form is a task eg.
+   *   for selected ids 6 & 8:
+   *   [
+   *      'radio_ts' => 'ts_sel',
+   *      'task' => CRM_Member_Task::PDF_LETTER,
+   *      'mark_x_6' => 1,
+   *      'mark_x_8' => 1,
+   *   ]
+   *
    * @return \CRM_Core_Form
    */
-  public function getFormObject($class, $formValues = [], $pageName = '') {
+  public function getFormObject($class, $formValues = [], $pageName = '', $searchFormValues = []) {
     $_POST = $formValues;
     /* @var CRM_Core_Form $form */
     $form = new $class();
@@ -3356,6 +3215,12 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     }
     $form->controller->setStateMachine(new CRM_Core_StateMachine($form->controller));
     $_SESSION['_' . $form->controller->_name . '_container']['values'][$pageName] = $formValues;
+    if ($searchFormValues) {
+      $_SESSION['_' . $form->controller->_name . '_container']['values']['Search'] = $searchFormValues;
+    }
+    if (isset($formValues['_qf_button_name'])) {
+      $_SESSION['_' . $form->controller->_name . '_container']['_qf_button_name'] = $formValues['_qf_button_name'];
+    }
     return $form;
   }
 
@@ -3910,19 +3775,22 @@ WHERE a1.is_primary = 0
 
   /**
    * Delete any existing custom data groups.
-   *
-   * @throws \API_Exception
    */
   protected function cleanupCustomGroups(): void {
-    CustomField::get(FALSE)->setSelect(['option_group_id', 'custom_group_id'])
-      ->addChain('delete_options', OptionGroup::delete()
-        ->addWhere('id', '=', '$option_group_id')
-      )
-      ->addChain('delete_fields', CustomField::delete()
-        ->addWhere('id', '=', '$id')
-      )->execute();
+    try {
+      CustomField::get(FALSE)->setSelect(['option_group_id', 'custom_group_id'])
+        ->addChain('delete_options', OptionGroup::delete()
+          ->addWhere('id', '=', '$option_group_id')
+        )
+        ->addChain('delete_fields', CustomField::delete()
+          ->addWhere('id', '=', '$id')
+        )->execute();
 
-    CustomGroup::delete(FALSE)->addWhere('id', '>', 0)->execute();
+      CustomGroup::delete(FALSE)->addWhere('id', '>', 0)->execute();
+    }
+    catch (API_Exception $e) {
+      $this->fail('failed to cleanup custom groups ' . $e->getMessage());
+    }
   }
 
   /**

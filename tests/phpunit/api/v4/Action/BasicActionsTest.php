@@ -21,11 +21,29 @@ namespace api\v4\Action;
 
 use api\v4\UnitTestCase;
 use Civi\Api4\MockBasicEntity;
+use Civi\Api4\Utils\CoreUtil;
+use Civi\Core\Event\GenericHookEvent;
+use Civi\Test\HookInterface;
 
 /**
  * @group headless
  */
-class BasicActionsTest extends UnitTestCase {
+class BasicActionsTest extends UnitTestCase implements HookInterface {
+
+  /**
+   * Listens for civi.api4.entityTypes event to manually add this nonstandard entity
+   *
+   * @param \Civi\Core\Event\GenericHookEvent $e
+   */
+  public function on_civi_api4_entityTypes(GenericHookEvent $e): void {
+    $e->entities['MockBasicEntity'] = MockBasicEntity::getInfo();
+  }
+
+  public function setUpHeadless() {
+    // Ensure MockBasicEntity gets added via above listener
+    \Civi::cache('metadata')->clear();
+    return parent::setUpHeadless();
+  }
 
   private function replaceRecords(&$records) {
     MockBasicEntity::delete()->addWhere('identifier', '>', 0)->execute();
@@ -38,6 +56,7 @@ class BasicActionsTest extends UnitTestCase {
     $info = MockBasicEntity::getInfo();
     $this->assertEquals('MockBasicEntity', $info['name']);
     $this->assertEquals(['identifier'], $info['primary_key']);
+    $this->assertEquals('identifier', CoreUtil::getIdFieldName('MockBasicEntity'));
   }
 
   public function testCrud() {
@@ -158,7 +177,7 @@ class BasicActionsTest extends UnitTestCase {
   public function testGetFields() {
     $getFields = MockBasicEntity::getFields()->execute()->indexBy('name');
 
-    $this->assertCount(7, $getFields);
+    $this->assertCount(8, $getFields);
     $this->assertEquals('Identifier', $getFields['identifier']['title']);
     // Ensure default data type is "String" when not specified
     $this->assertEquals('String', $getFields['color']['data_type']);
@@ -354,6 +373,28 @@ class BasicActionsTest extends UnitTestCase {
       ->execute();
     $this->assertCount(1, $result);
     $this->assertEquals('two', $result->first()['group']);
+  }
+
+  public function testRegexpOperators() {
+    $records = [
+      ['color' => 'red'],
+      ['color' => 'blue'],
+      ['color' => 'brown'],
+    ];
+    $this->replaceRecords($records);
+
+    $result = MockBasicEntity::get()
+      ->addWhere('color', 'REGEXP', '^b')
+      ->execute();
+    $this->assertCount(2, $result);
+    $this->assertEquals('blue', $result[0]['color']);
+    $this->assertEquals('brown', $result[1]['color']);
+
+    $result = MockBasicEntity::get()
+      ->addWhere('color', 'NOT REGEXP', '^b')
+      ->execute();
+    $this->assertCount(1, $result);
+    $this->assertEquals('red', $result[0]['color']);
   }
 
   public function testPseudoconstantMatch() {

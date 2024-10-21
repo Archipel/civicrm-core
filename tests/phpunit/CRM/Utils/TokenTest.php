@@ -60,8 +60,8 @@ class CRM_Utils_TokenTest extends CiviUnitTestCase {
    * Test for replaceGreetingTokens.
    *
    */
-  public function testReplaceGreetingTokens() {
-    $tokenString = 'First Name: {contact.first_name} Last Name: {contact.last_name} Birth Date: {contact.birth_date} Prefix: {contact.prefix_id} Suffix: {contact.individual_suffix}';
+  public function testReplaceGreetingTokens(): void {
+    $tokenString = 'First Name: {contact.first_name} Last Name: {contact.last_name} Birth Date: {contact.birth_date} Prefix: {contact.prefix_id:label} Suffix: {contact.individual_suffix}';
     $contactDetails = [
       [
         2811 => [
@@ -152,10 +152,8 @@ class CRM_Utils_TokenTest extends CiviUnitTestCase {
    *   and makes sure that greeting + contact tokens are replaced.
    * This is a good example to copy/expand when creating additional tests for token processor
    *   in "real" situations.
-   *
-   * @throws \CRM_Core_Exception
    */
-  public function testTokenProcessor() {
+  public function testTokenProcessor(): void {
     $params['contact_id'] = $this->individualCreate();
 
     // Prepare the processor and general context.

@@ -297,13 +297,13 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
     $this->callAPISuccess('job', 'send_reminder', []);
     $expected = [
       'first name = Alice',
-      'receive_date = February 1st, 2015 12:00 AM',
+      'receive_date = February 1st, 2015',
       'contribution status id = 1',
       'new style status = Completed',
       'new style label = Completed Label**',
       'id ' . $this->ids['Contribution']['alice'],
       'id  - not valid for action schedule',
-      'cancel date August 9th, 2021 12:00 AM',
+      'cancel date August 9th, 2021',
       'source SSF',
       'financial type id = 1',
       'financial type name = Donation',
@@ -311,10 +311,10 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
       'payment instrument id = 4',
       'payment instrument name = Check',
       'payment instrument label = Check',
-      'non_deductible_amount = € 10.00',
-      'total_amount = € 100.00',
-      'net_amount = € 95.00',
-      'fee_amount = € 5.00',
+      'non_deductible_amount = €10.00',
+      'total_amount = €100.00',
+      'net_amount = €95.00',
+      'fee_amount = €5.00',
       'campaign_id = 1',
       'campaign name = big_campaign',
       'campaign label = Campaign',
@@ -322,7 +322,7 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
     $this->mut->checkMailLog($expected);
 
     $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), [
-      'controller' => get_class(),
+      'controller' => __CLASS__,
       'smarty' => FALSE,
       'schema' => ['contributionId'],
       'contributionId' => $this->ids['Contribution']['alice'],
@@ -349,7 +349,7 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
       TRUE
     );
     $expected = [
-      'receive_date = February 1st, 2015 12:00 AM',
+      'receive_date = February 1st, 2015',
       'new style status = Completed',
       'contribution status id = 1',
       'id ' . $this->ids['Contribution']['alice'],
@@ -375,17 +375,10 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
     }
     $tokens = [
       'id',
-      'payment_instrument_id',
-      'payment_instrument_id:name',
       'payment_instrument_id:label',
-      'financial_type_id',
-      'financial_type_id:name',
       'financial_type_id:label',
-      'contribution_status_id',
-      'contribution_status_id:name',
       'contribution_status_id:label',
     ];
-    $processor = new CRM_Contribute_Tokens();
     $legacyTokens = [];
     $realLegacyTokens = [];
     foreach (CRM_Core_SelectValues::contributionTokens() as $token => $label) {
@@ -397,15 +390,48 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends \Civi\ActionSchedule\Abstr
     $fields = (array) Contribution::getFields()->addSelect('name', 'title')->execute()->indexBy('name');
     $allFields = [];
     foreach ($fields as $field) {
-      $allFields[$field['name']] = $field['title'];
+      if (!array_key_exists($field['name'], $this->getUnadvertisedTokens())) {
+        $allFields[$field['name']] = $field['title'];
+      }
     }
     // contact ID is skipped.
     unset($allFields['contact_id']);
     $this->assertEquals($allFields, $realLegacyTokens);
-    $this->assertEquals($legacyTokens, $processor->tokenNames);
-    foreach ($tokens as $token) {
-      $this->assertEquals(CRM_Core_SelectValues::contributionTokens()['{contribution.' . $token . '}'], $processor->tokenNames[$token]);
+    $tokenProcessor = new TokenProcessor(\Civi::dispatcher(), [
+      'controller' => __CLASS__,
+      'smarty' => FALSE,
+      'schema' => ['contributionId'],
+    ]);
+    $comparison = [];
+    foreach ($tokenProcessor->listTokens() as $token => $label) {
+      if (strpos($token, '{domain.') === 0) {
+        // domain token - ignore.
+        continue;
+      }
+      $comparison[substr($token, 14, -1)] = $label;
     }
+    $this->assertEquals($legacyTokens, $comparison);
+    foreach ($tokens as $token) {
+      $this->assertEquals(CRM_Core_SelectValues::contributionTokens()['{contribution.' . $token . '}'], $comparison[$token]);
+    }
+  }
+
+  /**
+   * Get tokens not advertised in the widget.
+   *
+   * @return string[]
+   */
+  public function getUnadvertisedTokens(): array {
+    return [
+      'financial_type_id' => 'Financial Type ID',
+      'contribution_page_id' => 'Contribution Page ID',
+      'payment_instrument_id' => 'Payment Method ID',
+      'is_test' => 'Is test',
+      'is_pay_later' => 'is pay later',
+      'is_template' => 'is_template',
+      'contribution_status_id' => 'Contribution Status ID',
+      'campaign_id' => 'Campaign ID',
+    ];
   }
 
 }
