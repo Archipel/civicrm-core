@@ -36,6 +36,7 @@ use Civi\Core\Event\GenericHookEvent;
  */
 class AutocompleteAction extends AbstractAction {
   use Traits\SavedSearchInspectorTrait;
+  use Traits\GetSetValueTrait;
 
   /**
    * Autocomplete search input for search mode
@@ -87,6 +88,17 @@ class AutocompleteAction extends AbstractAction {
    * @var string
    */
   protected $key;
+
+  /**
+   * Known entity values.
+   *
+   * Value will be populated by the form based on data entered at the time.
+   * They can be used by hooks for contextual filtering.
+   *
+   * Format: [fieldName => value][]
+   * @var array
+   */
+  protected $values = [];
 
   /**
    * Search conditions that will be automatically added to the WHERE or HAVING clauses
@@ -169,12 +181,14 @@ class AutocompleteAction extends AbstractAction {
       // For subsequent pages when searching by id, subtract the "extra" first page
       elseif ($searchById && $this->page > 1) {
         $this->page -= 1;
+        // Record with that id was already returned on page one so exclude it from subsequent pages
+        $this->savedSearch['api_params']['where'][] = [$primaryKeys[0], '!=', $this->input];
       }
       // If first line uses a rewrite, search on those fields too
       if (!$initialSearchById && !empty($this->display['settings']['columns'][0]['rewrite'])) {
         $searchFields = array_merge($searchFields, $this->getTokens($this->display['settings']['columns'][0]['rewrite']));
       }
-      $this->display['settings']['limit'] = $this->display['settings']['limit'] ?? \Civi::settings()->get('search_autocomplete_count');
+      $this->display['settings']['limit'] ??= \Civi::settings()->get('search_autocomplete_count');
       $this->display['settings']['pager'] = [];
       $return = 'scroll:' . $this->page;
       // SearchKit treats comma-separated fieldnames as OR clauses
@@ -192,7 +206,7 @@ class AutocompleteAction extends AbstractAction {
       $item = [
         'id' => $row['data'][$keyField],
         'label' => $row['columns'][0]['val'],
-        'icon' => $row['columns'][0]['icons'][0]['class'] ?? NULL,
+        'icon' => $row['columns'][0]['icons']['left'][0] ?? NULL,
         'description' => [],
       ];
       foreach (array_slice($row['columns'], 1) as $col) {
@@ -285,16 +299,8 @@ class AutocompleteAction extends AbstractAction {
    */
   private function getKeyField() {
     $entityName = $this->savedSearch['api_entity'];
-    if ($this->key) {
-      /** @var \CRM_Core_DAO $dao */
-      $dao = CoreUtil::getInfoItem($entityName, 'dao');
-      if ($dao && method_exists($dao, 'indices')) {
-        foreach ($dao::indices(FALSE) as $index) {
-          if (!empty($index['unique']) && in_array($this->key, $index['field'], TRUE)) {
-            return $this->key;
-          }
-        }
-      }
+    if ($this->key && in_array($this->key, CoreUtil::getInfoItem($entityName, 'match_fields') ?? [], TRUE)) {
+      return $this->key;
     }
     return $this->display['settings']['keyField'] ?? CoreUtil::getIdFieldName($entityName);
   }

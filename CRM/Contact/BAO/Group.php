@@ -9,14 +9,16 @@
  +--------------------------------------------------------------------+
  */
 
+use Civi\Api4\Event\AuthorizeRecordEvent;
 use Civi\Api4\Group;
+use Civi\Core\HookInterface;
 
 /**
  *
  * @package CRM
  * @copyright CiviCRM LLC https://civicrm.org/licensing
  */
-class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group {
+class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group implements HookInterface {
 
   /**
    * @deprecated
@@ -310,16 +312,19 @@ class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group {
   }
 
   /**
+   * @param string|null $entityName
+   * @param int|null $userId
+   * @param array $conditions
    * @inheritDoc
    */
-  public function addSelectWhereClause() {
+  public function addSelectWhereClause(?string $entityName = NULL, ?int $userId = NULL, array $conditions = []): array {
     $clauses = [];
     if (!CRM_Core_Permission::check([['edit all contacts', 'view all contacts']])) {
       $allowedGroups = CRM_Core_Permission::group(NULL, FALSE);
       $groupsIn = $allowedGroups ? implode(',', array_keys($allowedGroups)) : '0';
       $clauses['id'][] = "IN ($groupsIn)";
     }
-    CRM_Utils_Hook::selectWhereClause($this, $clauses);
+    CRM_Utils_Hook::selectWhereClause($this, $clauses, $userId, $conditions);
     return $clauses;
   }
 
@@ -341,9 +346,11 @@ class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group {
       'parents' => NULL,
     ];
 
+    // Fill title and frontend_title if not supplied
+    if (empty($params['id']) && empty($params['title'])) {
+      $params['title'] = $params['frontend_title'] ?? $params['name'];
+    }
     if (empty($params['id']) && empty($params['frontend_title'])) {
-      // If we were calling writeRecord it would handle this, but we need
-      // to migrate the other bits of magic.
       $params['frontend_title'] = $params['title'];
     }
     $hook = empty($params['id']) ? 'create' : 'edit';
@@ -385,6 +392,8 @@ class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group {
 
     // form the name only if missing: CRM-627
     $nameParam = $params['name'] ?? NULL;
+    // If we were calling writeRecord it would handle this, but we need
+    // to migrate the other bits of magic.
     if (!$nameParam && empty($params['id'])) {
       $params['name'] = CRM_Utils_String::titleToVar($params['title']);
     }
@@ -703,8 +712,8 @@ class CRM_Contact_BAO_Group extends CRM_Contact_DAO_Group {
       //create group only when new saved search.
       $groupParams = [
         'title' => "Hidden Smart Group {$ssId}",
-        'is_active' => CRM_Utils_Array::value('is_active', $params, 1),
-        'is_hidden' => CRM_Utils_Array::value('is_hidden', $params, 1),
+        'is_active' => $params['is_active'] ?? 1,
+        'is_hidden' => $params['is_hidden'] ?? 1,
         'group_type' => $params['group_type'] ?? NULL,
         'visibility' => $params['visibility'] ?? NULL,
         'saved_search_id' => $ssId,
@@ -1434,32 +1443,26 @@ WHERE {$whereClause}";
   }
 
   /**
-   * @param string $entityName
-   * @param string $action
-   * @param array $record
-   * @param $userID
-   * @return bool
-   * @see CRM_Core_DAO::checkAccess
+   * Check write access.
+   * @see \Civi\Api4\Utils\CoreUtil::checkAccessRecord
    */
-  public static function _checkAccess(string $entityName, string $action, array $record, $userID): bool {
-    switch ($action) {
-      case 'create':
-        $groupType = (array) ($record['group_type:name'] ?? []);
-        // If not already in :name format, transform to name
-        foreach ((array) ($record['group_type'] ?? []) as $typeId) {
-          $groupType[] = CRM_Core_PseudoConstant::getName(self::class, 'group_type', $typeId);
-        }
-        if ($groupType === ['Mailing List']) {
-          // If it's only a Mailing List, edit groups OR create mailings will work
-          return CRM_Core_Permission::check(['access CiviCRM', ['edit groups', 'access CiviMail', 'create mailings']], $userID);
-        }
-        else {
-          return CRM_Core_Permission::check(['access CiviCRM', 'edit groups'], $userID);
-        }
-
-      default:
-        // All other actions just rely on gatekeeper permissions
-        return TRUE;
+  public static function self_civi_api4_authorizeRecord(AuthorizeRecordEvent $e): void {
+    $record = $e->getRecord();
+    $userID = $e->getUserID();
+    // Check create permission (all other actions just rely on gatekeeper permissions)
+    if ($e->getActionName() === 'create') {
+      $groupType = (array) ($record['group_type:name'] ?? []);
+      // If not already in :name format, transform to name
+      foreach ((array) ($record['group_type'] ?? []) as $typeId) {
+        $groupType[] = CRM_Core_PseudoConstant::getName(self::class, 'group_type', $typeId);
+      }
+      if ($groupType === ['Mailing List']) {
+        // If it's only a Mailing List, edit groups OR create mailings will work
+        $e->setAuthorized(CRM_Core_Permission::check(['access CiviCRM', ['edit groups', 'access CiviMail', 'create mailings']], $userID));
+      }
+      else {
+        $e->setAuthorized(CRM_Core_Permission::check(['access CiviCRM', 'edit groups'], $userID));
+      }
     }
   }
 

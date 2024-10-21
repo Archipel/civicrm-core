@@ -596,7 +596,7 @@ AND    u.status = 1
     // all the modules that are listening on it, does not apply
     // to J! and WP as yet
     // CRM-8655
-    CRM_Utils_Hook::config($config);
+    CRM_Utils_Hook::config($config, ['uf' => TRUE]);
 
     if (!$loadUser) {
       return TRUE;
@@ -642,6 +642,7 @@ AND    u.status = 1
 
     // CRM-8655: Backdrop wasn't available during bootstrap, so
     // hook_civicrm_config() never executes.
+    // FIXME: This call looks redundant with the earlier call in the same function. Consider removing it.
     CRM_Utils_Hook::config($config);
 
     return FALSE;
@@ -654,6 +655,10 @@ AND    u.status = 1
     global $civicrm_paths;
     if (!empty($civicrm_paths['cms.root']['path'])) {
       return $civicrm_paths['cms.root']['path'];
+    }
+
+    if (defined('BACKDROP_ROOT')) {
+      return BACKDROP_ROOT;
     }
 
     $cmsRoot = NULL;
@@ -804,6 +809,34 @@ AND    u.status = 1
   }
 
   /**
+   * @inheritdoc
+   */
+  public function getCiviSourceStorage():array {
+    global $civicrm_root;
+    $config = CRM_Core_Config::singleton();
+
+    // Don't use $config->userFrameworkBaseURL; it has garbage on it.
+    // More generally, we shouldn't be using $config here.
+    if (!defined('CIVICRM_UF_BASEURL')) {
+      throw new RuntimeException('Undefined constant: CIVICRM_UF_BASEURL');
+    }
+    $baseURL = CRM_Utils_File::addTrailingSlash(CIVICRM_UF_BASEURL, '/');
+    if (CRM_Utils_System::isSSL()) {
+      $baseURL = str_replace('http://', 'https://', $baseURL);
+    }
+
+    $cmsPath = $config->userSystem->cmsRootPath();
+    $userFrameworkResourceURL = $baseURL . str_replace("$cmsPath/", '',
+      str_replace('\\', '/', $civicrm_root)
+    );
+
+    return [
+      'url' => CRM_Utils_File::addTrailingSlash($userFrameworkResourceURL, '/'),
+      'path' => CRM_Utils_File::addTrailingSlash($civicrm_root),
+    ];
+  }
+
+  /**
    * Wrapper for og_membership creation.
    *
    * @param int $ogID
@@ -912,10 +945,28 @@ AND    u.status = 1
   }
 
   /**
+   * Commit the session before exiting.
+   * Similar to drupal_exit().
+   */
+  public function onCiviExit() {
+    if (function_exists('module_invoke_all')) {
+      if (!defined('MAINTENANCE_MODE') || MAINTENANCE_MODE != 'update') {
+        module_invoke_all('exit');
+      }
+      if (!defined('_CIVICRM_FAKE_SESSION')) {
+        backdrop_session_commit();
+      }
+    }
+  }
+
+  /**
    * @inheritDoc
    */
   public function clearResourceCache() {
-    _backdrop_flush_css_js();
+    // Sometimes metadata gets cleared while the cms isn't bootstrapped.
+    if (function_exists('_backdrop_flush_css_js')) {
+      _backdrop_flush_css_js();
+    }
   }
 
   /**
@@ -1102,7 +1153,7 @@ AND    u.status = 1
    * CMS's drupal views expectations, if any.
    */
   public function getCRMDatabasePrefix(): string {
-    return str_replace(parent::getCRMDatabasePrefix(), '`', '');
+    return str_replace('`', '', parent::getCRMDatabasePrefix());
   }
 
   /**

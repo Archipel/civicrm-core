@@ -161,13 +161,13 @@ class CRM_Utils_Mail_IncomingMail {
     $twoDigitString = $twoDigitStringMin . $verpSeparator;
 
     // a common-for-all-actions regex to handle CiviCRM 2.2 address patterns
-    $regex = '/^' . $emailLocalPart . '(b|c|e|o|r|u)' . $twoDigitString . '([0-9a-f]{16})@' . $emailDomain . '$/';
+    $regex = '/^' . $emailLocalPart . '(b|c|e|o|r|u)' . $twoDigitString . '([0-9a-z]{16})@' . $emailDomain . '$/';
 
     // a tighter regex for finding bounce info in soft bounces’ mail bodies
-    $rpRegex = '/Return-Path:\s*' . $emailLocalPart . '(b)' . $twoDigitString . '([0-9a-f]{16})@' . $emailDomain . '/';
+    $rpRegex = '/Return-Path:\s*' . $emailLocalPart . '(b)' . $twoDigitString . '([0-9a-z]{16})@' . $emailDomain . '/';
 
     // a regex for finding bound info X-Header
-    $rpXHeaderRegex = '/X-CiviMail-Bounce: ' . $emailLocalPart . '(b)' . $twoDigitString . '([0-9a-f]{16})@' . $emailDomain . '/i';
+    $rpXHeaderRegex = '/X-CiviMail-Bounce: ' . $emailLocalPart . '(b)' . $twoDigitString . '([0-9a-z]{16})@' . $emailDomain . '/i';
     // CiviMail in regex and Civimail in header !!!
     $matches = NULL;
     foreach ($this->mail->to as $address) {
@@ -209,7 +209,7 @@ class CRM_Utils_Mail_IncomingMail {
       [, $this->action, $this->jobID, $this->queueID, $this->hash] = $matches;
     }
     if ($this->isVerp()) {
-      $queue = CRM_Mailing_Event_BAO_MailingEventQueue::verify($this->getJobID(), $this->getQueueID(), $this->getHash());
+      $queue = CRM_Mailing_Event_BAO_MailingEventQueue::verify(NULL, $this->getQueueID(), $this->getHash());
       if (!$queue) {
         throw new CRM_Core_Exception('Contact could not be found from civimail response');
       }
@@ -217,7 +217,7 @@ class CRM_Utils_Mail_IncomingMail {
         'id' => $queue->id,
         'hash' => $queue->hash,
         'contact_id' => $queue->contact_id,
-        'job_id' => $queue->contact_id,
+        'job_id' => $queue->job_id,
       ]);
       $this->define('Mailing', 'Mailing', [
         'id' => MailingJob::get(FALSE)

@@ -25,7 +25,7 @@ class SqlFunctionGROUP_CONCAT extends SqlFunction {
   protected static function params(): array {
     return [
       [
-        'flag_before' => ['' => NULL, 'DISTINCT' => ts('Distinct Value'), 'UNIQUE' => ts('Unique Record')],
+        'flag_before' => ['' => ts('All'), 'DISTINCT' => ts('Distinct Value'), 'UNIQUE' => ts('Unique Record')],
         'max_expr' => 1,
         'must_be' => ['SqlField', 'SqlFunction', 'SqlEquation'],
         'optional' => FALSE,
@@ -62,7 +62,7 @@ class SqlFunctionGROUP_CONCAT extends SqlFunction {
   public function formatOutputValue(?string &$dataType, array &$values, string $key): void {
     $exprArgs = $this->getArgs();
     // By default, values are split into an array and formatted according to the field's dataType
-    if (isset($exprArgs[2]['expr'][0]->expr) && $exprArgs[2]['expr'][0]->expr === \CRM_Core_DAO::VALUE_SEPARATOR) {
+    if ($this->getSerialize()) {
       $values[$key] = explode(\CRM_Core_DAO::VALUE_SEPARATOR, $values[$key]);
       // If the first expression is a SqlFunction/SqlEquation, allow it to control the dataType
       if (method_exists($exprArgs[0]['expr'][0], 'formatOutputValue')) {
@@ -88,6 +88,14 @@ class SqlFunctionGROUP_CONCAT extends SqlFunction {
     }
   }
 
+  public function getSerialize(): ?int {
+    $exprArgs = $this->getArgs();
+    if (($exprArgs[2]['expr'][0]->expr ?? NULL) === \CRM_Core_DAO::VALUE_SEPARATOR) {
+      return \CRM_Core_DAO::SERIALIZE_SEPARATOR_TRIMMED;
+    }
+    return NULL;
+  }
+
   /**
    * @return string
    */
@@ -108,10 +116,11 @@ class SqlFunctionGROUP_CONCAT extends SqlFunction {
     if ($this->args[0]['prefix'] === ['UNIQUE']) {
       $this->args[0]['prefix'] = [];
       $expr = $this->args[0]['expr'][0];
+      [$fieldPath] = explode(':', $expr->getFields()[0]);
       $field = $query->getField($expr->getFields()[0]);
       if ($field) {
         $idField = CoreUtil::getIdFieldName($field['entity']);
-        $idFieldKey = substr($expr->getFields()[0], 0, 0 - strlen($field['name'])) . $idField;
+        $idFieldKey = substr($fieldPath, 0, 0 - strlen($field['name'])) . $idField;
         // Keep the ordering consistent
         if (empty($this->args[1]['prefix'])) {
           $this->args[1] = [

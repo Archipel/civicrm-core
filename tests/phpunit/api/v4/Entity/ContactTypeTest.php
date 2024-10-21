@@ -23,7 +23,9 @@ use Civi\Api4\Contact;
 use api\v4\Api4TestBase;
 use Civi\Api4\ContactType;
 use Civi\Api4\Email;
+use Civi\Api4\Individual;
 use Civi\Api4\Navigation;
+use Civi\Api4\Organization;
 use Civi\Test\TransactionalInterface;
 
 /**
@@ -34,20 +36,21 @@ class ContactTypeTest extends Api4TestBase implements TransactionalInterface {
   public function testMenuItemWillBeCreatedAndDeleted(): void {
     ContactType::create(FALSE)
       ->addValue('name', 'Tester')
-      ->addValue('label', 'Tester')
+      ->addValue('label', 'Tèstër')
       ->addValue('parent_id.name', 'Individual')
       ->execute();
     // Menu item should have been auto-created
-    $this->assertCount(1, Navigation::get(FALSE)->addWhere('name', '=', 'New Tester')->execute());
+    $nav = Navigation::get(FALSE)->addWhere('name', '=', 'New Tester')->execute()->single();
+    $this->assertEquals('New Tèstër', $nav['label']);
 
     ContactType::update(FALSE)
       ->addWhere('name', '=', 'Tester')
-      ->addValue('label', 'Tested')
+      ->addValue('label', 'Wëll Téstęd!')
       ->execute();
 
     // Menu item should have been updated
     $nav = Navigation::get(FALSE)->addWhere('name', '=', 'New Tester')->execute()->single();
-    $this->assertEquals('New Tested', $nav['label']);
+    $this->assertEquals('New Wëll Téstęd!', $nav['label']);
 
     ContactType::delete(FALSE)
       ->addWhere('name', '=', 'Tester')
@@ -164,6 +167,37 @@ class ContactTypeTest extends Api4TestBase implements TransactionalInterface {
       ->addRecord(['organization_name' => 'Foo'])
       ->execute()->first();
     $this->assertEquals('Organization', $result['contact_type']);
+  }
+
+  public function testContactTypeWontChange(): void {
+    $hhId = $this->createTestRecord('Household')['id'];
+    $orgId = $this->createTestRecord('Organization')['id'];
+
+    $orgUpdate = Organization::update(FALSE)
+      ->addWhere('id', 'IN', [$hhId, $orgId])
+      ->addValue('organization_name', 'Foo')
+      ->execute();
+    $this->assertCount(1, $orgUpdate);
+
+    $indUpdate = Individual::update(FALSE)
+      ->addWhere('id', 'IN', [$hhId, $orgId])
+      ->addValue('first_name', 'Foo')
+      ->execute();
+    $this->assertCount(0, $indUpdate);
+
+    $orgUpdate = Organization::update(FALSE)
+      ->addWhere('id', '=', $hhId)
+      ->addValue('organization_name', 'Foo')
+      ->execute();
+    // This seems unexpected but is due to the fact that for efficiency the api
+    // will skip lookups and go straight to writeRecord when given a single id.
+    // Commented out assertion doesn't work:
+    // $this->assertCount(0, $orgUpdate);
+
+    $household = Contact::get(FALSE)->addWhere('id', '=', $hhId)->execute()->single();
+
+    $this->assertEquals('Household', $household['contact_type']);
+    $this->assertTrue(empty($household['organization_name']));
   }
 
 }

@@ -753,15 +753,22 @@
 
             // Write oop code
             code.oop = '$' + results + " = " + formatOOP(entity, action, params, 2) + "\n  ->execute()";
-            if (_.isNumber(index)) {
+            // Index: numeric input = itemAt()
+            if (typeof index === 'number') {
               code.oop += !index ? '\n  ->first()' : (index === -1 ? '\n  ->last()' : '\n  ->itemAt(' + index + ')');
-            } else if (index) {
-              if (_.isString(index) || (_.isPlainObject(index) && !index[0] && !index['0'])) {
-                code.oop += "\n  ->indexBy('" + (_.isPlainObject(index) ? _.keys(index)[0] : index) + "')";
-              }
-              if (_.isArray(index) || _.isPlainObject(index)) {
-                code.oop += "\n  ->column('" + (_.isArray(index) ? index[0] : _.values(index)[0]) + "')";
-              }
+            }
+            // Index: string input = indexBy()
+            else if (typeof index === 'string' && index.length) {
+              code.oop += "\n  ->indexBy(" + phpFormat(index) + ")";
+            }
+            // Index: array input = column() with 1 arg
+            else if (Array.isArray(index)) {
+              code.oop += "\n  ->column(" + phpFormat(index[0]) + ")";
+            }
+            // Index: object input = column() with 2 args
+            else if (typeof index === 'object') {
+              let indexKey = Object.keys(index)[0];
+              code.oop += "\n  ->column(" + phpFormat(index[indexKey]) + ", " + phpFormat(indexKey) + ")";
             }
             code.oop += ";\n";
             if (!_.isNumber(index)) {
@@ -1245,10 +1252,14 @@
           if ($el.is('.crm-form-date-wrapper .crm-hidden-date')) {
             $el.crmDatepicker('destroy');
           }
-          if ($el.is('.select2-container + input')) {
+          if (isSelect2()) {
             $el.crmAutocomplete('destroy');
           }
           $(element).removeData().removeAttr('type').removeAttr('placeholder').show();
+        }
+
+        function isSelect2() {
+          return $(element).is('.select2-container + input');
         }
 
         function makeWidget(field, op) {
@@ -1271,16 +1282,17 @@
           } else if (_.includes(['=', '!=', '<>', 'IN', 'NOT IN'], op) && (field.fk_entity || field.options || dataType === 'Boolean')) {
            if (field.options) {
               var id = field.pseudoconstant || 'id';
-              $el.addClass('loading').attr('placeholder', ts('- select -')).crmSelect2({multiple: multi, data: [{id: '', text: ''}]});
+              $el.addClass('loading').attr('placeholder', ts('- select -')).crmSelect2({multiple: multi, separator: "\u0001", data: [{id: '', text: ''}]});
               loadFieldOptions(field.entity || entity).then(function(data) {
                 var options = _.transform(data[field.name].options, function(options, opt) {
                   options.push({id: opt[id], text: opt.label, description: opt.description, color: opt.color, icon: opt.icon});
                 }, []);
-                $el.removeClass('loading').crmSelect2({data: options, multiple: multi});
+                $el.removeClass('loading').crmSelect2({data: options, multiple: multi, separator: "\u0001"});
               });
             } else if (field.fk_entity) {
               $el.crmAutocomplete(field.fk_entity, {fieldName: field.entity + '.' + field.name, key: field.id_field || null}, {
                 multiple: multi,
+                separator: "\u0001",
                 static: field.fk_entity === 'Contact' ? ['user_contact_id'] : [],
                 minimumInputLength: field.fk_entity === 'Contact' ? 1 : 0
               });
@@ -1312,14 +1324,14 @@
           // If the viewValue is invalid (say required but empty) it will be `undefined`
           if (_.isUndefined(viewValue)) return;
 
-          if (!multi) {
+          if (!multi || !isSelect2()) {
             return viewValue;
           }
 
           var list = [];
 
           if (viewValue) {
-            _.each(viewValue.split(','), function(value) {
+            _.each(viewValue.split("\u0001"), function(value) {
               if (value) list.push(_.trim(value));
             });
           }

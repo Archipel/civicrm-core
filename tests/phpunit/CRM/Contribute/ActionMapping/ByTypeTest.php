@@ -163,6 +163,18 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends AbstractMappingTest {
     ];
 
     $cs[] = [
+      '2015-02-02 00:00:00',
+      'addAliceDues addBobDonation scheduleForDonationWithAbsoluteDate useHelloFirstName',
+      [
+        [
+          'time' => '2015-02-02 00:00:00',
+          'to' => ['bob@example.org'],
+          'subject' => '/Hello, Bob.*via subject/',
+        ],
+      ],
+    ];
+
+    $cs[] = [
       '2015-02-03 00:00:00',
       'addAliceDues addBobDonation scheduleForSoftCreditor startWeekAfter useHelloFirstName',
       [
@@ -249,6 +261,16 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends AbstractMappingTest {
   }
 
   /**
+   * Schedule message delivery for contribution with an absolute date.
+   */
+  public function scheduleForDonationWithAbsoluteDate(): void {
+    $this->schedule->mapping_id = 'contribtype';
+    $this->schedule->absolute_date = date('Y-m-d', strtotime($this->targetDate));
+    $this->schedule->entity_value = CRM_Utils_Array::implodePadded([2]);
+    $this->schedule->entity_status = CRM_Utils_Array::implodePadded(NULL);
+  }
+
+  /**
    * Schedule message delivery for any contribution, regardless of type.
    */
   public function scheduleForAny(): void {
@@ -324,7 +346,8 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends AbstractMappingTest {
       campaign_id = {contribution.campaign_id}
       campaign name = {contribution.campaign_id:name}
       campaign label = {contribution.campaign_id:label}
-      receipt text = {contribution.contribution_page_id.receipt_text}';
+      receipt text = {contribution.contribution_page_id.receipt_text}
+      message_header = {site.message_header}';
 
     $this->schedule->save();
     $this->callAPISuccess('job', 'send_reminder', []);
@@ -354,6 +377,7 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends AbstractMappingTest {
       'campaign name = big_campaign',
       'campaign label = Campaign',
       'receipt text = Thank you!',
+      'header = <div><!-- This content comes from the site message header token--></div>',
     ];
     $this->mut->checkMailLog($expected);
 
@@ -447,6 +471,10 @@ class CRM_Contribute_ActionMapping_ByTypeTest extends AbstractMappingTest {
         'contribution_page_id.pay_later_text' => 'Pay Later Text',
         'contribution_page_id.pay_later_receipt' => 'Pay Later Receipt',
         'contribution_page_id.receipt_text' => 'Receipt Text',
+        'address_id.id' => 'Address ID',
+        'address_id.name' => 'Billing Address Name',
+        'address_id.display' => 'Billing Address',
+        'header' => 'Message Header',
       ], $comparison);
   }
 

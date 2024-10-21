@@ -75,9 +75,44 @@ class CRM_Event_Cart_ExtensionUtil {
     return self::CLASS_PREFIX . '_' . str_replace('\\', '_', $suffix);
   }
 
+  /**
+   * @return \CiviMix\Schema\SchemaHelperInterface
+   */
+  public static function schema() {
+    if (!isset($GLOBALS['CiviMixSchema'])) {
+      pathload()->loadPackage('civimix-schema@5', TRUE);
+    }
+    return $GLOBALS['CiviMixSchema']->getHelper(static::LONG_NAME);
+  }
+
 }
 
 use CRM_Event_Cart_ExtensionUtil as E;
+
+spl_autoload_register('_eventcart_civix_class_loader', TRUE, TRUE);
+
+function _eventcart_civix_class_loader($class) {
+  if ($class === 'CRM_Event_Cart_DAO_Base') {
+    if (version_compare(CRM_Utils_System::version(), '5.74.beta', '>=')) {
+      class_alias('CRM_Core_DAO_Base', 'CRM_Event_Cart_DAO_Base');
+      // ^^ Materialize concrete names -- encourage IDE's to pick up on this association.
+    }
+    else {
+      $realClass = 'CiviMix\\Schema\\Eventcart\\DAO';
+      class_alias($realClass, $class);
+      // ^^ Abstract names -- discourage IDE's from picking up on this association.
+    }
+    return;
+  }
+
+  // This allows us to tap-in to the installation process (without incurring real file-reads on typical requests).
+  if (strpos($class, 'CiviMix\\Schema\\Eventcart\\') === 0) {
+    // civimix-schema@5 is designed for backported use in download/activation workflows,
+    // where new revisions may become dynamically available.
+    pathload()->loadPackage('civimix-schema@5', TRUE);
+    CiviMix\Schema\loadClass($class);
+  }
+}
 
 /**
  * (Delegated) Implements hook_civicrm_config().
@@ -92,11 +127,6 @@ function _eventcart_civix_civicrm_config($config = NULL) {
   $configured = TRUE;
 
   $extRoot = __DIR__ . DIRECTORY_SEPARATOR;
-  $extDir = $extRoot . 'templates';
-  if (file_exists($extDir)) {
-    CRM_Core_Smarty::singleton()->addTemplateDir($extDir);
-  }
-
   $include_path = $extRoot . PATH_SEPARATOR . get_include_path();
   set_include_path($include_path);
   // Based on <compatibility>, this does not currently require mixin/polyfill.php.
@@ -138,8 +168,8 @@ function _eventcart_civix_insert_navigation_menu(&$menu, $path, $item) {
   if (empty($path)) {
     $menu[] = [
       'attributes' => array_merge([
-        'label'      => CRM_Utils_Array::value('name', $item),
-        'active'     => 1,
+        'label' => $item['name'] ?? NULL,
+        'active' => 1,
       ], $item),
     ];
     return TRUE;
@@ -202,15 +232,4 @@ function _eventcart_civix_fixNavigationMenuItems(&$nodes, &$maxNavID, $parentID)
       _eventcart_civix_fixNavigationMenuItems($nodes[$origKey]['child'], $maxNavID, $nodes[$origKey]['attributes']['navID']);
     }
   }
-}
-
-/**
- * (Delegated) Implements hook_civicrm_entityTypes().
- *
- * Find any *.entityType.php files, merge their content, and return.
- *
- * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
- */
-function _eventcart_civix_civicrm_entityTypes(&$entityTypes) {
-  $entityTypes = array_merge($entityTypes, []);
 }

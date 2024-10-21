@@ -56,7 +56,49 @@ abstract class CRM_Utils_System_Base {
     }
   }
 
+  /**
+   * Determine if the UF/CMS has been loaded already.
+   *
+   * This is generally TRUE. If using the "extern" boot protocol, then this may initially be false (until loadBootStrap runs).
+   *
+   * @internal
+   * @return bool
+   */
+  abstract public function isLoaded(): bool;
+
   abstract public function loadBootStrap($params = [], $loadUser = TRUE, $throwError = TRUE, $realPath = NULL);
+
+  /**
+   * Returns the Smarty template path to the main template that renders the content.
+   *
+   * In CMS contexts, this goes inside their theme, but Standalone needs to render the full HTML page.
+   *
+   * @var int|string $print
+   *   Should match a CRM_Core_Smarty::PRINT_* constant,
+   *   or equal 0 if not in print mode.
+   */
+  public static function getContentTemplate($print = 0): string {
+    if ($print === CRM_Core_Smarty::PRINT_JSON) {
+      return 'CRM/common/snippet.tpl';
+    }
+
+    switch ($print) {
+      case 0:
+        // Not a print context.
+        $config = CRM_Core_Config::singleton();
+        return 'CRM/common/' . strtolower($config->userFramework) . '.tpl';
+
+      case CRM_Core_Smarty::PRINT_PAGE:
+        return 'CRM/common/print.tpl';
+
+      case 'xls':
+      case 'doc':
+        return 'CRM/Contact/Form/Task/Excel.tpl';
+
+      default:
+        return 'CRM/common/snippet.tpl';
+    }
+  }
 
   /**
    * Append an additional breadcrumb tag to the existing breadcrumb.
@@ -98,14 +140,12 @@ abstract class CRM_Utils_System_Base {
    *   The url to post the form.
    */
   public function postURL($action) {
-    $config = CRM_Core_Config::singleton();
     if (!empty($action)) {
       return $action;
     }
 
-    return $this->url(CRM_Utils_Array::value($config->userFrameworkURLVar, $_GET),
-      NULL, TRUE, NULL, FALSE
-    );
+    $current_path = CRM_Utils_System::currentPath();
+    return (string) Civi::url('current://' . $current_path, 'a');
   }
 
   /**
@@ -251,11 +291,11 @@ abstract class CRM_Utils_System_Base {
   /**
    * Load user into session.
    *
-   * @param obj $user
+   * @param string $username
    *
    * @return bool
    */
-  public function loadUser($user) {
+  public function loadUser($username) {
     return TRUE;
   }
 
@@ -957,6 +997,27 @@ abstract class CRM_Utils_System_Base {
   }
 
   /**
+   * Whether to allow access to CMS user sync action
+   * @return bool
+   */
+  public function allowSynchronizeUsers() {
+    return TRUE;
+  }
+
+  /**
+   * Run CMS user sync if allowed, otherwise just returns empty array
+   * @return array
+   */
+  public function synchronizeUsersIfAllowed() {
+    if ($this->allowSynchronizeUsers()) {
+      return $this->synchronizeUsers();
+    }
+    else {
+      return [];
+    }
+  }
+
+  /**
    * Send an HTTP Response base on PSR HTTP RespnseInterface response.
    *
    * @param \Psr\Http\Message\ResponseInterface $response
@@ -967,7 +1028,7 @@ abstract class CRM_Utils_System_Base {
       CRM_Utils_System::setHttpHeader($name, implode(', ', (array) $values));
     }
     echo $response->getBody();
-    CRM_Utils_System::civiExit();
+    CRM_Utils_System::civiExit(0, ['response' => $response]);
   }
 
   /**
@@ -1187,6 +1248,13 @@ abstract class CRM_Utils_System_Base {
     $profile = str_replace('civicrm/admin/uf/group', $urlReplaceWith, $profile);
 
     return $profile;
+  }
+
+  /**
+   * Hook for further system boot once the main CiviCRM
+   * Container is up (only used in Standalone currently)
+   */
+  public function postContainerBoot(): void {
   }
 
 }

@@ -606,9 +606,9 @@ HERESQL;
             $op = $this->_params["{$fieldName}_op"] ?? NULL;
             $clause = $this->whereClause($field,
               $op,
-              CRM_Utils_Array::value("{$fieldName}_value", $this->_params),
-              CRM_Utils_Array::value("{$fieldName}_min", $this->_params),
-              CRM_Utils_Array::value("{$fieldName}_max", $this->_params)
+              $this->_params["{$fieldName}_value"] ?? NULL,
+              $this->_params["{$fieldName}_min"] ?? NULL,
+              $this->_params["{$fieldName}_max"] ?? NULL
             );
           }
           if (!empty($clause)) {
@@ -797,7 +797,7 @@ HERESQL;
    * @param int|null $rowCount
    */
   public function limit($rowCount = NULL) {
-    $rowCount = $rowCount ?? $this->getRowCount();
+    $rowCount ??= $this->getRowCount();
     parent::limit($rowCount);
   }
 
@@ -806,7 +806,7 @@ HERESQL;
    * @param int|null $rowCount
    */
   public function setPager($rowCount = NULL): void {
-    $rowCount = $rowCount ?? $this->getRowCount();
+    $rowCount ??= $this->getRowCount();
     parent::setPager($rowCount);
   }
 
@@ -843,8 +843,8 @@ HERESQL;
         unset($this->_columnHeadersComponent[$componentTitle][$id_header], $this->_columnHeadersComponent[$componentTitle][$contact_header]);
       }
 
-      $this->assign_by_ref('columnHeadersComponent', $this->_columnHeadersComponent);
-      $this->assign_by_ref('componentRows', $componentRows);
+      $this->assign('columnHeadersComponent', $this->_columnHeadersComponent);
+      $this->assign('componentRows', $componentRows);
     }
 
     $this->doTemplateAssignment($rows);

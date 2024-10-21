@@ -20,7 +20,7 @@ use CRM_Afform_ExtensionUtil as E;
  * @see https://lab.civicrm.org/extensions/afform
  * @labelField title
  * @iconField type:icon
- * @searchable none
+ * @since 5.31
  * @package Civi\Api4
  */
 class Afform extends Generic\AbstractEntity {
@@ -99,6 +99,15 @@ class Afform extends Generic\AbstractEntity {
 
   /**
    * @param bool $checkPermissions
+   * @return Action\Afform\Process
+   */
+  public static function process($checkPermissions = TRUE) {
+    return (new Action\Afform\Process('Afform', __FUNCTION__))
+      ->setCheckPermissions($checkPermissions);
+  }
+
+  /**
+   * @param bool $checkPermissions
    * @return Action\Afform\SubmitFile
    */
   public static function submitFile($checkPermissions = TRUE) {
@@ -139,6 +148,7 @@ class Afform extends Generic\AbstractEntity {
           'name' => 'type',
           'title' => E::ts('Type'),
           'pseudoconstant' => ['optionGroupName' => 'afform_type'],
+          'default_value' => 'form',
         ],
         [
           'name' => 'requires',
@@ -165,34 +175,21 @@ class Afform extends Generic\AbstractEntity {
           'title' => E::ts('Description'),
         ],
         [
-          'name' => 'is_dashlet',
-          'title' => E::ts('Dashboard Dashlet'),
-          'data_type' => 'Boolean',
-        ],
-        [
-          'name' => 'is_public',
-          'title' => E::ts('Is Public'),
-          'data_type' => 'Boolean',
-        ],
-        [
-          'name' => 'is_token',
-          'title' => E::ts('Generate Tokens'),
-          'data_type' => 'Boolean',
-        ],
-        [
-          'name' => 'contact_summary',
-          'title' => E::ts('Contact Summary'),
-          'data_type' => 'String',
-          'options' => [
-            'block' => E::ts('Contact Summary Block'),
-            'tab' => E::ts('Contact Summary Tab'),
-          ],
+          'name' => 'placement',
+          'title' => E::ts('Placement'),
+          'pseudoconstant' => ['optionGroupName' => 'afform_placement'],
+          'data_type' => 'Array',
         ],
         [
           'name' => 'summary_contact_type',
           'title' => E::ts('Summary Contact Type'),
           'data_type' => 'Array',
           'options' => \CRM_Contact_BAO_ContactType::contactTypePairs(),
+        ],
+        [
+          'name' => 'summary_weight',
+          'title' => E::ts('Order'),
+          'data_type' => 'Integer',
         ],
         [
           'name' => 'icon',
@@ -204,14 +201,22 @@ class Afform extends Generic\AbstractEntity {
           'title' => E::ts('Page Route'),
         ],
         [
+          'name' => 'is_public',
+          'title' => E::ts('Is Public'),
+          'data_type' => 'Boolean',
+          'default_value' => FALSE,
+        ],
+        [
           'name' => 'permission',
           'title' => E::ts('Permission'),
           'data_type' => 'Array',
+          'default_value' => ['access CiviCRM'],
         ],
         [
           'name' => 'permission_operator',
           'title' => E::ts('Permission Operator'),
           'data_type' => 'String',
+          'default_value' => 'AND',
           'options' => \CRM_Core_SelectValues::andOr(),
         ],
         [
@@ -235,6 +240,18 @@ class Afform extends Generic\AbstractEntity {
           'data_type' => 'Boolean',
         ],
         [
+          'name' => 'manual_processing',
+          'data_type' => 'Boolean',
+        ],
+        [
+          'name' => 'allow_verification_by_email',
+          'data_type' => 'Boolean',
+        ],
+        [
+          'name' => 'email_confirmation_template_id',
+          'data_type' => 'Integer',
+        ],
+        [
           'name' => 'navigation',
           'title' => E::ts('Navigation Menu'),
           'data_type' => 'Array',
@@ -245,6 +262,12 @@ class Afform extends Generic\AbstractEntity {
           'title' => E::ts('Layout'),
           'data_type' => 'Array',
           'description' => 'HTML form layout; format is controlled by layoutFormat param',
+        ],
+        [
+          'name' => 'modified_date',
+          'title' => E::ts('Date Modified'),
+          'data_type' => 'Timestamp',
+          'readonly' => TRUE,
         ],
       ];
       // Calculated fields returned by get action
@@ -305,7 +328,7 @@ class Afform extends Generic\AbstractEntity {
           'data_type' => 'String',
           'description' => 'Name of extension which provides this form',
           'readonly' => TRUE,
-          'pseudoconstant' => ['callback' => ['CRM_Core_PseudoConstant', 'getExtensions']],
+          'pseudoconstant' => ['callback' => ['CRM_Core_BAO_Managed', 'getBaseModules']],
         ];
         $fields[] = [
           'name' => 'search_displays',
@@ -326,7 +349,7 @@ class Afform extends Generic\AbstractEntity {
   public static function permissions() {
     return [
       'meta' => ['access CiviCRM'],
-      'default' => [['administer CiviCRM', 'administer afform']],
+      'default' => ['administer afform'],
       // These all check form-level permissions
       'get' => [],
       'getOptions' => [],

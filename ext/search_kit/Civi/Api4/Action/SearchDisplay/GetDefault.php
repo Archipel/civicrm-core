@@ -146,19 +146,34 @@ class GetDefault extends \Civi\Api4\Generic\AbstractAction {
    */
   public function getLinksMenu() {
     $menu = [];
+    $exclude = ['add', 'browse'];
     $mainEntity = $this->savedSearch['api_entity'] ?? NULL;
     if ($mainEntity && !$this->canAggregate(CoreUtil::getIdFieldName($mainEntity))) {
-      foreach (Display::getEntityLinks($mainEntity, TRUE) as $link) {
+      foreach (Display::getEntityLinks($mainEntity, TRUE, $exclude) as $link) {
         $link['join'] = NULL;
         $menu[] = $link;
       }
+    }
+    if ($this->getField('is_active')) {
+      $menu[] = [
+        'entity' => $mainEntity,
+        'task' => 'enable',
+        'icon' => 'fa-toggle-on',
+        'text' => E::ts('Enable'),
+      ];
+      $menu[] = [
+        'entity' => $mainEntity,
+        'task' => 'disable',
+        'icon' => 'fa-toggle-off',
+        'text' => E::ts('Disable'),
+      ];
     }
     $keys = ['entity' => TRUE, 'bridge' => TRUE];
     foreach ($this->getJoins() as $join) {
       if (!$this->canAggregate($join['alias'] . '.' . CoreUtil::getIdFieldName($join['entity']))) {
         foreach (array_filter(array_intersect_key($join, $keys)) as $joinEntity) {
           $joinLabel = $this->getJoinLabel($join['alias']);
-          foreach (Display::getEntityLinks($joinEntity, $joinLabel) as $link) {
+          foreach (Display::getEntityLinks($joinEntity, $joinLabel, $exclude) as $link) {
             $link['join'] = $join['alias'];
             $menu[] = $link;
           }

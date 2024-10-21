@@ -7,7 +7,7 @@
 
     // TaskManager object is responsible for fetching task metadata for a SearchDispaly
     // and handles the running of tasks.
-    function TaskManager(displayCtrl) {
+    function TaskManager(displayCtrl, $element) {
       var mngr = this;
       var fetchedMetadata;
       this.tasks = null;
@@ -60,13 +60,18 @@
         if (task.crmPopup) {
           var path = $rootScope.$eval(task.crmPopup.path, data),
             query = task.crmPopup.query && $rootScope.$eval(task.crmPopup.query, data);
-          CRM.loadForm(CRM.url(path, query), {post: task.crmPopup.data && $rootScope.$eval(task.crmPopup.data, data)})
-            .on('crmFormSuccess', mngr.refreshAfterTask);
+          CRM.loadForm(CRM.url(path, query, 'back'), {post: task.crmPopup.data && $rootScope.$eval(task.crmPopup.data, data)})
+            .on('crmFormSuccess', (e) => {
+                // refreshAfterTask emits its own
+                // crmPopupFormSuccess event
+                e.stopPropagation();
+                mngr.refreshAfterTask();
+            });
         }
         else if (task.redirect) {
           var redirectPath = $rootScope.$eval(task.redirect.path, data),
             redirectQuery = task.redirect.query && $rootScope.$eval(task.redirect.query, data) && $rootScope.$eval(task.redirect.data, data);
-          $window.open(CRM.url(redirectPath, redirectQuery), '_blank');
+          $window.open(CRM.url(redirectPath, redirectQuery, 'back'), '_blank');
         }
         // If task uses dialogService
         else {
@@ -84,8 +89,11 @@
       this.refreshAfterTask = function() {
         displayCtrl.selectedRows = [];
         displayCtrl.allRowsSelected = false;
-        displayCtrl.rowCount = undefined;
-        displayCtrl.runSearch();
+        displayCtrl.rowCount = null;
+        displayCtrl.getResultsPronto();
+        // Trigger all other displays in the same form to update.
+        // This display won't update twice because of the debounce in getResultsPronto()
+        $element.trigger('crmPopupFormSuccess');
       };
     }
 
@@ -201,10 +209,10 @@
       },
 
       // onInitialize callback
-      onInitialize: [function() {
+      onInitialize: [function($scope, $element) {
         // Instantiate task manager object
         if (!this.taskManager) {
-          this.taskManager = new TaskManager(this);
+          this.taskManager = new TaskManager(this, $element);
         }
       }],
 

@@ -142,11 +142,7 @@ return [
                   'style' => 'default',
                   'path' => '',
                   'action' => '',
-                  'condition' => [
-                    'is_active',
-                    '=',
-                    TRUE,
-                  ],
+                  'condition' => [],
                 ],
                 [
                   'task' => 'enable',
@@ -158,11 +154,7 @@ return [
                   'style' => 'default',
                   'path' => '',
                   'action' => '',
-                  'condition' => [
-                    'is_active',
-                    '=',
-                    FALSE,
-                  ],
+                  'condition' => [],
                 ],
                 [
                   'entity' => 'ActionSchedule',
@@ -177,20 +169,26 @@ return [
                   'condition' => [],
                 ],
               ],
-              'type' => 'buttons',
+              'type' => 'menu',
+              'icon' => 'fa-bars',
               'alignment' => 'text-right',
             ],
           ],
-          'actions' => FALSE,
+          'actions' => TRUE,
           'classes' => [
             'table',
             'table-striped',
             'crm-sticky-header',
           ],
-          'addButton' => [
-            'path' => 'civicrm/admin/scheduleReminders/edit?reset=1&action=add',
-            'text' => E::ts('Add Scheduled Reminder'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'ActionSchedule',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Scheduled Reminder'),
+              'icon' => 'fa-plus',
+            ],
           ],
         ],
         'acl_bypass' => FALSE,

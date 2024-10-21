@@ -289,7 +289,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
     ]);
 
     // Register "contribution create" hook
-    $this->hookClass->setHook('civicrm_post', array($this, 'implementHookPost'));
+    $this->hookClass->setHook('civicrm_post', [$this, 'implementHookPost']);
     \Civi::$statics['testCreateTemplateContributionFromFirstContributionTest']['custom_field_id'] = $custom_field['id'];
 
     // Make sure a template contribution exists.
@@ -666,7 +666,7 @@ class CRM_Contribute_BAO_ContributionRecurTest extends CiviUnitTestCase {
    * @return array
    *   ['year' => int, 'month' => int]
    */
-  private function getYearAndMonthFromOffset(int $offset, int $year = NULL, int $month = NULL): array {
+  private function getYearAndMonthFromOffset(int $offset, ?int $year = NULL, ?int $month = NULL): array {
     $dateInfo = [
       'year' => $year ?? (int) date('Y'),
       'month' => ($month ?? (int) date('m')) + $offset,

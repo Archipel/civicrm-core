@@ -8,7 +8,6 @@
  +--------------------------------------------------------------------+
 *}
 {* This file provides the template for inline editing of phones *}
-{$form.oplock_ts.html}
 <table class="crm-inline-edit-form">
     <tr>
       <td colspan="5">
@@ -19,7 +18,7 @@
     </tr>
     <tr>
       <td>{ts}Phone{/ts}&nbsp;
-      {if $actualBlockCount lt 5 }
+      {if $actualBlockCount lt 5}
         <span id="add-more-phone" title="{ts}click to add more{/ts}"><a class="crm-hover-button action-item add-more-inline" href="#">{ts}add{/ts}</a></span>
       {/if}
       </td>

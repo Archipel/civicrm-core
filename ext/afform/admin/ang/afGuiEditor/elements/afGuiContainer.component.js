@@ -99,7 +99,8 @@
 
       $scope.tags = {
         div: ts('Container'),
-        fieldset: ts('Fieldset')
+        fieldset: ts('Fieldset'),
+        details: ts('Collapsible')
       };
 
       // Block settings
@@ -116,7 +117,7 @@
       };
 
       $scope.isRepeatable = function() {
-        return ctrl.join ||
+        return (ctrl.join && $scope.getRepeatMax() !== 1) ||
           (block.directive && afGui.meta.blocks[block.directive].repeat) ||
           (ctrl.node['af-fieldset'] && ctrl.editor.getEntityDefn(ctrl.editor.getEntity(ctrl.node['af-fieldset'])) !== false);
       };
@@ -139,9 +140,10 @@
       };
 
       this.getCollapsibleIcon = function() {
-        if (afGui.hasClass(ctrl.node, 'af-collapsible')) {
-          return afGui.hasClass(ctrl.node, 'af-collapsed') ? 'fa-caret-right' : 'fa-caret-down';
+        if (ctrl.node['#tag'] === 'details') {
+          return 'open' in ctrl.node ? 'fa-caret-down' : 'fa-caret-right';
         }
+        return '';
       };
 
       // Sets min value for af-repeat as a string, returns it as an int
@@ -369,8 +371,6 @@
             ctrl.node['af-title'] = value;
           } else {
             delete ctrl.node['af-title'];
-            // With no title, cannot be collapsible
-            afGui.modifyClasses(ctrl.node, 'af-collapsible af-collapsed');
           }
         }
         return ctrl.node['af-title'];

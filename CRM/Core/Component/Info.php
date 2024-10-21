@@ -111,17 +111,6 @@ abstract class CRM_Core_Component_Info {
   }
 
   /**
-   * EXPERIMENTAL: Get a list of AngularJS modules
-   *
-   * @return array
-   *   list of modules; same format as CRM_Utils_Hook::angularModules(&$angularModules)
-   * @see CRM_Utils_Hook::angularModules
-   */
-  public function getAngularModules() {
-    return [];
-  }
-
-  /**
    * Name of the module-extension coupled with this component
    * @return string
    */
@@ -151,19 +140,11 @@ abstract class CRM_Core_Component_Info {
   }
 
   /**
-   * Provides permissions that are used by component.
-   * Needs to be implemented in component's information
-   * class.
+   * Defines permissions that are used by component.
    *
-   * NOTE: if using conditionally permission return,
-   * implementation of $getAllUnconditionally is required.
-   *
-   * @param bool $getAllUnconditionally
-   *
-   * @return array|null
-   *   collection of permissions, null if none
+   * @return array
    */
-  abstract public function getPermissions($getAllUnconditionally = FALSE);
+  abstract public function getPermissions();
 
   /**
    * Determine how many other records refer to a given record.

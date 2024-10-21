@@ -8,7 +8,6 @@
  +--------------------------------------------------------------------+
 *}
 {* This file provides the template for inline editing of websites *}
-{$form.oplock_ts.html}
 <table class="crm-inline-edit-form">
     <tr>
       <td colspan="5">
@@ -21,7 +20,7 @@
     <tr>
       <td>{ts}Website{/ts}
         {help id="id-website" file="CRM/Contact/Form/Contact.hlp"}
-        {if $actualBlockCount lt 25 }
+        {if $actualBlockCount lt 25}
           &nbsp;&nbsp;<span id="add-more-website" title="{ts}click to add more{/ts}"><a class="crm-hover-button action-item add-more-inline" href="#">{ts}add{/ts}</a></span>
         {/if}
       </td>

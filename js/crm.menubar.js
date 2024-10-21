@@ -145,6 +145,12 @@
     },
     spin: function(spin) {
       $('.crm-logo-sm', '#civicrm-menu').toggleClass('fa-spin', spin);
+      // Sometimes the logo does not stop spinning (ex: file downloads)
+      if (spin) {
+        window.setTimeout(function() {
+          CRM.menubar.spin(false);
+        }, 10000);
+      }
     },
     getItem: function(itemName) {
       return traverse(CRM.menubar.data.menu, itemName, 'get');
@@ -297,12 +303,16 @@
             } else {
               params.filters[option.val()] = request.term;
             }
+            // Specialized Autocomplete SearchDisplay: @see ContactAutocompleteProvider
             CRM.api4('Contact', 'autocomplete', params).then(function(result) {
               var ret = [];
               if (result.length > 0) {
                 $('#crm-qsearch-input').autocomplete('widget').menu('option', 'disabled', false);
                 $.each(result, function(key, item) {
-                  ret.push({value: item.id, label: item.label});
+                  // Add extra items from the description (see contact_autocomplete_options setting)
+                  let description = (item.description || []).filter((v) => v);
+                  let extra = description.length ? ' :: ' + description.join(' :: ') : '';
+                  ret.push({value: item.id, label: item.label + extra});
                 });
               } else {
                 $('#crm-qsearch-input').autocomplete('widget').menu('option', 'disabled', true);
@@ -388,6 +398,7 @@
           return false;
         }
         var $menu = $('#crm-qsearch-input').autocomplete('widget');
+        // If only one contact was returned, go directly to that contact page
         if ($('li.ui-menu-item', $menu).length === 1) {
           var cid = $('li.ui-menu-item', $menu).data('ui-autocomplete-item').value;
           if (cid > 0) {
@@ -404,8 +415,9 @@
       function setQuickSearchValue() {
         var $selection = $('.crm-quickSearchField input:checked'),
           label = $selection.parent().text(),
-          value = $selection.val();
-        $('#crm-qsearch-input').attr({name: value, placeholder: '\uf002 ' + label});
+          // Set name because the mini-form submits directly to adv search
+          value = $selection.data('advSearchLegacy') || $selection.val();
+        $('#crm-qsearch-input').attr({name: value, placeholder: '\uf002 ' + label, title: label});
       }
       $('.crm-quickSearchField').click(function() {
         var input = $('input', this);
@@ -442,7 +454,7 @@
         '<label class="crm-menubar-toggle-btn" for="crm-menubar-state">' +
           '<span class="crm-menu-logo"></span>' +
           '<span class="crm-menubar-toggle-btn-icon"></span>' +
-          '<%- ts("Toggle main menu") %>' +
+          '<span class="sr-only"><%- ts("Toggle main menu") %></span>' +
         '</label>' +
         '<ul id="civicrm-menu" class="sm sm-civicrm">' +
           '<%= searchTpl({items: search}) %>' +
@@ -464,7 +476,7 @@
         '</a>' +
         '<ul>' +
           '<% _.forEach(items, function(item) { %>' +
-            '<li><a href="#" class="crm-quickSearchField"><label><input type="radio" value="<%= item.key %>" name="quickSearchField"> <%- item.value %></label></a></li>' +
+            '<li><a href="#" class="crm-quickSearchField"><label><input type="radio" value="<%= item.key %>" name="quickSearchField" data-adv-search-legacy="<%= item.adv_search_legacy %>"> <%- item.value %></label></a></li>' +
           '<% }) %>' +
         '</ul>' +
       '</li>',

@@ -1,6 +1,10 @@
 <?php
-
 use CRM_CivicrmAdminUi_ExtensionUtil as E;
+
+// Temporary check can be removed when moving this file to the civi_mail extension.
+if (!CRM_Core_Component::isEnabled('CiviMail')) {
+  return [];
+}
 
 // This SearchDisplay shows an editable-in-place field for Enabled? for all rows, including the bounce processing mail account, which cannot actually be disabled (you can change it to No, but it won't actually be disabled). So this is FIXME for when we can set rows to edit-in-place conditionally.
 return [
@@ -59,6 +63,7 @@ return [
         'saved_search_id.name' => 'Mail_Accounts',
         'type' => 'table',
         'settings' => [
+          'actions' => TRUE,
           'description' => NULL,
           'sort' => [],
           'limit' => 50,
@@ -71,6 +76,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Name'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -78,6 +84,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Server'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -85,6 +92,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Username'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -92,6 +100,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Localpart'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -99,6 +108,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Domain'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -106,6 +116,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Return-Path'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -113,6 +124,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Protocol'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -120,6 +132,7 @@ return [
               'dataType' => 'String',
               'label' => E::ts('Mail Folder'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'field',
@@ -127,6 +140,7 @@ return [
               'dataType' => 'Boolean',
               'label' => E::ts('Use SSL?'),
               'sortable' => TRUE,
+              'editable' => TRUE,
             ],
             [
               'type' => 'html',
@@ -134,6 +148,7 @@ return [
               'dataType' => 'Boolean',
               'label' => E::ts('Used For'),
               'sortable' => TRUE,
+              'editable' => TRUE,
               'rewrite' => '{if "[is_default]" == "' . E::ts('Yes') . '"}' . E::ts('Bounce Processing <strong>(Default)</strong>') . '{else}' . E::ts('Email-to-Activity') . '{/if}',
             ],
             [
@@ -173,15 +188,19 @@ return [
               'alignment' => 'text-right',
             ],
           ],
-          'actions' => FALSE,
           'classes' => [
             'table',
             'table-striped',
           ],
-          'addButton' => [
-            'path' => 'civicrm/admin/mailSettings/edit?action=add&reset=1',
-            'text' => E::ts('Add Mail Account'),
-            'icon' => 'fa-plus',
+          'toolbar' => [
+            [
+              'entity' => 'MailSettings',
+              'action' => 'add',
+              'target' => 'crm-popup',
+              'style' => 'primary',
+              'text' => E::ts('Add Mail Account'),
+              'icon' => 'fa-plus',
+            ],
           ],
         ],
         'acl_bypass' => FALSE,

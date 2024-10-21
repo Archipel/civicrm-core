@@ -1,6 +1,11 @@
 <?php
 use CRM_CivicrmAdminUi_ExtensionUtil as E;
 
+// Temporary check can be removed when moving this file to the civi_contribute extension.
+if (!CRM_Core_Component::isEnabled('CiviContribute')) {
+  return [];
+}
+
 return [
   [
     'name' => 'SavedSearch_Manage_Contribution_Pages',
@@ -51,7 +56,7 @@ return [
         'saved_search_id.name' => 'Manage_Contribution_Pages',
         'type' => 'table',
         'settings' => [
-          'actions' => FALSE,
+          'actions' => TRUE,
           'limit' => 50,
           'classes' => [
             'table',
@@ -145,7 +150,7 @@ return [
                   'entity' => '',
                   'action' => '',
                   'join' => '',
-                  'target' => '',
+                  'target' => '_blank',
                   'icon' => 'fa-external-link',
                   'text' => E::ts('Live Page'),
                   'style' => 'default',
@@ -156,7 +161,7 @@ return [
                   'entity' => '',
                   'action' => '',
                   'join' => '',
-                  'target' => '',
+                  'target' => '_blank',
                   'icon' => 'fa-external-link',
                   'text' => E::ts('Test-drive'),
                   'style' => 'default',
@@ -200,7 +205,8 @@ return [
                   'condition' => [],
                 ],
                 [
-                  'path' => 'civicrm/admin/contribute?action=copy&gid=[id]',
+                  'path' => 'civicrm/admin/contribute/manage?action=copy&gid=[id]',
+                  'csrf' => 'qfKey',
                   'icon' => 'fa-clone',
                   'text' => E::ts('Clone'),
                   'style' => 'secondary',
@@ -217,7 +223,7 @@ return [
                   'icon' => 'fa-toggle-on',
                   'text' => E::ts('Enable'),
                   'style' => 'default',
-                  'condition' => ['is_active', '=', FALSE],
+                  'condition' => [],
                 ],
                 [
                   'task' => 'disable',
@@ -226,11 +232,11 @@ return [
                   'icon' => 'fa-toggle-off',
                   'text' => E::ts('Disable'),
                   'style' => 'default',
-                  'condition' => ['is_active', '=', TRUE],
+                  'condition' => [],
                 ],
                 [
                   'entity' => 'ContributionPage',
-                  'action' => 'delete',
+                  'action' => '',
                   'join' => '',
                   'target' => 'crm-popup',
                   'icon' => 'fa-trash',
@@ -238,9 +244,11 @@ return [
                   'style' => 'danger',
                   'path' => '',
                   'condition' => [],
+                  'task' => 'delete',
                 ],
               ],
-              'type' => 'buttons',
+              'type' => 'menu',
+              'icon' => 'fa-bars',
               'alignment' => 'text-right',
             ],
           ],

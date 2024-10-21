@@ -13,7 +13,6 @@ namespace Civi\Search;
 
 use Civi\Api4\Action\SearchDisplay\AbstractRunAction;
 use Civi\Api4\Entity;
-use Civi\Api4\Extension;
 use Civi\Api4\Query\SqlEquation;
 use Civi\Api4\Query\SqlFunction;
 use Civi\Api4\SearchDisplay;
@@ -35,8 +34,6 @@ class Admin {
    */
   public static function getAdminSettings():array {
     $schema = self::getSchema();
-    $extensions = Extension::get(FALSE)->addWhere('status', '=', 'installed')
-      ->execute()->indexBy('key')->column('label');
     $data = [
       'schema' => self::addImplicitFKFields($schema),
       'joins' => self::getJoins($schema),
@@ -48,17 +45,18 @@ class Admin {
       'styles' => \CRM_Utils_Array::makeNonAssociative(self::getStyles()),
       'defaultPagerSize' => (int) \Civi::settings()->get('default_pager_size'),
       'defaultDisplay' => SearchDisplay::getDefault(FALSE)->setSavedSearch(['id' => NULL])->execute()->first(),
-      'modules' => $extensions,
-      'defaultContactType' => \CRM_Contact_BAO_ContactType::basicTypeInfo()['Individual']['name'] ?? NULL,
+      'modules' => \CRM_Core_BAO_Managed::getBaseModules(),
       'defaultDistanceUnit' => \CRM_Utils_Address::getDefaultDistanceUnit(),
       'jobFrequency' => \Civi\Api4\Job::getFields()
         ->addWhere('name', '=', 'run_frequency')
         ->setLoadOptions(['id', 'label'])
         ->execute()->first()['options'],
       'tags' => Tag::get()
-        ->addSelect('id', 'name', 'color', 'is_selectable', 'description')
+        ->addSelect('id', 'label', 'color', 'is_selectable', 'description')
         ->addWhere('used_for', 'CONTAINS', 'civicrm_saved_search')
         ->execute(),
+      'myName' => \CRM_Core_Session::singleton()->getLoggedInContactDisplayName(),
+      'dateFormats' => self::getDateFormats(),
     ];
     $perms = \Civi\Api4\Permission::get()
       ->addWhere('group', 'IN', ['civicrm', 'cms'])
@@ -98,6 +96,8 @@ class Admin {
       'NOT LIKE' => E::ts('Not Like'),
       'REGEXP' => E::ts('Matches Pattern'),
       'NOT REGEXP' => E::ts("Doesn't Match Pattern"),
+      'REGEXP BINARY' => E::ts('Matches Pattern (case-sensitive)'),
+      'NOT REGEXP BINARY' => E::ts("Doesn't Match Pattern (case-sensitive)"),
       'BETWEEN' => E::ts('Is Between'),
       'NOT BETWEEN' => E::ts('Not Between'),
       'IS EMPTY' => E::ts('Is Empty'),
@@ -145,15 +145,11 @@ class Admin {
         if ($links) {
           $entity['links'] = array_values($links);
         }
-        $paths = CoreUtil::getInfoItem($entity['name'], 'paths');
-        if (!empty($paths['add'])) {
-          $entity['addPath'] = $paths['add'];
-        }
         try {
           $getFields = civicrm_api4($entity['name'], 'getFields', [
             'select' => ['name', 'title', 'label', 'description', 'type', 'options', 'input_type', 'input_attrs', 'data_type', 'serialize', 'entity', 'fk_entity', 'readonly', 'operators', 'suffixes', 'nullable'],
             'where' => [['deprecated', '=', FALSE], ['name', 'NOT IN', ['api_key', 'hash']]],
-            'orderBy' => ['label'],
+            'orderBy' => ['label' => 'ASC'],
           ])->indexBy('name');
         }
         catch (\CRM_Core_Exception $e) {
@@ -283,35 +279,14 @@ class Admin {
   public static function getJoins(array $allowedEntities):array {
     $joins = [];
     foreach ($allowedEntities as $entity) {
-      // Multi-record custom field groups (to-date only the contact entity supports these)
-      if (in_array('CustomValue', $entity['type'])) {
-        // TODO: Lookup target entity from custom group if someday other entities support multi-record custom data
-        $targetEntity = $allowedEntities['Contact'];
-        // Join from Custom group to Contact (n-1)
-        $alias = "{$entity['name']}_{$targetEntity['name']}_entity_id";
-        $joins[$entity['name']][] = [
-          'label' => $entity['title'] . ' ' . $targetEntity['title'],
-          'description' => '',
-          'entity' => $targetEntity['name'],
-          'conditions' => self::getJoinConditions('entity_id', $alias . '.id'),
-          'defaults' => self::getJoinDefaults($alias, $targetEntity),
-          'alias' => $alias,
-          'multi' => FALSE,
-        ];
-        // Join from Contact to Custom group (n-n)
-        $alias = "{$targetEntity['name']}_{$entity['name']}_entity_id";
-        $joins[$targetEntity['name']][] = [
-          'label' => $entity['title_plural'],
-          'description' => '',
-          'entity' => $entity['name'],
-          'conditions' => self::getJoinConditions('id', $alias . '.entity_id'),
-          'defaults' => self::getJoinDefaults($alias, $entity),
-          'alias' => $alias,
-          'multi' => TRUE,
-        ];
-      }
-      // Non-custom DAO entities
-      elseif (!empty($entity['dao'])) {
+      $isVirtualEntity = (bool) array_intersect(['CustomValue', 'SavedSearch'], $entity['type']);
+
+      // Normal DAO entities (excludes virtual entities)
+      // FIXME: At this point DAO entities have enough metadata that using getReferenceColumns()
+      // is no longer necessary and they could be handled the same as virtual entities.
+      // So this entire block could, in theory, be removed in favor of the foreach loop below.
+      // Just need a solid before/after comparison to ensure the output stays stable.
+      if (!empty($entity['dao']) && !$isVirtualEntity) {
         /** @var \CRM_Core_DAO $daoClass */
         $daoClass = $entity['dao'];
         $references = $daoClass::getReferenceColumns();
@@ -336,29 +311,33 @@ class Admin {
             $dynamicCol = $reference->getTypeColumn();
 
             // For dynamic references getTargetEntities will return multiple targets; for normal joins this loop will only run once
-            foreach ($reference->getTargetEntities() as $targetTable => $targetEntityName) {
-              if (!isset($allowedEntities[$targetEntityName]) || $targetEntityName === $entity['name']) {
+            foreach ($reference->getTargetEntities() as $dynamicValue => $targetEntityName) {
+              if (!isset($allowedEntities[$targetEntityName])) {
+                // Skip if target entity doesn't exist
                 continue;
               }
               $targetEntity = $allowedEntities[$targetEntityName];
-              // Add the straight 1-1 join
-              $alias = $entity['name'] . '_' . $targetEntityName . '_' . $keyField['name'];
-              $joins[$entity['name']][] = [
-                'label' => $entity['title'] . ' ' . ($dynamicCol ? $targetEntity['title'] : $keyField['label']),
-                'description' => '',
-                'entity' => $targetEntityName,
-                'conditions' => self::getJoinConditions($keyField['name'], $alias . '.' . $reference->getTargetKey(), $targetTable, $dynamicCol),
-                'defaults' => self::getJoinDefaults($alias, $targetEntity),
-                'alias' => $alias,
-                'multi' => FALSE,
-              ];
+              $isSelf = $targetEntityName === $entity['name'];
+              // Add the straight 1-1 join (but only if it's not a reference to itself, those can be done with implicit joins)
+              if (!$isSelf) {
+                $alias = $entity['name'] . '_' . $targetEntityName . '_' . $keyField['name'];
+                $joins[$entity['name']][] = [
+                  'label' => $entity['title'] . ' ' . ($dynamicCol ? $targetEntity['title'] : $keyField['label']),
+                  'description' => '',
+                  'entity' => $targetEntityName,
+                  'conditions' => self::getJoinConditions($keyField['name'], $alias . '.' . $reference->getTargetKey(), $dynamicValue, $dynamicCol),
+                  'defaults' => self::getJoinDefaults($alias, $targetEntity),
+                  'alias' => $alias,
+                  'multi' => FALSE,
+                ];
+              }
               // Flip the conditions & add the reverse (1-n) join
               $alias = $targetEntityName . '_' . $entity['name'] . '_' . $keyField['name'];
               $joins[$targetEntityName][] = [
-                'label' => $targetEntity['title'] . ' ' . $entity['title_plural'],
-                'description' => $dynamicCol ? '' : $keyField['label'],
+                'label' => ($isSelf ? $keyField['label'] : $targetEntity['title']) . ' ' . $entity['title_plural'],
+                'description' => $dynamicCol || $isSelf ? '' : $keyField['label'],
                 'entity' => $entity['name'],
-                'conditions' => self::getJoinConditions($reference->getTargetKey(), $alias . '.' . $keyField['name'], $targetTable, $dynamicCol ? $alias . '.' . $dynamicCol : NULL),
+                'conditions' => self::getJoinConditions($reference->getTargetKey(), $alias . '.' . $keyField['name'], $dynamicValue, $dynamicCol ? $alias . '.' . $dynamicCol : NULL),
                 'defaults' => self::getJoinDefaults($alias, $entity),
                 'alias' => $alias,
                 'multi' => TRUE,
@@ -373,7 +352,7 @@ class Admin {
             $reference = self::getReference($targetKey, $references);
             $dynamicCol = $reference->getTypeColumn();
             $keyField = $fields[$reference->getReferenceKey()] ?? NULL;
-            foreach ($reference->getTargetEntities() as $targetTable => $targetEntityName) {
+            foreach ($reference->getTargetEntities() as $dynamicValue => $targetEntityName) {
               $targetEntity = $allowedEntities[$targetEntityName] ?? NULL;
               $baseEntity = $allowedEntities[$fields[$baseKey]['fk_entity']] ?? NULL;
               if (!$targetEntity || !$baseEntity) {
@@ -388,7 +367,7 @@ class Admin {
                 'entity' => $targetEntityName,
                 'conditions' => array_merge(
                   [$bridge],
-                  self::getJoinConditions('id', $alias . '.' . $baseKey, NULL, NULL)
+                  self::getJoinConditions('id', $alias . '.' . $baseKey)
                 ),
                 'defaults' => self::getJoinDefaults($alias, $targetEntity, $entity),
                 'bridge' => $bridge,
@@ -404,7 +383,7 @@ class Admin {
                   'entity' => $baseEntity['name'],
                   'conditions' => array_merge(
                     [$bridge],
-                    self::getJoinConditions($reference->getTargetKey(), $alias . '.' . $keyField['name'], $targetTable, $dynamicCol ? $alias . '.' . $dynamicCol : NULL)
+                    self::getJoinConditions($reference->getTargetKey(), $alias . '.' . $keyField['name'], $dynamicValue, $alias . '.' . $dynamicCol)
                   ),
                   'defaults' => self::getJoinDefaults($alias, $baseEntity, $entity),
                   'bridge' => $bridge,
@@ -415,25 +394,60 @@ class Admin {
             }
           }
         }
-        // Custom EntityRef joins
-        foreach ($fields as $field) {
-          if ($field['type'] === 'Custom' && $field['input_type'] === 'EntityRef') {
-            $targetEntity = $allowedEntities[$field['fk_entity']];
-            // Add the EntityRef join
-            [, $bareFieldName] = explode('.', $field['name']);
-            $alias = $entity['name'] . '_' . $field['fk_entity'] . '_' . $bareFieldName;
-            $joins[$entity['name']][] = [
-              'label' => $entity['title'] . ' ' . $field['title'],
-              'description' => $field['description'],
-              'entity' => $field['fk_entity'],
-              'conditions' => self::getJoinConditions($field['name'], $alias . '.id'),
-              'defaults' => [],
-              'alias' => $alias,
-              'multi' => FALSE,
-            ];
+      }
+
+      // This handles joins for custom fields and virtual entities which don't have a DAO.
+      foreach ($entity['fields'] as $field) {
+        // FIXME: See comment above: this loop should be able to handle every entity.
+        // Above block could be removed and the first part of this conditional
+        // `($field['type'] === 'Custom' || $isVirtualEntity)` can be removed.
+        if (($field['type'] === 'Custom' || $isVirtualEntity) && $field['fk_entity'] && $field['input_type'] === 'EntityRef') {
+          $entityRefJoins = self::getEntityRefJoins($entity, $field);
+          foreach ($entityRefJoins as $joinEntity => $joinInfo) {
+            $joins[$joinEntity][] = $joinInfo;
           }
         }
       }
+    }
+    // Add contact joins to the contactType pseudo-entities
+    foreach (\CRM_Contact_BAO_ContactType::basicTypes() as $contactType) {
+      $joins += [$contactType => []];
+      $joins[$contactType] = array_merge($joins[$contactType], $joins['Contact']);
+    }
+    return $joins;
+  }
+
+  /**
+   * Get joins for entity reference custom fields, and the entity_id field in
+   * multi-record custom groups.
+   *
+   * @return array[]
+   */
+  public static function getEntityRefJoins(array $entity, array $field): array {
+    $exploded = explode('.', $field['name']);
+    $bareFieldName = array_reverse($exploded)[0];
+    $alias = "{$entity['name']}_{$field['fk_entity']}_$bareFieldName";
+    $joins[$entity['name']] = [
+      'label' => $entity['title'] . ' ' . $field['label'],
+      'description' => $field['description'],
+      'entity' => $field['fk_entity'],
+      'conditions' => self::getJoinConditions($field['name'], $alias . '.id'),
+      'defaults' => [],
+      'alias' => $alias,
+      'multi' => FALSE,
+    ];
+    // Do reverse join if not the same entity
+    if ($entity['name'] !== $field['fk_entity']) {
+      $alias = "{$field['fk_entity']}_{$entity['name']}_$bareFieldName";
+      $joins[$field['fk_entity']] = [
+        'label' => $entity['title_plural'],
+        'description' => $entity['description'] ?? '',
+        'entity' => $entity['name'],
+        'conditions' => self::getJoinConditions('id', "$alias.{$field['name']}"),
+        'defaults' => [],
+        'alias' => $alias,
+        'multi' => TRUE,
+      ];
     }
     return $joins;
   }
@@ -458,11 +472,11 @@ class Admin {
    *
    * @param string $nearCol
    * @param string $farCol
-   * @param string|null $targetTable
+   * @param string|null $dynamicValue
    * @param string|null $dynamicCol
    * @return array[]
    */
-  private static function getJoinConditions(string $nearCol, string $farCol, string $targetTable = NULL, string $dynamicCol = NULL):array {
+  private static function getJoinConditions(string $nearCol, string $farCol, ?string $dynamicValue = NULL, ?string $dynamicCol = NULL):array {
     $conditions = [
       [
         $nearCol,
@@ -474,7 +488,7 @@ class Admin {
       $conditions[] = [
         $dynamicCol,
         '=',
-        "'$targetTable'",
+        "'$dynamicValue'",
       ];
     }
     return $conditions;
@@ -567,6 +581,14 @@ class Admin {
       return $a['title'] <=> $b['title'];
     });
     return $functions;
+  }
+
+  private static function getDateFormats(): array {
+    return \Civi\Api4\Setting::getFields(FALSE)
+      ->addWhere('name', 'LIKE', 'dateformat%')
+      ->execute()
+      ->indexBy('name')
+      ->column('title');
   }
 
 }

@@ -25,11 +25,13 @@ class api_v3_ExtensionTest extends CiviUnitTestCase {
   use \Civi\Test\GuzzleTestTrait;
 
   public function setUp(): void {
+    parent::setUp();
     Civi::settings()->set('ext_repo_url', 'http://localhost:9999/fake-repo');
   }
 
   public function tearDown(): void {
     Civi::settings()->revert('ext_repo_url');
+    parent::tearDown();
   }
 
   /**
@@ -37,7 +39,7 @@ class api_v3_ExtensionTest extends CiviUnitTestCase {
    */
   public function testGetremote(): void {
     $testsDir = dirname(dirname(dirname(dirname(__FILE__))));
-    $this->createMockHandler([file_get_contents($testsDir . '/mock/extension_browser_results/single')]);
+    $this->createMockHandler([file_get_contents($testsDir . '/mock/extension_browser_results/single.json')]);
     $this->setUpClientWithHistoryContainer();
     CRM_Extension_System::singleton()->getBrowser()->setGuzzleClient($this->getGuzzleClient());
     CRM_Extension_System::singleton()->getBrowser()->refresh();

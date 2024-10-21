@@ -11,7 +11,7 @@
   {include file="CRM/Form/basicFormFields.tpl"}
 
   <table class="form-layout" id="invoicing_blocks">
-    {foreach from=$htmlFields item=fieldSpec key=htmlField}
+    {foreach from=$invoiceDependentFields item=fieldSpec key=htmlField}
       {if $form.$htmlField}
         {assign var=n value=$htmlField|cat:'_description'}
         <tr class="crm-preferences-form-block-{$htmlField}">
@@ -56,6 +56,7 @@
         }
         else {
           cj("#invoicing_blocks").hide();
+          cj('#invoice_is_email_pdf_invoice_is_email_pdf').prop('checked', false);
         }
       });
     });

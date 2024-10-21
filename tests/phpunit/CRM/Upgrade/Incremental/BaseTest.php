@@ -4,7 +4,6 @@ use Civi\Api4\ActionSchedule;
 use Civi\Api4\MessageTemplate;
 
 /**
- * Class CRM_UF_Page_ProfileEditorTest
  * @group headless
  */
 class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
@@ -12,32 +11,28 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
 
   public function tearDown(): void {
     $this->quickCleanup(['civicrm_saved_search', 'civicrm_action_schedule']);
+    $this->revertTemplateToReservedTemplate();
     parent::tearDown();
   }
 
   /**
    * Test message upgrade process.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testMessageTemplateUpgrade(): void {
-    $workFlowID = $this->callAPISuccessGetValue('OptionValue', ['return' => 'id', 'name' => 'membership_online_receipt', 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
-
-    $templates = $this->callAPISuccess('MessageTemplate', 'get', ['workflow_id' => $workFlowID])['values'];
+    $templates = $this->callAPISuccess('MessageTemplate', 'get', ['workflow_name' => 'membership_online_receipt'])['values'];
     foreach ($templates as $template) {
-      $originalText = $template['msg_text'];
-      $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => 'great what a cool member you are', 'id' => $template['id']]);
-      $msg_text = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_text']);
-      $this->assertEquals('great what a cool member you are', $msg_text);
+      $this->callAPISuccess('MessageTemplate', 'create', ['msg_html' => 'great what a cool member you are', 'id' => $template['id']]);
+      $msg_html = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_html']);
+      $this->assertEquals('great what a cool member you are', $msg_html);
     }
     $messageTemplateObject = new CRM_Upgrade_Incremental_MessageTemplates('5.4.alpha1');
     $messageTemplateObject->updateTemplates();
 
     foreach ($templates as $template) {
-      $msg_text = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_text']);
-      $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}{$greeting},{/if}', $msg_text);
-      if ($msg_text !== $originalText) {
-        // Reset value for future tests.
-        $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => $originalText, 'id' => $template['id']]);
-      }
+      $msg_html = MessageTemplate::get()->addWhere('id', '=', $template['id'])->execute()->first()['msg_html'];
+      $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}<p>{$greeting},</p>{/if}', $msg_html);
     }
   }
 
@@ -98,42 +93,36 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
    * Test message upgrade process only edits the default if the template is customised.
    */
   public function testMessageTemplateUpgradeAlreadyCustomised(): void {
-    $workFlowID = civicrm_api3('OptionValue', 'getvalue', ['return' => 'id', 'name' => 'membership_online_receipt', 'options' => ['limit' => 1, 'sort' => 'id DESC']]);
-
-    $templates = $this->callAPISuccess('MessageTemplate', 'get', ['workflow_id' => $workFlowID])['values'];
+    $templates = $this->callAPISuccess('MessageTemplate', 'get', ['workflow_name' => 'membership_online_receipt'])['values'];
     foreach ($templates as $template) {
       if ($template['is_reserved']) {
-        $originalText = $template['msg_text'];
-        $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => 'great what a cool member you are', 'id' => $template['id']]);
+        $this->callAPISuccess('MessageTemplate', 'create', ['msg_html' => 'great what a cool member you are', 'id' => $template['id']]);
       }
       else {
-        $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => 'great what a silly sausage you are', 'id' => $template['id']]);
+        $this->callAPISuccess('MessageTemplate', 'create', ['msg_html' => 'great what a silly sausage you are', 'id' => $template['id']]);
       }
     }
     $messageTemplateObject = new CRM_Upgrade_Incremental_MessageTemplates('5.4.alpha1');
     $messageTemplateObject->updateTemplates();
 
     foreach ($templates as $template) {
-      $msg_text = $this->callAPISuccessGetValue('MessageTemplate', ['id' => $template['id'], 'return' => 'msg_text']);
+      $msg_html = MessageTemplate::get()->addWhere('id', '=', $template['id'])->execute()->first()['msg_html'];
       if ($template['is_reserved']) {
-        $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}{$greeting},{/if}', $msg_text);
+        $this->assertStringContainsString('{assign var="greeting" value="{contact.email_greeting_display}"}{if $greeting}<p>{$greeting},</p>{/if}', $msg_html);
       }
       else {
-        $this->assertEquals('great what a silly sausage you are', $msg_text);
-      }
-
-      if ($msg_text !== $originalText) {
-        // Reset value for future tests.
-        $this->callAPISuccess('MessageTemplate', 'create', ['msg_text' => $originalText, 'id' => $template['id']]);
+        $this->assertEquals('great what a silly sausage you are', $msg_html);
       }
     }
   }
 
   /**
    * Test function for messages on upgrade.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testMessageTemplateGetUpgradeMessages(): void {
-    \Civi\Api4\MessageTemplate::update(FALSE)
+    MessageTemplate::update(FALSE)
       ->addValue('msg_text', 'Edited text')
       ->addWhere('workflow_name', '=', 'contribution_online_receipt')
       ->addWhere('is_default', '=', TRUE)
@@ -181,7 +170,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
   /**
    * Test Multiple Relative Date conversions
    */
-  public function testSmartGroupMultipleRelatvieDateConversions(): void {
+  public function testSmartGroupMultipleRelativeDateConversions(): void {
     $this->callAPISuccess('SavedSearch', 'create', [
       'form_values' => [
         ['membership_join_date_low', '=', '20190903000000'],
@@ -554,7 +543,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
       'name' => $name,
     ]);
     // API is hardened to strip the spaces to lets re-add in now
-    CRM_Core_DAO::executeQuery("UPDATE civicrm_option_group SET name = %1 WHERE id = %2", [
+    CRM_Core_DAO::executeQuery('UPDATE civicrm_option_group SET name = %1 WHERE id = %2', [
       1 => [$name, 'String'],
       2 => [$optionGroup['id'], 'Positive'],
     ]);
@@ -578,7 +567,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
       'name' => $name,
     ]);
     // API is hardened to strip the spaces to lets re-add in now
-    CRM_Core_DAO::executeQuery("UPDATE civicrm_option_group SET name = %1 WHERE id = %2", [
+    CRM_Core_DAO::executeQuery('UPDATE civicrm_option_group SET name = %1 WHERE id = %2', [
       1 => [$name, 'String'],
       2 => [$optionGroup['id'], 'Positive'],
     ]);
@@ -617,37 +606,6 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
         'id_max' => '',
         'id_op' => 'lte',
         'id_value' => '',
-        'contact_type_op' => 'in',
-        'contact_type_value' => [],
-        'contact_sub_type_op' => 'in',
-        'contact_sub_type_value' => [],
-        'is_deleted_op' => 'eq',
-        'is_deleted_value' => 0,
-        'preferred_language_op' => 'in',
-        'preferred_language_value' => [],
-        'do_not_email_op' => 'eq',
-        'do_not_email_value' => '',
-        'do_not_phone_op' => 'eq',
-        'do_not_phone_value' => '',
-        'do_not_mail_op' => 'eq',
-        'do_not_mail_value' => '',
-        'do_not_sms_op' => 'eq',
-        'do_not_sms_value' => '',
-        'is_opt_out_op' => 'eq',
-        'is_opt_out_value' => '',
-        'first_name_op' => 'has',
-        'first_name_value' => '',
-        'prefix_id_op' => 'in',
-        'prefix_id_value' => [],
-        'suffix_id_op' => 'in',
-        'suffix_id_value' => [],
-        'gender_id_op' => 'in',
-        'gender_id_value' => [],
-        'birth_date_relative' => '',
-        'birth_date_from' => '',
-        'birth_date_to' => '',
-        'is_deceased_op' => 'eq',
-        'is_deceased_value' => '',
         'contribution_or_soft_op' => 'eq',
         'contribution_or_soft_value' => 'contributions_only',
         'receive_date_relative' => 0,
@@ -660,22 +618,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
         'contribution_source_value' => '',
         'currency_op' => 'in',
         'currency_value' => [],
-        'non_deductible_amount_min' => '',
-        'non_deductible_amount_max' => '',
-        'non_deductible_amount_op' => 'lte',
-        'non_deductible_amount_value' => '',
-        'financial_type_id_op' => 'in',
-        'financial_type_id_value' => [],
-        'contribution_page_id_op' => 'in',
-        'contribution_page_id_value' => [],
-        'payment_instrument_id_op' => 'in',
-        'payment_instrument_id_value' => [],
-        'contribution_status_id_op' => 'in',
         'contribution_status_id_value' => [0 => 1],
-        'total_amount_min' => '',
-        'total_amount_max' => '',
-        'total_amount_op' => 'lte',
-        'total_amount_value' => '',
         'cancel_date_relative' => '',
         'cancel_date_from' => '',
         'cancel_date_to' => '',
@@ -685,21 +628,6 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
         'soft_credit_type_id_value' => [],
         'card_type_id_op' => 'in',
         'card_type_id_value' => [],
-        'ordinality_op' => 'in',
-        'ordinality_value' => [],
-        'note_value' => '',
-        'street_address_op' => 'has',
-        'street_address_value' => '',
-        'postal_code_op' => 'has',
-        'postal_code_value' => '',
-        'city_op' => 'has',
-        'city_value' => '',
-        'country_id_op' => 'in',
-        'country_id_value' => [],
-        'state_province_id_op' => 'in',
-        'state_province_id_value' => [],
-        'county_id_op' => 'in',
-        'county_id_value' => [],
         'tagid_op' => 'in',
         'tagid_value' => [],
         'gid_op' => 'in',
@@ -728,7 +656,7 @@ class CRM_Upgrade_Incremental_BaseTest extends CiviUnitTestCase {
     ]);
     CRM_Upgrade_Incremental_php_FiveTwentyFive::convertReportsJcalendarToDatePicker();
     $reportGet = $this->callAPISuccess('ReportInstance', 'getsingle', ['id' => $report['id']]);
-    $formValues = unserialize($reportGet['form_values']);
+    $formValues = @unserialize($reportGet['form_values']);
     $this->assertEquals('1991-11-01 00:00:00', $formValues['receive_date_from']);
   }
 

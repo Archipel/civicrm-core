@@ -200,7 +200,7 @@ class CRM_Event_Selector_Search extends CRM_Core_Selector_Base implements CRM_Co
     if ($compContext) {
       $extraParams .= "&compContext={$compContext}";
     }
-    elseif ($context == 'search') {
+    elseif ($context === 'search') {
       $extraParams .= '&compContext=participant';
     }
 
@@ -226,8 +226,8 @@ class CRM_Event_Selector_Search extends CRM_Core_Selector_Base implements CRM_Co
         ],
         CRM_Core_Action::DELETE => [
           'name' => ts('Delete'),
-          'url' => 'civicrm/contact/view/participant',
-          'qs' => 'reset=1&action=delete&id=%%id%%&cid=%%cid%%&context=%%cxt%%' . $extraParams,
+          'url' => 'civicrm/participant/delete',
+          'qs' => 'reset=1&id=%%id%%' . $extraParams,
           'title' => ts('Delete Participation'),
           'weight' => 100,
         ],
@@ -329,23 +329,13 @@ class CRM_Event_Selector_Search extends CRM_Core_Selector_Base implements CRM_Co
 
       // Skip registration if event_id is NULL
       if (empty($row['event_id'])) {
-        Civi::log()->warning('Participant record without event ID. You have invalid data in your database!');
+        Civi::log()->warning('Participant record (' . $row['participant_id'] . ') without event ID. You have invalid data in your database!');
         continue;
       }
 
       //carry campaign on selectors.
       $row['campaign'] = $allCampaigns[$result->participant_campaign_id] ?? NULL;
       $row['campaign_id'] = $result->participant_campaign_id;
-
-      // gross hack to show extra information for pending status
-      $statusClass = NULL;
-      if ((isset($row['participant_status_id'])) &&
-        ($statusId = array_search($row['participant_status_id'], $statusTypes))
-      ) {
-        $statusClass = $statusClasses[$statusId];
-      }
-
-      $row['showConfirmUrl'] = $statusClass == 'Pending';
 
       if (!empty($row['participant_is_test'])) {
         $row['participant_status'] = CRM_Core_TestEntity::appendTestText($row['participant_status']);
@@ -412,7 +402,7 @@ class CRM_Event_Selector_Search extends CRM_Core_Selector_Base implements CRM_Co
         $result->participant_id
       );
 
-      $row['contact_type'] = CRM_Contact_BAO_Contact_Utils::getImage($result->contact_sub_type ? $result->contact_sub_type : $result->contact_type, FALSE, $result->contact_id
+      $row['contact_type'] = CRM_Contact_BAO_Contact_Utils::getImage($result->contact_sub_type ?: $result->contact_type, FALSE, $result->contact_id
       );
 
       $row['paid'] = CRM_Event_BAO_Event::isMonetary($row['event_id']);
@@ -435,7 +425,7 @@ class CRM_Event_Selector_Search extends CRM_Core_Selector_Base implements CRM_Co
       }
       $rows[] = $row;
     }
-    CRM_Core_Selector_Controller::$_template->assign_by_ref('lineItems', $lineItems);
+    CRM_Core_Smarty::singleton()->assign('lineItems', $lineItems ?? []);
 
     return $rows;
   }

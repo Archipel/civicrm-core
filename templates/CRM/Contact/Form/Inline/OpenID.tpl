@@ -8,7 +8,6 @@
  +--------------------------------------------------------------------+
 *}
 {* This file provides the template for inline editing of openids *}
-{$form.oplock_ts.html}
 <table class="crm-inline-edit-form">
   <tr>
     <td colspan="4">
@@ -20,7 +19,7 @@
 
   <tr>
     <td>{ts}Open ID{/ts}&nbsp;
-    {if $actualBlockCount lt 5 }
+    {if $actualBlockCount lt 5}
       <span id="add-more-openid" title="{ts}click to add more{/ts}"><a class="crm-hover-button action-item add-more-inline" href="#">{ts}add{/ts}</a></span>
     {/if}
     </td>

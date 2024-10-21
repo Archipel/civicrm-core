@@ -104,6 +104,24 @@ class SqlFunctionTest extends Api4TestBase implements TransactionalInterface {
     $this->assertContains('1, ' . $cid . ', 100.00', $agg['GROUP_CONCAT:financial_type_id_contact_id_total_amount']);
     $this->assertEquals([TRUE, TRUE, FALSE, FALSE], $agg['is_donation']);
     $this->assertEquals(['January', 'February', 'March', 'April'], $agg['months']);
+
+    // Test GROUP_FIRST
+    $agg = Contribution::get(FALSE)
+      ->addGroupBy('contact_id')
+      ->addWhere('contact_id', '=', $cid)
+      ->addSelect('GROUP_FIRST(financial_type_id:name ORDER BY id) AS financial_type_1')
+      ->addSelect("GROUP_FIRST((financial_type_id = 1) ORDER BY id) AS is_donation_1")
+      ->addSelect("GROUP_FIRST((financial_type_id = 1) ORDER BY id DESC) AS is_donation_4")
+      ->addSelect("GROUP_FIRST(MONTH(receive_date):label ORDER BY id) AS months")
+      ->addSelect('COUNT(*) AS count')
+      ->execute()
+      ->first();
+
+    $this->assertTrue(4 === $agg['count']);
+    $this->assertEquals('Donation', $agg['financial_type_1']);
+    $this->assertEquals('January', $agg['months']);
+    $this->assertTrue($agg['is_donation_1']);
+    $this->assertFalse($agg['is_donation_4']);
   }
 
   public function testGroupConcatUnique(): void {
@@ -174,19 +192,20 @@ class SqlFunctionTest extends Api4TestBase implements TransactionalInterface {
     $this->assertEquals(2, $result[0]['count']);
     $this->assertEquals(1, $result[1]['count']);
 
-    $result = Contribution::get(FALSE)
-      ->addGroupBy('contact_id')
-      ->addGroupBy('receive_date')
-      ->addSelect('contact_id')
-      ->addSelect('receive_date')
-      ->addSelect('SUM(total_amount)')
-      ->addOrderBy('receive_date')
-      ->addWhere('contact_id', '=', $cid)
-      ->addHaving('SUM(total_amount)', '>', 300)
-      ->execute();
+    $result = (array) civicrm_api4('Contribution', 'get', [
+      'checkPermissions' => FALSE,
+      'groupBy' => ['contact_id', 'receive_date'],
+      'select' => ['contact_id', 'DATE(receive_date)', 'SUM(total_amount)'],
+      'orderBy' => ['receive_date' => 'ASC'],
+      'where' => [
+        ['contact_id', '=', $cid],
+      ],
+      'having' => [
+        ['SUM(total_amount)', '>', 300],
+      ],
+    ], ['DATE:receive_date' => 'SUM:total_amount']);
     $this->assertCount(1, $result);
-    $this->assertStringStartsWith('2020-04-04', $result[0]['receive_date']);
-    $this->assertEquals(400, $result[0]['SUM:total_amount']);
+    $this->assertEquals(['2020-04-04' => 400], $result);
   }
 
   public function testComparisonFunctions(): void {
@@ -320,6 +339,54 @@ class SqlFunctionTest extends Api4TestBase implements TransactionalInterface {
     $this->assertEquals('201001', $result[1]['year_month']);
     $this->assertEquals(6, $result[1]['day_number']);
     $this->assertEquals('Friday', $result[1]['day_name']);
+  }
+
+  public function testAnniversaryFunctions(): void {
+    $lastName = uniqid(__FUNCTION__);
+    $sampleData = [
+      ['first_name' => 'abc', 'last_name' => $lastName, 'birth_date' => '2001-02-28'],
+      ['first_name' => 'def', 'last_name' => $lastName, 'birth_date' => '2000-02-29'],
+    ];
+    $contacts = $this->saveTestRecords('Contact', [
+      'records' => $sampleData,
+    ]);
+
+    $result = Contact::get(FALSE)
+      ->addSelect('birth_date')
+      ->addSelect('next_birthday')
+      ->addSelect('NEXTANNIV(birth_date) AS next_birthday_date')
+      ->addSelect('DAYSTOANNIV(birth_date) AS next_birthday_count')
+      ->addWhere('last_name', '=', $lastName)
+      ->addOrderBy('id')
+      ->execute();
+
+    $this->assertEquals('2001-02-28', $result[0]['birth_date']);
+    $this->assertEquals('2000-02-29', $result[1]['birth_date']);
+    $this->assertNotNull($result[0]['next_birthday']);
+    $this->assertNotNull($result[1]['next_birthday']);
+    $this->assertNotNull($result[0]['next_birthday_count']);
+    $this->assertNotNull($result[1]['next_birthday_count']);
+    $this->assertNotNull($result[0]['next_birthday_date']);
+    $this->assertNotNull($result[1]['next_birthday_date']);
+    $this->assertEquals($result[0]['next_birthday'], $result[0]['next_birthday_count']);
+    $this->assertEquals($result[1]['next_birthday'], $result[1]['next_birthday_count']);
+
+    // Check upcoming birthday is a date in the future
+    $this->assertGreaterThanOrEqual(date('Y-m-d'), $result[0]['next_birthday_date']);
+    [$y, $md] = explode('-', $result[0]['next_birthday_date'], 2);
+    $this->assertEquals('02-28', $md);
+
+    // This birthday falls on a leap year.
+    [$y, $md] = explode('-', $result[1]['next_birthday_date'], 2);
+    $this->assertGreaterThanOrEqual(date('Y'), $y);
+    // If the upcoming date falls on a leap year, we expect feb 29 to be returned
+    if ((new \IntlGregorianCalendar())->isLeapYear($y)) {
+      $this->assertEquals('02-29', $md);
+    }
+    // Otherwise it should return feb 28
+    else {
+      $this->assertEquals('02-28', $md);
+    }
   }
 
   public function testIncorrectNumberOfArguments(): void {

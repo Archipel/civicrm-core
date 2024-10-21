@@ -64,6 +64,8 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact implemen
             'group_id' => $event->object->group_id,
             'contact_id' => $event->object->contact_id,
             'status' => $event->object->status,
+            'method' => $event->params['method'] ?? 'API',
+            'tracking' => $event->params['tracking'] ?? NULL,
           ],
         ])->execute();
       }
@@ -201,14 +203,15 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact implemen
         CRM_Contact_BAO_GroupContactCache::invalidateGroupContactCache($groupId);
       }
       else {
+        // 'Removed' means we add a history record and ensure the GroupContact record exists with a 'Removed' status.
         $groupContact = new CRM_Contact_DAO_GroupContact();
         $groupContact->group_id = $groupId;
         $groupContact->contact_id = $contactId;
-        // check if the selected contact id already a member, or if this is
+        // check if the selected contact is already listed as Removed
         // an opt-out of a smart group.
         // if not a member remove to groupContact else keep the count of contacts that are not removed
-        if ($groupContact->find(TRUE) || $group->saved_search_id) {
-          // remove the contact from the group
+        if (($groupContact->find(TRUE) || $group->saved_search_id) && $groupContact->status !== $status) {
+          // remove the contact from the group.
           $numContactsRemoved++;
         }
         else {
@@ -465,8 +468,7 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact implemen
         LEFT JOIN civicrm_subscription_history
           ON ( civicrm_group_contact.contact_id = civicrm_subscription_history.contact_id
           AND civicrm_subscription_history.group_id = {$groupID} )";
-      $where = "AND civicrm_subscription_history.method ='Email'";
-      $orderBy = "ORDER BY civicrm_subscription_history.id DESC";
+      $orderBy = "ORDER BY civicrm_subscription_history.id DESC LIMIT 1";
     }
     $query = "
 SELECT    *
@@ -474,7 +476,6 @@ SELECT    *
           $leftJoin
   WHERE civicrm_group_contact.contact_id = %1
   AND civicrm_group_contact.group_id = %2
-          $where
           $orderBy
 ";
 

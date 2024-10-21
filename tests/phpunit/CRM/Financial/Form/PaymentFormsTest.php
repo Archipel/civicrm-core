@@ -33,12 +33,24 @@ class CRM_Financial_Form_PaymentFormsTest extends CiviUnitTestCase {
 
   use CRM_Core_Payment_AuthorizeNetTrait;
 
+  public function setUp(): void {
+    parent::setUp();
+    $this->callAPISuccess('Extension', 'enable', ['keys' => ['eventcart']]);
+  }
+
+  public function tearDown(): void {
+    $this->callAPISuccess('Extension', 'disable', ['keys' => ['eventcart']]);
+    $this->callAPISuccess('Extension', 'uninstall', ['keys' => ['eventcart']]);
+    parent::tearDown();
+  }
+
   /**
    * Generic test on event payment forms to make sure they submit without error with payment processing.
    *
    * @throws \CRM_Core_Exception
    */
   public function testEventPaymentForms(): void {
+    $this->callAPISuccess('Extension', 'install', ['keys' => ['eventcart']]);
     $this->createAuthorizeNetProcessor();
     $processors = [$this->ids['PaymentProcessor']['anet']];
     $eventID = $this->eventCreatePaid([
@@ -98,7 +110,10 @@ class CRM_Financial_Form_PaymentFormsTest extends CiviUnitTestCase {
       ->addWhere('status_id:name', '=', 'Registered')
       ->execute()
       ->first();
-    $this->assertEquals($cart->id, $participant['cart_id']);
+    $cartID = \Civi\Api4\EventCartParticipant::get()
+      ->addWhere('participant_id', '=', $participant['id'])
+      ->execute()->single()['cart_id'];
+    $this->assertEquals($cart->id, $cartID);
     $this->assertEquals(CRM_Core_PseudoConstant::getKey('CRM_Event_BAO_Participant', 'status_id', 'Registered'), $participant['status_id']);
     $this->assertRequestValid(['x_city' => 'The+Shire', 'x_state' => 'IL', 'x_amount' => 300.0]);
   }

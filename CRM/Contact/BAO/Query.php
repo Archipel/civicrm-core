@@ -583,10 +583,10 @@ class CRM_Contact_BAO_Query {
       // Unit test coverage in api_v3_FinancialTypeACLTest::testGetACLContribution.
       $clauses = [];
       if ($component === 'contribution') {
-        $clauses = CRM_Contribute_BAO_Contribution::getSelectWhereClause();
+        $clauses = array_filter(CRM_Contribute_BAO_Contribution::getSelectWhereClause());
       }
       if ($component === 'membership') {
-        $clauses = CRM_Member_BAO_Membership::getSelectWhereClause();
+        $clauses = array_filter(CRM_Member_BAO_Membership::getSelectWhereClause());
       }
       if ($clauses) {
         $this->_whereClause .= ' AND ' . implode(' AND ', $clauses);
@@ -1276,10 +1276,6 @@ class CRM_Contact_BAO_Query {
 
                   //build locationType join
                   $locationTypeJoin[$tName] = " ( `$tName`.location_type_id = $ltName.id )";
-
-                  if ($addWhere) {
-                    $this->_whereTables[$tName] = $this->_tables[$tName];
-                  }
                   break;
 
                 case 'civicrm_state_province':
@@ -3213,27 +3209,28 @@ WHERE  $smartGroupClause
    *
    * @throws \CRM_Core_Exception
    */
-  public function tagSearch(&$values) {
+  public function tagSearch(array $values): void {
     [$name, $op, $value, $grouping, $wildcard] = $values;
 
-    $op = "LIKE";
+    $op = 'LIKE';
     $value = "%{$value}%";
     $escapedValue = CRM_Utils_Type::escape("%{$value}%", 'String');
 
     $useAllTagTypes = $this->getWhereValues('all_tag_types', $grouping);
     $tagTypesText = $this->getWhereValues('tag_types_text', $grouping);
 
-    $etTable = "`civicrm_entity_tag-" . uniqid() . "`";
-    $tTable = "`civicrm_tag-" . uniqid() . "`";
-
-    if ($useAllTagTypes[2]) {
+    $etTable = '`civicrm_entity_tag-' . uniqid() . '`';
+    $tTable = '`civicrm_tag-' . uniqid() . '`';
+    // All Tag Types will only be added as a field on the form if tags are available
+    // for entities other than contact
+    if ($useAllTagTypes && $useAllTagTypes[2]) {
       $this->_tables[$etTable] = $this->_whereTables[$etTable]
         = " LEFT JOIN civicrm_entity_tag {$etTable} ON ( {$etTable}.entity_id = contact_a.id)
             LEFT JOIN civicrm_tag {$tTable} ON ( {$etTable}.tag_id = {$tTable}.id  )";
 
       // search tag in cases
-      $etCaseTable = "`civicrm_entity_case_tag-" . uniqid() . "`";
-      $tCaseTable = "`civicrm_case_tag-" . uniqid() . "`";
+      $etCaseTable = '`civicrm_entity_case_tag-' . uniqid() . '`';
+      $tCaseTable = '`civicrm_case_tag-' . uniqid() . '`';
       $this->_tables[$etCaseTable] = $this->_whereTables[$etCaseTable]
         = " LEFT JOIN civicrm_case_contact ON civicrm_case_contact.contact_id = contact_a.id
             LEFT JOIN civicrm_case
@@ -3242,8 +3239,8 @@ WHERE  $smartGroupClause
             LEFT JOIN civicrm_entity_tag {$etCaseTable} ON ( {$etCaseTable}.entity_table = 'civicrm_case' AND {$etCaseTable}.entity_id = civicrm_case.id )
             LEFT JOIN civicrm_tag {$tCaseTable} ON ( {$etCaseTable}.tag_id = {$tCaseTable}.id  )";
       // search tag in activities
-      $etActTable = "`civicrm_entity_act_tag-" . uniqid() . "`";
-      $tActTable = "`civicrm_act_tag-" . uniqid() . "`";
+      $etActTable = '`civicrm_entity_act_tag-' . uniqid() . '`';
+      $tActTable = '`civicrm_act_tag-' . uniqid() . '`';
       $activityContacts = CRM_Activity_BAO_ActivityContact::buildOptions('record_type_id', 'validate');
       $targetID = CRM_Utils_Array::key('Activity Targets', $activityContacts);
 
@@ -3260,8 +3257,8 @@ WHERE  $smartGroupClause
       $this->_qill[$grouping][] = ts('Tag %1 %2', [1 => $tagTypesText[2], 2 => $op]) . ' ' . $value;
     }
     else {
-      $etTable = "`civicrm_entity_tag-" . uniqid() . "`";
-      $tTable = "`civicrm_tag-" . uniqid() . "`";
+      $etTable = '`civicrm_entity_tag-' . uniqid() . "`";
+      $tTable = '`civicrm_tag-' . uniqid() . '`';
       $this->_tables[$etTable] = $this->_whereTables[$etTable] = " LEFT JOIN civicrm_entity_tag {$etTable} ON ( {$etTable}.entity_id = contact_a.id  AND
       {$etTable}.entity_table = 'civicrm_contact' )
                 LEFT JOIN civicrm_tag {$tTable} ON ( {$etTable}.tag_id = {$tTable}.id  ) ";
@@ -3364,7 +3361,7 @@ WHERE  $smartGroupClause
       elseif ($op == '!=') {
         $this->_where[$grouping][] = "{$etTable}.entity_id NOT IN (SELECT entity_id FROM civicrm_entity_tag cet WHERE cet.entity_table = 'civicrm_contact' AND " . self::buildClause("cet.tag_id", '=', $value, 'Int') . ")";
       }
-      elseif ($op == '=' || strstr($op, 'IN')) {
+      elseif ($op == '=' || str_contains($op, 'IN')) {
         $op = ($op == '=') ? 'IN' : $op;
         $this->_where[$grouping][] = "{$etTable}.tag_id $op ( $value )";
       }
@@ -3787,7 +3784,7 @@ WHERE  $smartGroupClause
       $this->_tables['civicrm_address'] = 1;
       $this->_whereTables['civicrm_address'] = 1;
 
-      $locationType = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id');
+      $locationType = CRM_Core_DAO_Address::buildOptions('location_type_id');
       $names = [];
       foreach ($value as $id) {
         $names[] = $locationType[$id];
@@ -4116,7 +4113,7 @@ WHERE  $smartGroupClause
 
     if (self::caseImportant($op)) {
       $value = implode("[[:cntrl:]]|[[:cntrl:]]", (array) $value);
-      $op = (strstr($op, '!') || strstr($op, 'NOT')) ? 'NOT RLIKE' : 'RLIKE';
+      $op = (str_contains($op, '!') || str_contains($op, 'NOT')) ? 'NOT RLIKE' : 'RLIKE';
       $value = "[[:cntrl:]]" . $value . "[[:cntrl:]]";
     }
 
@@ -4247,7 +4244,7 @@ WHERE  $smartGroupClause
           if (!empty($relQill)) {
             $relQill .= ' OR ';
           }
-          $relQill .= CRM_Utils_Array::value($rel, $allRelationshipType);
+          $relQill .= $allRelationshipType[$rel] ?? '';
         }
         $this->_qill[$grouping][] = 'Relationship Type(s) ' . $relQill . " ( " . implode(", ", $qillNames) . " )";
       }
@@ -4498,6 +4495,7 @@ civicrm_relationship.start_date > {$today}
           'legal_name' => 1,
           'sic_code' => 1,
           'current_employer' => 1,
+          'contact_source' => 1,
           // FIXME: should we use defaultHierReturnProperties() for the below?
           'do_not_email' => 1,
           'do_not_mail' => 1,
@@ -4579,6 +4577,8 @@ civicrm_relationship.start_date > {$today}
    *
    * @return array
    * @throws \CRM_Core_Exception
+   *
+   * @deprecated since 5.71 - will be removed after all core usages are fully removed.
    */
   public static function apiQuery(
     $params = NULL,
@@ -4765,9 +4765,8 @@ civicrm_relationship.start_date > {$today}
       return FALSE;
     }
     try {
-      $customFieldData = CRM_Core_BAO_CustomField::getFieldObject($customFieldID);
-      $customFieldDataType = $customFieldData->data_type;
-      if ('Date' == $customFieldDataType) {
+      $customFieldData = CRM_Core_BAO_CustomField::getField($customFieldID);
+      if ($customFieldData && 'Date' == $customFieldData['data_type']) {
         return TRUE;
       }
     }
@@ -5066,7 +5065,7 @@ civicrm_relationship.start_date > {$today}
     if (!$this->_skipPermission) {
       $permissionClauses = CRM_Contact_BAO_Contact_Permission::cacheClause();
       $this->_permissionWhereClause = $permissionClauses[1];
-      $this->_permissionFromClause = $permissionClauses[0];
+      $this->_permissionFromClause = $permissionClauses[0] ?: '';
 
       if (CRM_Core_Permission::check('access deleted contacts')) {
         if (!$onlyDeleted) {
@@ -5077,25 +5076,18 @@ civicrm_relationship.start_date > {$today}
         }
       }
 
+      // Add ACL permission clause generated by the BAO. This is the same clause used by API::get.
+      // TODO: Why only activities and contributions?. Not likely to change now as we move away from this.
       if (isset($this->_tables['civicrm_activity'])) {
-        $bao = new CRM_Activity_BAO_Activity();
-        $clauses = $subclauses = [];
-        foreach ((array) $bao->addSelectWhereClause() as $field => $vals) {
-          if ($vals && $field !== 'id') {
-            $clauses[] = $bao->tableName() . ".$field " . $vals;
-          }
-          elseif ($vals) {
-            $subclauses[] = "$field " . implode(" AND $field ", (array) $vals);
-          }
+        $clauses = array_filter(CRM_Activity_BAO_Activity::getSelectWhereClause());
+        if ($clauses) {
+          $this->_permissionWhereClause .= ($this->_permissionWhereClause ? ' AND ' : '') . '(' . implode(' AND ', $clauses) . ')';
         }
-        if ($subclauses) {
-          $clauses[] = $bao->tableName() . '.`id` IN (SELECT `id` FROM `' . $bao->tableName() . '` WHERE ' . implode(' AND ', $subclauses) . ')';
-        }
-        if (!empty($clauses) && $this->_permissionWhereClause) {
-          $this->_permissionWhereClause .= ' AND (' . implode(' AND ', $clauses) . ')';
-        }
-        elseif (!empty($clauses)) {
-          $this->_permissionWhereClause .= '(' . implode(' AND ', $clauses) . ')';
+      }
+      if (isset($this->_tables['civicrm_contribution'])) {
+        $contributionClauses = array_filter(CRM_Contribute_BAO_Contribution::getSelectWhereClause());
+        if (!empty($contributionClauses)) {
+          $this->_permissionWhereClause .= ($this->_permissionWhereClause ? ' AND ' : '') . '(' . implode(' AND ', $contributionClauses) . ')';
         }
       }
     }
@@ -5122,24 +5114,16 @@ civicrm_relationship.start_date > {$today}
   }
 
   /**
-   * @param null $context
+   * @param string|null $context
    *
    * @return array
    * @throws \CRM_Core_Exception
    */
-  public function summaryContribution($context = NULL) {
-    [$innerselect, $from, $where, $having] = $this->query(TRUE);
-    if (!empty($this->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
-      $from .= " $this->_permissionFromClause";
-    }
-    if ($this->_permissionWhereClause) {
-      $where .= " AND " . $this->_permissionWhereClause;
-    }
-    if ($context == 'search') {
+  public function summaryContribution(?string $context = NULL): array {
+    [, $from, $where] = $this->query(TRUE);
+    if ($context === 'search') {
       $where .= " AND contact_a.is_deleted = 0 ";
     }
-
-    $this->appendFinancialTypeWhereAndFromToQueryStrings($where, $from);
 
     $summary = ['total' => [], 'soft_credit' => ['count' => 0, 'avg' => 0, 'amount' => 0]];
     $this->addBasicStatsToSummary($summary, $where, $from);
@@ -5151,28 +5135,6 @@ civicrm_relationship.start_date > {$today}
     $this->addBasicCancelStatsToSummary($summary, $where, $from);
 
     return $summary;
-  }
-
-  /**
-   * Append financial ACL limits to the query from & where clauses, if applicable.
-   *
-   * @param string $where
-   * @param string $from
-   */
-  public function appendFinancialTypeWhereAndFromToQueryStrings(&$where, &$from) {
-    if (!CRM_Financial_BAO_FinancialType::isACLFinancialTypeStatus()) {
-      return;
-    }
-    CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($financialTypes);
-    if (!empty($financialTypes)) {
-      $where .= " AND civicrm_contribution.financial_type_id IN (" . implode(',', array_keys($financialTypes)) . ") AND li.id IS NULL";
-      $from .= " LEFT JOIN civicrm_line_item li
-                  ON civicrm_contribution.id = li.contribution_id AND
-                     li.entity_table = 'civicrm_contribution' AND li.financial_type_id NOT IN (" . implode(',', array_keys($financialTypes)) . ") ";
-    }
-    else {
-      $where .= " AND civicrm_contribution.financial_type_id IN (0)";
-    }
   }
 
   /**
@@ -5356,7 +5318,7 @@ civicrm_relationship.start_date > {$today}
       }
 
       if ($secondDate) {
-        $highDBFieldName = $highDBFieldName ?? $dbFieldName;
+        $highDBFieldName ??= $dbFieldName;
         $this->_where[$grouping][] = "
 ( {$tableName}.{$dbFieldName} $firstOP '$firstDate' ) AND
 ( {$tableName}.{$highDBFieldName} $secondOP '$secondDate' )
@@ -5377,7 +5339,7 @@ civicrm_relationship.start_date > {$today}
       }
 
       $date = $format = NULL;
-      if (strstr($op, 'IN')) {
+      if (str_contains($op, 'IN')) {
         $format = [];
         foreach ($value as &$date) {
           $date = CRM_Utils_Date::processDate($date, NULL, FALSE, $dateFormat);
@@ -5410,8 +5372,8 @@ civicrm_relationship.start_date > {$today}
     }
 
     // Ensure the tables are set, but don't whomp anything.
-    $this->_tables[$tableName] = $this->_tables[$tableName] ?? 1;
-    $this->_whereTables[$tableName] = $this->_whereTables[$tableName] ?? 1;
+    $this->_tables[$tableName] ??= 1;
+    $this->_whereTables[$tableName] ??= 1;
   }
 
   /**
@@ -5514,7 +5476,7 @@ civicrm_relationship.start_date > {$today}
 
     $asofDateValues = $this->getWhereValues("{$fieldName}_asof_date", $grouping);
     // will be treated as current day
-    $asofDate = NULL;
+    $asofDate = '';
     if ($asofDateValues) {
       $asofDate = CRM_Utils_Date::processDate($asofDateValues[2]);
       $asofDateFormat = CRM_Utils_Date::customFormat(substr($asofDate, 0, 8));
@@ -6071,7 +6033,7 @@ AND   displayRelType.is_active = 1
           $viewValues = explode(CRM_Core_DAO::VALUE_SEPARATOR, $val);
 
           if ($value['pseudoField'] == 'participant_role') {
-            $pseudoOptions = CRM_Core_PseudoConstant::get('CRM_Event_DAO_Participant', 'role_id');
+            $pseudoOptions = CRM_Event_DAO_Participant::buildOptions('role_id');
             foreach ($viewValues as $k => $v) {
               $viewValues[$k] = $pseudoOptions[$v];
             }
@@ -6215,7 +6177,7 @@ AND   displayRelType.is_active = 1
       $pseudoOptions = CRM_Core_PseudoConstant::worldRegion();
     }
     elseif ($daoName == 'CRM_Event_DAO_Event' && $fieldName == 'id') {
-      $checkPermission = CRM_Utils_Array::value('check_permission', $pseudoExtraParam, TRUE);
+      $checkPermission = $pseudoExtraParam['check_permission'] ?? TRUE;
       $pseudoOptions = CRM_Event_BAO_Event::getEvents(0, $fieldValue, TRUE, $checkPermission, TRUE);
     }
     elseif ($fieldName == 'contribution_product_id') {
@@ -6450,7 +6412,7 @@ AND   displayRelType.is_active = 1
       // is not declared for them.
       // @todo so far only integer fields are being handled. If we add string fields we need to look at
       // escaping.
-      $pseudoConstantMetadata = CRM_Utils_Array::value('pseudoconstant', $fieldSpec, FALSE);
+      $pseudoConstantMetadata = $fieldSpec['pseudoconstant'] ?? FALSE;
       if (!empty($pseudoConstantMetadata)
       ) {
         if (!empty($pseudoConstantMetadata['optionGroupName'])
@@ -6899,7 +6861,7 @@ AND   displayRelType.is_active = 1
     if (!empty($field) && empty($field['name'])) {
       // standardising field formatting here - over time we can phase out variants.
       // all paths using this currently unit tested
-      $field['name'] = CRM_Utils_Array::value('field_name', $field, CRM_Utils_Array::value('idCol', $field, $fieldName));
+      $field['name'] = $field['field_name'] ?? $field['idCol'] ?? $fieldName;
     }
     return $field;
   }
@@ -7068,8 +7030,8 @@ AND   displayRelType.is_active = 1
     $filters = CRM_Core_OptionGroup::values('relative_date_filters');
     $grouping = $values[3] ?? NULL;
     // If the table value is already set for a custom field it will be more nuanced than just '1'.
-    $this->_tables[$tableName] = $this->_tables[$tableName] ?? 1;
-    $this->_whereTables[$tableName] = $this->_whereTables[$tableName] ?? 1;
+    $this->_tables[$tableName] ??= 1;
+    $this->_whereTables[$tableName] ??= 1;
 
     $dates = CRM_Utils_Date::getFromTo($value, NULL, NULL);
     // Where end would be populated only if we are handling one of the weird ones with different from & to fields.
