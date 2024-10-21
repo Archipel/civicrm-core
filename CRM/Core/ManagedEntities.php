@@ -277,7 +277,7 @@ class CRM_Core_ManagedEntities {
       $dao->id = $item['id'];
       $dao->cleanup = $item['cleanup'] ?? NULL;
       // Reset the `entity_modified_date` timestamp if reverting record.
-      //$dao->entity_modified_date = $doUpdate ? 'null' : NULL;
+      $dao->entity_modified_date = $doUpdate ? 'null' : NULL;
       $dao->update();
     }
   }
