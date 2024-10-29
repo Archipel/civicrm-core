@@ -1,9 +1,6 @@
 [submodule "api/org.timelab.api"]
 	path = api/org.timelab.api
 	url = https://github.com/AlainBenbassat/org.timelab.api.git
-[submodule "ext/nz.co.fuzion.omnipaymultiprocessor"]
-	path = ext/nz.co.fuzion.omnipaymultiprocessor
-	url = https://github.com/Archipel/nz.co.fuzion.omnipaymultiprocessor.git
 [submodule "packages"]
 	path = packages
 	url = https://github.com/Archipel/civicrm-packages.git

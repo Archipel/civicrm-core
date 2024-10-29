@@ -505,9 +505,6 @@ class CRM_Contact_Form_Search extends CRM_Core_Form_Search {
 
   }
 
-  function normalizeFormValues() {
-  }
-
   /**
    * Processing needed for buildForm and later.
    *

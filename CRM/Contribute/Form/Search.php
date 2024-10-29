@@ -304,7 +304,6 @@ class CRM_Contribute_Form_Search extends CRM_Core_Form_Search {
       }
 
       if ($group && is_array($group)) {
-        // @todo - stop changing formValues - respect submitted form values, change a working array.
         unset($this->_formValues['group']);
         foreach ($group as $groupID) {
           // @todo - stop changing formValues - respect submitted form values, change a working array.
